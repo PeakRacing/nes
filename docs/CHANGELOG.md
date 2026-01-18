@@ -4,6 +4,10 @@
 
 ## master (unreleased)
 
+## v0.0.4
+
+- Supports  rt-thread
+
 ## v0.0.3
 
 - Optimization Rate
@@ -41,6 +45,10 @@ The first beta version, which already supports CUP, PPU, mapper0 2, is already p
 # 更新日志 
 
 ## master (开发中)
+
+## v0.0.4
+
+- 添加rt-thread适配
 
 ## v0.0.3
 
