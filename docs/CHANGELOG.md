@@ -4,7 +4,11 @@
 
 ## master (unreleased)
 
+## v0.0.3
 
+- Optimization Rate
+- Experimentally added mapper1
+- Supports SDL3
 
 ## v0.0.2
 
@@ -38,7 +42,11 @@ The first beta version, which already supports CUP, PPU, mapper0 2, is already p
 
 ## master (开发中)
 
+## v0.0.3
 
+- 优化速率
+- 实验性添加mapper1
+- 支持sdl3
 
 ## v0.0.2
 
