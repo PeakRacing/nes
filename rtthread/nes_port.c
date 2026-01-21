@@ -62,30 +62,30 @@ int nes_fclose(FILE *stream ){
 
 #if (NES_ENABLE_SOUND == 1)
 
-int nes_sound_output(uint8_t *buffer, size_t len){
+rt_weak int nes_sound_output(uint8_t *buffer, size_t len){
 #error "Sound output function is not implemented!"
     return 0;
 }
 #endif
 
-int nes_initex(nes_t *nes){
+rt_weak int nes_initex(nes_t *nes){
 
     return 0;
 }
 
-int nes_deinitex(nes_t *nes){
+rt_weak int nes_deinitex(nes_t *nes){
 
     return 0;
 }
 
-int nes_draw(int x1, int y1, int x2, int y2, nes_color_t* color_data){
+rt_weak int nes_draw(int x1, int y1, int x2, int y2, nes_color_t* color_data){
 #error "Display function is not implemented!"
     return 0;
 }
 
 #define FRAMES_PER_SECOND   1000/60
 
-void nes_frame(nes_t* nes){
+rt_weak void nes_frame(nes_t* nes){
 
 }
 
