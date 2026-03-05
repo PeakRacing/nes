@@ -876,7 +876,6 @@ static inline void nes_brk(nes_t* nes, const uint16_t address){
     NES_B_SET;
     NES_PUSH(nes,nes->nes_cpu.P);
     NES_I_SET;
-    NES_D_SET;
     nes->nes_cpu.PC = nes_readw_cpu(nes, NES_VERCTOR_IRQBRK);
 }
 
@@ -891,7 +890,7 @@ static inline void nes_rti(nes_t* nes, const uint16_t address){
     nes_dummy_read(nes);
     // P:=+(S)
     nes->nes_cpu.P = NES_POP(nes);
-    // NES_U_SET;
+    NES_U_SET;
     // NES_B_SET;
     // PC:=+(S)
     const uint8_t low_byte = (nes->nes_cpu.cpu_ram + 0x100)[++nes->nes_cpu.SP];
@@ -1187,8 +1186,10 @@ static inline void nes_anc(nes_t* nes, const uint16_t address){
     *                 *  *
 */
 static inline void nes_alr(nes_t* nes, const uint16_t address){
-    (void)nes;
-    (void)address;
+    nes->nes_cpu.A &= nes_read_cpu(nes, address);
+    nes->nes_cpu.C = nes->nes_cpu.A & 0x01;
+    nes->nes_cpu.A >>= 1;
+    NES_CHECK_NZ(nes->nes_cpu.A);
 }
 
 /*
@@ -1234,8 +1235,7 @@ static inline void nes_axs(nes_t* nes, const uint16_t address){
 
 */
 static inline void nes_ahx(nes_t* nes, const uint16_t address){
-    (void)nes;
-    (void)address;
+    nes_write_cpu(nes, address, nes->nes_cpu.A & nes->nes_cpu.X & ((address >> 8) + 1));
 }
 
 /*
@@ -1244,8 +1244,7 @@ static inline void nes_ahx(nes_t* nes, const uint16_t address){
 
 */
 static inline void nes_shy(nes_t* nes, const uint16_t address){
-    (void)nes;
-    (void)address;
+    nes_write_cpu(nes, address, nes->nes_cpu.Y & ((address >> 8) + 1));
 }
 
 /*
@@ -1254,8 +1253,7 @@ static inline void nes_shy(nes_t* nes, const uint16_t address){
 
 */
 static inline void nes_shx(nes_t* nes, const uint16_t address){
-    (void)nes;
-    (void)address;
+    nes_write_cpu(nes, address, nes->nes_cpu.X & ((address >> 8) + 1));
 }
 
 /*
@@ -1264,8 +1262,8 @@ static inline void nes_shx(nes_t* nes, const uint16_t address){
 
 */
 static inline void nes_tas(nes_t* nes, const uint16_t address){
-    (void)nes;
-    (void)address;
+    nes->nes_cpu.SP = nes->nes_cpu.A & nes->nes_cpu.X;
+    nes_write_cpu(nes, address, nes->nes_cpu.SP & ((address >> 8) + 1));
 }
 
 /*
@@ -1274,8 +1272,9 @@ static inline void nes_tas(nes_t* nes, const uint16_t address){
     *                 *  
 */
 static inline void nes_las(nes_t* nes, const uint16_t address){
-    (void)nes;
-    (void)address;
+    uint8_t value = nes_read_cpu(nes, address) & nes->nes_cpu.SP;
+    nes->nes_cpu.A = nes->nes_cpu.X = nes->nes_cpu.SP = value;
+    NES_CHECK_NZ(nes->nes_cpu.A);
 }
 
 /*
@@ -1393,12 +1392,12 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
         case 0x09:{nes_ora(nes, nes_imm(nes)); nes->nes_cpu.cycles += 2;break;}// ORA IMM     2
         case 0x0A:{nes_asla(nes, 0);           nes->nes_cpu.cycles += 2;break;}// ASL         2
         case 0x0B:{nes_anc(nes, nes_imm(nes)); nes->nes_cpu.cycles += 2;break;}// ANC IMM     2
-        case 0x0C:{nes_nop(nes, nes_abs(nes)); nes->nes_cpu.cycles += 2;break;}// NOP ABS     4
-        case 0x0D:{nes_ora(nes, nes_abs(nes)); nes->nes_cpu.cycles += 2;break;}// ORA ABS     4
-        case 0x0E:{nes_asl(nes, nes_abs(nes)); nes->nes_cpu.cycles += 2;break;}// ASL ABS     6
-        case 0x0F:{nes_slo(nes, nes_abs(nes)); nes->nes_cpu.cycles += 2;break;}// SLO ABS     6
+        case 0x0C:{nes_nop(nes, nes_abs(nes)); nes->nes_cpu.cycles += 4;break;}// NOP ABS     4
+        case 0x0D:{nes_ora(nes, nes_abs(nes)); nes->nes_cpu.cycles += 4;break;}// ORA ABS     4
+        case 0x0E:{nes_asl(nes, nes_abs(nes)); nes->nes_cpu.cycles += 6;break;}// ASL ABS     6
+        case 0x0F:{nes_slo(nes, nes_abs(nes)); nes->nes_cpu.cycles += 6;break;}// SLO ABS     6
         case 0x10:{nes_bpl(nes, nes_rel(nes)); nes->nes_cpu.cycles += 2;break;}// BPL REL     2*
-        case 0x11:{nes_ora(nes, nes_izy(nes)); nes->nes_cpu.cycles += 2;break;}// ORA IZY     5*
+        case 0x11:{nes_ora(nes, nes_izy(nes)); nes->nes_cpu.cycles += 5;break;}// ORA IZY     5*
         case 0x12:{                                                     break;}// KIL         0
         case 0x13:{nes_slo(nes, nes_izy2(nes));nes->nes_cpu.cycles += 8;break;}// SLO IZY     8
         case 0x14:{nes_nop(nes, nes_zpx(nes)); nes->nes_cpu.cycles += 4;break;}// NOP ZPX     4
