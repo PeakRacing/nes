@@ -46,7 +46,7 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t date) {
     nes_ppu_screen_mirrors(nes, bank_select->M?NES_MIRROR_HORIZONTAL:NES_MIRROR_VERTICAL);
 }
 
-int nes_mapper117_init(nes_t* nes){
+int nes_mapper177_init(nes_t* nes){
     nes->nes_mapper.mapper_init = nes_mapper_init;
     nes->nes_mapper.mapper_write = nes_mapper_write;
     return 0;

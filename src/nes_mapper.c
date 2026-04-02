@@ -66,7 +66,7 @@ int nes_load_mapper(nes_t* nes){
         NES_CASE_LOAD_MAPPER(4);
         NES_CASE_LOAD_MAPPER(7);
         NES_CASE_LOAD_MAPPER(94);
-        NES_CASE_LOAD_MAPPER(117);
+        NES_CASE_LOAD_MAPPER(177);
         NES_CASE_LOAD_MAPPER(180);
         default :
             NES_LOG_ERROR("mapper:%03d is unsupported\n",nes->nes_rom.mapper_number);

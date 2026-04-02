@@ -39,7 +39,7 @@ gitee: [nes: c语言实现的nes模拟器 (gitee.com)](https://gitee.com/PeakRac
 
 **mapper  support：**
 
-​	0, 2, 3, 7, 94, 117, 180
+​	0, 2, 3, 7, 94, 177, 180
 
 ## Software Architecture
 ​	The example is based on SDL for image and sound output, without special dependencies, and you can port to any hardware by yourself
