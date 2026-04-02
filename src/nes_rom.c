@@ -55,7 +55,12 @@ int nes_load_file(nes_t* nes, const char* file_path ){
             nes_header_ines_t* ines_header_info = (nes_header_ines_t*)&nes_header_info;
             nes->nes_rom.prg_rom_size = ines_header_info->prg_rom_size;
             nes->nes_rom.chr_rom_size = ines_header_info->chr_rom_size;
-            nes->nes_rom.mapper_number = ines_header_info->mapper_number_l | ines_header_info->mapper_number_h << 4;
+            /* Detect dirty iNES header: if bytes 12-15 are not all zero, ignore upper mapper nibble */
+            if (ines_header_info->Reserved[1] | ines_header_info->Reserved[2] | ines_header_info->Reserved[3] | ines_header_info->Reserved[4]) {
+                nes->nes_rom.mapper_number = ines_header_info->mapper_number_l;
+            } else {
+                nes->nes_rom.mapper_number = ines_header_info->mapper_number_l | ines_header_info->mapper_number_h << 4;
+            }
         }
         nes->nes_rom.mirroring_type = nes_header_info.mirroring;
         nes->nes_rom.four_screen = nes_header_info.four_screen;
@@ -143,7 +148,12 @@ int nes_load_rom(nes_t* nes, const uint8_t* nes_rom){
         nes_header_ines_t* ines_header_info = (nes_header_ines_t*)nes_header_info;
         nes->nes_rom.prg_rom_size = ines_header_info->prg_rom_size;
         nes->nes_rom.chr_rom_size = ines_header_info->chr_rom_size;
-        nes->nes_rom.mapper_number = ines_header_info->mapper_number_l | ines_header_info->mapper_number_h << 4;
+        /* Detect dirty iNES header: if bytes 12-15 are not all zero, ignore upper mapper nibble */
+        if (ines_header_info->Reserved[1] | ines_header_info->Reserved[2] | ines_header_info->Reserved[3] | ines_header_info->Reserved[4]) {
+            nes->nes_rom.mapper_number = ines_header_info->mapper_number_l;
+        } else {
+            nes->nes_rom.mapper_number = ines_header_info->mapper_number_l | ines_header_info->mapper_number_h << 4;
+        }
     }
 
     nes->nes_rom.mirroring_type = (nes_header_info->mirroring);
