@@ -1323,7 +1323,7 @@ void nes_cpu_init(nes_t* nes){
 
     NES_CPU_P = 0;
     NES_U_SET;
-    NES_N_SET;
+    NES_I_SET;
     nes->nes_cpu.SP = 0x00;             // reset: S = $00-$03 = $FD
 }
 
@@ -1357,10 +1357,6 @@ uint8_t cycles_old = 0;
 // https://www.oxyron.de/html/opcodes02.html
 
 void nes_opcode(nes_t* nes,uint16_t ticks){
-    if (nes->nes_cpu.irq_nmi) {
-        nes_nmi(nes);
-        nes->nes_cpu.irq_nmi = 0;
-    }
     while (ticks > nes->nes_cpu.cycles){
 #ifdef __DEBUG__
         // fprintf(debug_fp,"A:0x%02X X:0x%02X Y:0x%02X SP:0x%02X \nP:0x%02X \nC:0x%02X Z:0x%02X I:0x%02X D:0x%02X B:0x%02X V:0x%02X N:0x%02X \n",
@@ -1643,6 +1639,12 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
         // cycles += nes->nes_cpu.cycles - cycles_old;
         // fprintf(debug_fp,"\nopcode: %s \n",nes_opcode_name[nes->nes_cpu.opcode]);
 #endif
+        // Check NMI after instruction execution (more accurate timing)
+        // This allows BIT $2002 to read VBlank flag and set N before NMI fires
+        if (nes->nes_cpu.irq_nmi) {
+            nes_nmi(nes);
+            nes->nes_cpu.irq_nmi = 0;
+        }
     }
     nes->nes_cpu.cycles -= ticks;
 }
