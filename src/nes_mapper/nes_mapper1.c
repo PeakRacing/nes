@@ -69,7 +69,7 @@ static inline void nes_mapper_write_chrbank0(nes_t* nes) {
     if (mapper_register.control.C) {
         nes_load_chrrom_4k(nes, 0, mapper_register.shift);
     } else {
-        nes_load_chrrom_8k(nes, 0, (mapper_register.shift & (uint8_t)0x0E));
+        nes_load_chrrom_8k(nes, 0, mapper_register.shift >> 1);
     }
 }
 /*
@@ -145,7 +145,9 @@ Load register ($8000-$FFFF)
 static void nes_mapper_write(nes_t* nes, uint16_t write_addr, uint8_t data){
     if (data & (uint8_t)0x80){
         mapper_register.shift = 0x10; // reset shift register
-        nes_mapper_write_control(nes, mapper_register.control.P);
+        // Control = Control OR $0C, locking PRG-ROM at $C000-$FFFF to the last bank
+        mapper_register.control_byte |= 0x0C;
+        nes_ppu_screen_mirrors(nes, mapper_register.control.M);
     }else {
         const uint8_t finished = mapper_register.shift & 1;
         mapper_register.shift >>= 1;
