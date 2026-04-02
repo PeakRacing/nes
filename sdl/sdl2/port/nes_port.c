@@ -64,10 +64,11 @@ int nes_fclose(FILE *stream ){
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 static SDL_Texture *framebuffer = NULL;
+static uint64_t nes_next_frame_tick = 0;
 
 static void sdl_event(nes_t *nes) {
     SDL_Event event;
-    if (SDL_PollEvent(&event)){
+    while (SDL_PollEvent(&event)){
         switch (event.type) {
             case SDL_KEYDOWN:
                 switch (event.key.keysym.scancode){
@@ -189,21 +190,12 @@ static void sdl_event(nes_t *nes) {
 static SDL_AudioDeviceID nes_audio_device;
 #define SDL_AUDIO_NUM_CHANNELS          (1)
 
-
-static uint8_t apu_output = 0;
-static void AudioCallback(void* userdata, Uint8* stream, int len) {
-    (void)len;
-    nes_t *nes = (nes_t*)userdata;
-    if (apu_output){
-        nes_memcpy(stream, &nes->nes_apu.sample_buffer , NES_APU_SAMPLE_PER_SYNC);
-        apu_output = 0;
-    }
-}
-
 int nes_sound_output(uint8_t *buffer, size_t len){
-    (void)buffer;
-    (void)len;
-    apu_output = 1;
+    const uint32_t max_queue_bytes = NES_APU_SAMPLE_PER_SYNC * 4;
+    if (SDL_GetQueuedAudioSize(nes_audio_device) > max_queue_bytes){
+        SDL_ClearQueuedAudio(nes_audio_device);
+    }
+    SDL_QueueAudio(nes_audio_device, buffer, (uint32_t)len);
     return 0;
 }
 #endif
@@ -233,10 +225,10 @@ int nes_initex(nes_t *nes){
 #if (NES_ENABLE_SOUND == 1)
     SDL_AudioSpec desired = {
         .freq = NES_APU_SAMPLE_RATE,
-        .format = AUDIO_S8,
+        .format = AUDIO_U8,
         .channels = SDL_AUDIO_NUM_CHANNELS,
         .samples = NES_APU_SAMPLE_PER_SYNC,
-        .callback = AudioCallback,
+        .callback = NULL,
         .userdata = nes
     };
     nes_audio_device = SDL_OpenAudioDevice(NULL, SDL_FALSE, &desired, NULL, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
@@ -270,11 +262,27 @@ int nes_draw(int x1, int y1, int x2, int y2, nes_color_t* color_data){
     return 0;
 }
 
-#define FRAMES_PER_SECOND   1000/60
-
 void nes_frame(nes_t* nes){
+    const uint64_t freq = SDL_GetPerformanceFrequency();
+    const uint64_t frame_ticks = freq / 60;
+
+    if (nes_next_frame_tick == 0){
+        nes_next_frame_tick = SDL_GetPerformanceCounter();
+    }
+
     SDL_RenderCopy(renderer, framebuffer, NULL, NULL);
     SDL_RenderPresent(renderer);
     sdl_event(nes);
-    SDL_Delay(FRAMES_PER_SECOND);
+
+    nes_next_frame_tick += frame_ticks;
+    uint64_t now = SDL_GetPerformanceCounter();
+    if (now < nes_next_frame_tick){
+        uint32_t delay_ms = (uint32_t)((nes_next_frame_tick - now) * 1000 / freq);
+        if (delay_ms > 0){
+            SDL_Delay(delay_ms);
+        }
+    }else if ((now - nes_next_frame_tick) > (frame_ticks * 2)){
+        // If we are far behind, resync to avoid long-term drift.
+        nes_next_frame_tick = now;
+    }
 }

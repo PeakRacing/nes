@@ -75,9 +75,7 @@ typedef struct {
     uint8_t sweep_divider;
     uint8_t envelope_divider;
     uint8_t envelope_volume;
-    uint8_t sample_buffer[NES_APU_SAMPLE_PER_SYNC];
-    uint16_t sample_index;
-    float seq_local_old;
+    uint32_t phase_acc;
 } pulse_t;
 
 // https://www.nesdev.org/wiki/APU#Triangle_($4008-$400B)
@@ -109,9 +107,7 @@ typedef struct {
     uint8_t linear_counter;
     uint8_t linear_restart;
     uint16_t cur_period;
-    uint8_t sample_buffer[NES_APU_SAMPLE_PER_SYNC];
-    uint16_t sample_index;
-    float seq_local_old;
+    uint32_t phase_acc;
 } triangle_t;
 
 // https://www.nesdev.org/wiki/APU#Noise_($400C-$400F)
@@ -153,8 +149,7 @@ typedef struct {
     uint8_t envelope_restart;
     uint8_t envelope_divider;
     uint8_t envelope_volume;
-    uint8_t sample_buffer[NES_APU_SAMPLE_PER_SYNC];
-    uint16_t sample_index;
+    uint32_t lfsr_acc;
 } noise_t;
 
 typedef struct {
@@ -176,8 +171,6 @@ typedef struct {
     };
     uint8_t sample_address;                 /*	Sample address (A) */
     uint8_t sample_length;                  /*	Sample length (L) */
-    uint8_t sample_buffer[NES_APU_SAMPLE_PER_SYNC];
-    uint16_t sample_index;
 } dmc_t;
 
 // https://www.nesdev.org/wiki/APU#Registers
@@ -216,9 +209,6 @@ typedef struct nes_apu{
     // sample_buffer: pulse1 pulse2 triangle noise dmc output
     uint8_t sample_buffer[NES_APU_SAMPLE_PER_SYNC];
     uint16_t sample_index;
-    uint64_t cpu_lock_count;
-    uint64_t sample_local_start;
-    uint64_t sample_local_end;
 } nes_apu_t;
 
 void nes_apu_init(nes_t *nes);
