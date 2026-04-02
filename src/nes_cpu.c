@@ -165,10 +165,11 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
 #define NES_V_CLR       (NES_CPU_P &= ~(uint8_t)NES_FLAG_V)
 #define NES_N_CLR       (NES_CPU_P &= ~(uint8_t)NES_FLAG_N)
 
-// 状态寄存器检查位
-#define NES_CHECK_N(x)          {nes->nes_cpu.N = ((uint8_t)(x) >> 7) & 0x01;}
-#define NES_CHECK_Z(x)          {nes->nes_cpu.Z = ((uint8_t)(x) == 0);}
-#define NES_CHECK_NZ(x)         {NES_CHECK_N(x);NES_CHECK_Z(x);}
+// 状态寄存器检查位 (使用直接位掩码操作代替位域写入,减少read-modify-write次数)
+#define NES_CHECK_N(x)          {NES_CPU_P = (NES_CPU_P & (uint8_t)~NES_FLAG_N) | ((uint8_t)(x) & (uint8_t)NES_FLAG_N);}
+#define NES_CHECK_Z(x)          {NES_CPU_P = (NES_CPU_P & (uint8_t)~NES_FLAG_Z) | (uint8_t)(((uint8_t)(x) == 0) << 1);}
+#define NES_CHECK_NZ(x)         {const uint8_t _nz_val = (uint8_t)(x); \
+                                 NES_CPU_P = (NES_CPU_P & (uint8_t)0x7D) | (_nz_val & (uint8_t)0x80) | (uint8_t)((_nz_val == 0) << 1);}
 // 入栈
 #define NES_PUSH(nes,data)      (nes->nes_cpu.cpu_ram + 0x100)[nes->nes_cpu.SP--] = (uint8_t)(data)
 #define NES_PUSHW(nes,data)     NES_PUSH(nes, ((data) >> 8) ); NES_PUSH(nes, ((data) & 0xff))
@@ -275,7 +276,7 @@ static inline uint16_t nes_zpy(nes_t* nes){
 */
 static inline uint16_t nes_izx(nes_t* nes){
     const uint8_t address = (uint8_t)nes_zp(nes) + nes->nes_cpu.X;
-    return nes_read_cpu(nes,address)|(uint16_t)nes_read_cpu(nes,(uint8_t)(address + 1)) << 8;
+    return nes->nes_cpu.cpu_ram[address] | (uint16_t)nes->nes_cpu.cpu_ram[(uint8_t)(address + 1)] << 8;
 }
 
 /*
@@ -283,14 +284,14 @@ static inline uint16_t nes_izx(nes_t* nes){
 */
 static inline uint16_t nes_izy(nes_t* nes){
     const uint8_t value = (uint8_t)nes_zp(nes);
-    const uint16_t address = nes_read_cpu(nes,value)|(uint16_t)nes_read_cpu(nes,(uint8_t)(value + 1)) << 8;
+    const uint16_t address = nes->nes_cpu.cpu_ram[value] | (uint16_t)nes->nes_cpu.cpu_ram[(uint8_t)(value + 1)] << 8;
     if ((address>>8) != ((address+nes->nes_cpu.Y)>>8))nes->nes_cpu.cycles++;
     return address + nes->nes_cpu.Y;
 }
 
 static inline uint16_t nes_izy2(nes_t* nes){
     const uint8_t value = (uint8_t)nes_zp(nes);
-    const uint16_t address = nes_read_cpu(nes,value)|(uint16_t)nes_read_cpu(nes,(uint8_t)(value + 1)) << 8;
+    const uint16_t address = nes->nes_cpu.cpu_ram[value] | (uint16_t)nes->nes_cpu.cpu_ram[(uint8_t)(value + 1)] << 8;
     return address + nes->nes_cpu.Y;
 }
 
@@ -348,15 +349,17 @@ static inline void nes_eor(nes_t* nes, const uint16_t address){
 */
 static inline void nes_adc(nes_t* nes, const uint16_t address){
     const uint8_t src = nes_read_cpu(nes, address);
-    const uint16_t result16 = nes->nes_cpu.A + src + NES_CPU_C;
-    nes->nes_cpu.C = result16 >> 8;
+    const uint8_t a = nes->nes_cpu.A;
+    const uint16_t result16 = a + src + (NES_CPU_P & NES_FLAG_C);
     const uint8_t result8 = (uint8_t)result16;
-
-    if (!((nes->nes_cpu.A ^ src) & 0x80) && ((nes->nes_cpu.A ^ result8) & 0x80)) nes->nes_cpu.V = 1;
-    else nes->nes_cpu.V = 0;
-
+    // 合并 C、V、N、Z 标志写入为单次操作
+    uint8_t flags = NES_CPU_P & (uint8_t)~(NES_FLAG_C | NES_FLAG_V | NES_FLAG_N | NES_FLAG_Z);
+    flags |= (uint8_t)(result16 >> 8) & NES_FLAG_C;
+    flags |= (((~(a ^ src)) & (a ^ result8)) >> 1) & NES_FLAG_V;
+    flags |= result8 & NES_FLAG_N;
+    flags |= (uint8_t)((result8 == 0) << 1);
+    NES_CPU_P = flags;
     nes->nes_cpu.A = result8;
-    NES_CHECK_NZ(nes->nes_cpu.A);
 }
 
 /* 
@@ -367,15 +370,17 @@ static inline void nes_adc(nes_t* nes, const uint16_t address){
 */
 static inline void nes_sbc(nes_t* nes, const uint16_t address){
     const uint8_t src = nes_read_cpu(nes, address);
-    const uint16_t result16 = nes->nes_cpu.A - src - !nes->nes_cpu.C;
-    nes->nes_cpu.C = !(result16 >> 8);
+    const uint8_t a = nes->nes_cpu.A;
+    const uint16_t result16 = a - src - !(NES_CPU_P & NES_FLAG_C);
     const uint8_t result8 = (uint8_t)result16;
-
-    if (((nes->nes_cpu.A ^ src) & 0x80) && ((nes->nes_cpu.A ^ result8) & 0x80)) nes->nes_cpu.V = 1;
-    else nes->nes_cpu.V = 0;
-
+    // 合并 C、V、N、Z 标志写入为单次操作
+    uint8_t flags = NES_CPU_P & (uint8_t)~(NES_FLAG_C | NES_FLAG_V | NES_FLAG_N | NES_FLAG_Z);
+    flags |= (uint8_t)(!(result16 >> 8)) & NES_FLAG_C;
+    flags |= (((a ^ src) & (a ^ result8)) >> 1) & NES_FLAG_V;
+    flags |= result8 & NES_FLAG_N;
+    flags |= (uint8_t)((result8 == 0) << 1);
+    NES_CPU_P = flags;
     nes->nes_cpu.A = result8;
-    NES_CHECK_NZ(nes->nes_cpu.A);
 }
 
 /*
@@ -386,8 +391,12 @@ static inline void nes_sbc(nes_t* nes, const uint16_t address){
 */
 static inline void nes_cmp(nes_t* nes, const uint16_t address){
     const uint16_t value = (uint16_t)nes->nes_cpu.A - (uint16_t)nes_read_cpu(nes, address);
-    nes->nes_cpu.C = !(value >> 15);
-    NES_CHECK_NZ((uint8_t)value);
+    const uint8_t val8 = (uint8_t)value;
+    uint8_t flags = NES_CPU_P & (uint8_t)~(NES_FLAG_C | NES_FLAG_N | NES_FLAG_Z);
+    flags |= (uint8_t)(!(value >> 15)) & NES_FLAG_C;
+    flags |= val8 & NES_FLAG_N;
+    flags |= (uint8_t)((val8 == 0) << 1);
+    NES_CPU_P = flags;
 }
 
 /*
@@ -398,8 +407,12 @@ static inline void nes_cmp(nes_t* nes, const uint16_t address){
 */
 static inline void nes_cpx(nes_t* nes, const uint16_t address){
     const uint16_t value = (uint16_t)nes->nes_cpu.X - (uint16_t)nes_read_cpu(nes, address);
-    nes->nes_cpu.C = !(value >> 15);
-    NES_CHECK_NZ((uint8_t)value);
+    const uint8_t val8 = (uint8_t)value;
+    uint8_t flags = NES_CPU_P & (uint8_t)~(NES_FLAG_C | NES_FLAG_N | NES_FLAG_Z);
+    flags |= (uint8_t)(!(value >> 15)) & NES_FLAG_C;
+    flags |= val8 & NES_FLAG_N;
+    flags |= (uint8_t)((val8 == 0) << 1);
+    NES_CPU_P = flags;
 }
 
 /*
@@ -410,8 +423,12 @@ static inline void nes_cpx(nes_t* nes, const uint16_t address){
 */
 static inline void nes_cpy(nes_t* nes, const uint16_t address){
     const uint16_t value = (uint16_t)nes->nes_cpu.Y - (uint16_t)nes_read_cpu(nes, address);
-    nes->nes_cpu.C = !(value >> 15);
-    NES_CHECK_NZ((uint8_t)value);
+    const uint8_t val8 = (uint8_t)value;
+    uint8_t flags = NES_CPU_P & (uint8_t)~(NES_FLAG_C | NES_FLAG_N | NES_FLAG_Z);
+    flags |= (uint8_t)(!(value >> 15)) & NES_FLAG_C;
+    flags |= val8 & NES_FLAG_N;
+    flags |= (uint8_t)((val8 == 0) << 1);
+    NES_CPU_P = flags;
 }
 
 /*
@@ -948,9 +965,8 @@ static inline void nes_jmp(nes_t* nes, const uint16_t address){
 */
 static inline void nes_bit(nes_t* nes, const uint16_t address){
     const uint8_t value = nes_read_cpu(nes, address);
-    nes->nes_cpu.N = value >> 7;
-    nes->nes_cpu.V = (value >> 6) & 1;
-    NES_CHECK_Z((nes->nes_cpu.A & value));
+    // 合并N、V、Z标志的写入为单次操作
+    NES_CPU_P = (NES_CPU_P & (uint8_t)0x3D) | (value & (uint8_t)0xC0) | (uint8_t)(((nes->nes_cpu.A & value) == 0) << 1);
 }
 
 /*
