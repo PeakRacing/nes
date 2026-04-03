@@ -53,6 +53,10 @@
 #define NES_RAM_LACK            (0)
 #endif
 
+#ifndef NES_ROM_STREAM
+#define NES_ROM_STREAM          (0)       /* stream ROM banks from file instead of loading entire ROM into RAM */
+#endif
+
 #if (NES_RAM_LACK == 1)
 #define NES_DRAW_SIZE           (NES_WIDTH * NES_HEIGHT / 2) 
 #else

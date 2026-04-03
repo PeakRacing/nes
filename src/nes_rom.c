@@ -65,6 +65,26 @@ int nes_load_file(nes_t* nes, const char* file_path ){
         nes->nes_rom.mirroring_type = nes_header_info.mirroring;
         nes->nes_rom.four_screen = nes_header_info.four_screen;
         nes->nes_rom.save_ram = nes_header_info.save;
+#if (NES_ROM_STREAM == 1)
+        /* Stream mode: only allocate active bank buffers, keep file open */
+        nes->nes_rom.prg_data_offset = (long)sizeof(nes_header_info) + (nes_header_info.trainer ? TRAINER_SIZE : 0);
+        nes->nes_rom.chr_data_offset = nes->nes_rom.prg_data_offset + (long)PRG_ROM_UNIT_SIZE * nes->nes_rom.prg_rom_size;
+        /* PRG: 4 x 8KB bank buffers = 32KB */
+        nes->nes_rom.prg_rom = (uint8_t*)nes_malloc(8192 * 4);
+        if (nes->nes_rom.prg_rom == NULL) {
+            goto error;
+        }
+        nes_memset(nes->nes_rom.prg_rom, 0, 8192 * 4);
+        /* CHR: 8 x 1KB bank buffers = 8KB */
+        nes->nes_rom.chr_rom = (uint8_t*)nes_malloc(1024 * 8);
+        if (nes->nes_rom.chr_rom == NULL) {
+            goto error;
+        }
+        nes_memset(nes->nes_rom.chr_rom, 0, 1024 * 8);
+        /* Keep file handle open for streaming */
+        nes->nes_rom.rom_file = nes_file;
+        nes_file = NULL;
+#else
         nes->nes_rom.prg_rom = (uint8_t*)nes_malloc(PRG_ROM_UNIT_SIZE * nes->nes_rom.prg_rom_size);
         if (nes->nes_rom.prg_rom == NULL) {
             goto error;
@@ -81,10 +101,13 @@ int nes_load_file(nes_t* nes, const char* file_path ){
                 goto error;
             }
         }
+#endif
     }else{
         goto error;
     }
+#if (NES_ROM_STREAM != 1)
     nes_fclose(nes_file);
+#endif
     nes_cpu_init(nes);
 #if (NES_ENABLE_SOUND==1)
     nes_apu_init(nes);
@@ -108,6 +131,12 @@ error:
 
 
 int nes_unload_file(nes_t* nes){
+#if (NES_ROM_STREAM == 1)
+    if (nes->nes_rom.rom_file){
+        nes_fclose(nes->nes_rom.rom_file);
+        nes->nes_rom.rom_file = NULL;
+    }
+#endif
     if (nes->nes_rom.prg_rom){
         nes_free(nes->nes_rom.prg_rom);
     }
