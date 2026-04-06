@@ -32,6 +32,7 @@
 #define NES_RAM_LACK            (0)       /* lack of RAM */
 
 #define NES_USE_FS              (1)       /* use file system */
+#define NES_ROM_STREAM          (0)       /* stream ROM banks from file (saves RAM) */
 /*
 *  - NES_LOG_LEVEL_NONE     Do not log anything.
 *  - NES_LOG_LEVEL_ERROR    Log error.
