@@ -4,6 +4,11 @@
 
 ## master (unreleased)
 
+- 完善cpu模拟(包括所有非法指令)
+- apu模拟改为定点计算
+- 修复cpu中断处理
+- 新增动态从文件切换 bank功能，此模式只需要40KB 活跃 bank 缓冲区（PRG 32KB + CHR 8KB），文件句柄保持打开，但切换bank速度会下降，为低内存设计
+
 ## v0.0.4
 
 - Supports  rt-thread
@@ -45,6 +50,8 @@ The first beta version, which already supports CUP, PPU, mapper0 2, is already p
 # 更新日志 
 
 ## master (开发中)
+
+- 
 
 ## v0.0.4
 
