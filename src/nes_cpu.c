@@ -111,6 +111,9 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
 #if (NES_ENABLE_SOUND == 1)
                 nes_write_apu_register(nes, address,data);
 #endif
+            }else if (address >= 0x5000){
+                if (nes->nes_mapper.mapper_apu)
+                    nes->nes_mapper.mapper_apu(nes, address, data);
             }else{
                 NES_LOG_DEBUG("nes_write address %04X not support\n",address);
             }
