@@ -288,14 +288,11 @@ void nes_run(nes_t* nes){
     // NES_LOG_DEBUG("save_ram:%d\n",nes->nes_rom.save_ram);
 
     nes_cpu_reset(nes);
-    uint64_t frame_cnt = 0;
     // 341 PPU dots per scanline / 3 = 113 remainder 2.
     // Accumulate fractional cycles: add 2 per scanline, emit +1 CPU cycle when >= 3.
     uint8_t dot_remainder = 0;
 
     while (!nes->nes_quit){
-        // NES_LOG_DEBUG("frame_cnt:%d\n",frame_cnt);
-        frame_cnt++;
 #if (NES_FRAME_SKIP != 0)
         if(nes->nes_frame_skip_count == 0)
 #endif
@@ -319,6 +316,8 @@ void nes_run(nes_t* nes){
             dot_remainder += 2;
             if (dot_remainder >= 3) { dot_remainder -= 3; scanline_ticks = 114; }
             if (nes->nes_ppu.MASK_b){
+                if (nes->nes_mapper.mapper_render_screen)
+                    nes->nes_mapper.mapper_render_screen(nes, 1);
 #if (NES_FRAME_SKIP != 0)
                 if (nes->nes_frame_skip_count == 0)
 #endif
@@ -331,6 +330,8 @@ void nes_run(nes_t* nes){
                 }
             }
             if (nes->nes_ppu.MASK_s){
+                if (nes->nes_mapper.mapper_render_screen)
+                    nes->nes_mapper.mapper_render_screen(nes, 0);
 #if (NES_RAM_LACK == 1)
                 nes_render_sprite_line(nes, nes->scanline,nes->nes_draw_data + nes->scanline%(NES_HEIGHT/2) * NES_WIDTH);
 #else
@@ -396,6 +397,9 @@ void nes_run(nes_t* nes){
         }
         
         nes->nes_ppu.STATUS_V = 1;// Set VBlank flag (241 line)
+        if (nes->nes_mapper.mapper_vsync) {
+            nes->nes_mapper.mapper_vsync(nes);
+        }
         if (nes->nes_ppu.CTRL_V) {
             nes->nes_cpu.irq_nmi=1;
         }

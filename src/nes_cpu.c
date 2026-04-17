@@ -49,16 +49,17 @@ static inline uint8_t nes_read_cpu(nes_t* nes,uint16_t address){
 #if (NES_ENABLE_SOUND == 1)
                 return nes_read_apu_register(nes, address);
 #endif
+            }else if (address >= 0x5000){
+                if (nes->nes_mapper.mapper_read_apu)
+                    return nes->nes_mapper.mapper_read_apu(nes, address);
             }else{
                 NES_LOG_DEBUG("nes_read address %04X not support \n",address);
             }
             return 0;
         case 0x6000://$6000-$7FFF SRAM
-#if (NES_USE_SRAM == 1)
-            return nes->nes_rom.sram[address & (uint16_t)0x1fff];
-#else
+            if (nes->nes_rom.sram)
+                return nes->nes_rom.sram[address & (uint16_t)0x1fff];
             return 0;
-#endif
         case 0x8000: case 0xA000: case 0xC000: case 0xE000:
             return nes->nes_cpu.prg_banks[(address >> 13)-4][address & (uint16_t)0x1fff];
         default :
@@ -119,9 +120,8 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
             }
             return;
         case 0x6000://$6000-$7FFF SRAM
-#if (NES_USE_SRAM == 1)
-            nes->nes_rom.sram[address & (uint16_t)0x1fff] = data;
-#endif
+            if (nes->nes_rom.sram)
+                nes->nes_rom.sram[address & (uint16_t)0x1fff] = data;
             return;
         case 0x8000: case 0xA000: case 0xC000: case 0xE000: // $8000-$FFFF PRG-ROM
             nes->nes_mapper.mapper_write(nes, address, data);
