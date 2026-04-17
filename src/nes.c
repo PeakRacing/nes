@@ -226,18 +226,32 @@ static void nes_render_sprite_line(nes_t* nes,uint16_t scanline,nes_color_t* dra
                 }
             }
         }
-        // 检测精灵0命中
-        if (sprite_id==0){
+        // 检测精灵0命中 (逐像素对比已渲染的背景)
+        if (sprite_id == 0){
             if (nes->nes_ppu.MASK_b && nes->nes_ppu.STATUS_S == 0){
-                const uint8_t nametable_id = (uint8_t)nes->nes_ppu.v.nametable;
-                const uint8_t tile_x = (sprite_info_arr[0].x) >> 3;
-                const uint8_t tile_y = (uint8_t)(scanline >> 3);
-                const uint8_t pattern_id = nes->nes_ppu.name_table[nametable_id][tile_x + (tile_y << 5)];
-                const uint8_t bg_base2 = nes->nes_ppu.CTRL_B ? 4 : 0;
-                const uint8_t* bit0_p = pattern_table[bg_base2 + (pattern_id >> 6)] + ((pattern_id & 0x3F) << 4);
-                const uint8_t background_date = bit0_p[dy] | bit0_p[dy + 8] << 1;
-                if (sprite_date & background_date){
-                    nes->nes_ppu.STATUS_S = 1;
+                uint8_t px = sprite_info_arr[0].x;
+                if (sprite_info.flip_h){
+                    for (int8_t m = 0; m <= 7; m++){
+                        if (px == 255) break;
+                        if ((sprite_date >> m) & 1){
+                            if (draw_data[px] != background_color){
+                                nes->nes_ppu.STATUS_S = 1;
+                                break;
+                            }
+                        }
+                        px++;
+                    }
+                } else {
+                    for (int8_t m = 7; m >= 0; m--){
+                        if (px == 255) break;
+                        if ((sprite_date >> m) & 1){
+                            if (draw_data[px] != background_color){
+                                nes->nes_ppu.STATUS_S = 1;
+                                break;
+                            }
+                        }
+                        px++;
+                    }
                 }
             }
         }
