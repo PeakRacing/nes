@@ -289,6 +289,9 @@ void nes_run(nes_t* nes){
 
     nes_cpu_reset(nes);
     uint64_t frame_cnt = 0;
+    // 341 PPU dots per scanline / 3 = 113 remainder 2.
+    // Accumulate fractional cycles: add 2 per scanline, emit +1 CPU cycle when >= 3.
+    uint8_t dot_remainder = 0;
 
     while (!nes->nes_quit){
         // NES_LOG_DEBUG("frame_cnt:%d\n",frame_cnt);
@@ -312,6 +315,9 @@ void nes_run(nes_t* nes){
 #endif
         // https://www.nesdev.org/wiki/PPU_rendering#Visible_scanlines_(0-239)
         for(nes->scanline = 0; nes->scanline < NES_HEIGHT; nes->scanline++) { // 0-239 Visible frame
+            uint16_t scanline_ticks = 113;
+            dot_remainder += 2;
+            if (dot_remainder >= 3) { dot_remainder -= 3; scanline_ticks = 114; }
             if (nes->nes_ppu.MASK_b){
 #if (NES_FRAME_SKIP != 0)
                 if (nes->nes_frame_skip_count == 0)
@@ -357,7 +363,7 @@ void nes_run(nes_t* nes){
             if (nes->nes_mapper.mapper_hsync) {
                 nes->nes_mapper.mapper_hsync(nes);
             }
-            nes_opcode(nes,NES_PPU_CPU_CLOCKS-85);
+            nes_opcode(nes,scanline_ticks-85);
 #if (NES_ENABLE_SOUND==1)
             if (nes->scanline % 66 == 65) nes_apu_frame(nes);
 #endif
@@ -382,7 +388,12 @@ void nes_run(nes_t* nes){
             nes_draw(0, 0, NES_WIDTH-1, NES_HEIGHT-1, nes->nes_draw_data);
         }
 #endif
-        nes_opcode(nes,NES_PPU_CPU_CLOCKS); //240 Post-render line
+        {
+            uint16_t scanline_ticks = 113;
+            dot_remainder += 2;
+            if (dot_remainder >= 3) { dot_remainder -= 3; scanline_ticks = 114; }
+            nes_opcode(nes,scanline_ticks); //240 Post-render line
+        }
         
         nes->nes_ppu.STATUS_V = 1;// Set VBlank flag (241 line)
         if (nes->nes_ppu.CTRL_V) {
@@ -390,10 +401,18 @@ void nes_run(nes_t* nes){
         }
 
         for(uint8_t i = 0; i < 20; i++){ // 241-260行 垂直空白行 x20
-            nes_opcode(nes,NES_PPU_CPU_CLOCKS);
+            uint16_t scanline_ticks = 113;
+            dot_remainder += 2;
+            if (dot_remainder >= 3) { dot_remainder -= 3; scanline_ticks = 114; }
+            nes_opcode(nes,scanline_ticks);
         }
         nes->nes_ppu.ppu_status = 0;    // Clear:VBlank,Sprite 0,Overflow
-        nes_opcode(nes,NES_PPU_CPU_CLOCKS); // Pre-render scanline (-1 or 261)
+        {
+            uint16_t scanline_ticks = 113;
+            dot_remainder += 2;
+            if (dot_remainder >= 3) { dot_remainder -= 3; scanline_ticks = 114; }
+            nes_opcode(nes,scanline_ticks); // Pre-render scanline (-1 or 261)
+        }
 
         if (nes->nes_ppu.MASK_b){
             // https://www.nesdev.org/wiki/PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_(end_of_vblank)

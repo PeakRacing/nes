@@ -86,6 +86,7 @@ typedef struct nes_cpu{
     };
     uint8_t irq_counter;
     uint8_t irq_nmi;
+    uint8_t irq_pending;                   /*  IRQ line asserted (level-triggered, polled per instruction) */
     uint8_t opcode;
     uint16_t cycles;
     uint8_t cpu_ram[NES_CPU_RAM_SIZE];

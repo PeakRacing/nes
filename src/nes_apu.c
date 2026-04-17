@@ -318,6 +318,7 @@ uint8_t nes_read_apu_register(nes_t *nes,uint16_t address){
         if (nes->nes_apu.dmc.load_counter) data |= (1 << 4);
 
         nes->nes_apu.frame_interrupt = 0;
+        nes->nes_cpu.irq_pending = 0;
     }else{
         NES_LOG_DEBUG("nes_read apu %04X %02X\n",address,data);
     }

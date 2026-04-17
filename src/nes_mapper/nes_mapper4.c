@@ -167,11 +167,11 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
         mapper_reg.irq_latch = data;
         break;
     case 0xC001: /* IRQ reload */
-        mapper_reg.irq_counter = 0;
         mapper_reg.irq_reload = 1;
         break;
-    case 0xE000: /* IRQ disable */
+    case 0xE000: /* IRQ disable + acknowledge */
         mapper_reg.irq_enabled = 0;
+        nes->nes_cpu.irq_pending = 0;
         break;
     case 0xE001: /* IRQ enable */
         mapper_reg.irq_enabled = 1;
@@ -191,7 +191,6 @@ static void nes_mapper_hsync(nes_t* nes) {
 
     if (mapper_reg.irq_counter == 0 || mapper_reg.irq_reload) {
         mapper_reg.irq_counter = mapper_reg.irq_latch;
-        mapper_reg.irq_reload = 0;
     } else {
         mapper_reg.irq_counter--;
     }
@@ -199,6 +198,8 @@ static void nes_mapper_hsync(nes_t* nes) {
     if (mapper_reg.irq_counter == 0 && mapper_reg.irq_enabled) {
         nes_cpu_irq(nes);
     }
+
+    mapper_reg.irq_reload = 0;
 }
 
 int nes_mapper4_init(nes_t* nes) {

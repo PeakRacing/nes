@@ -76,8 +76,15 @@ void nes_write_ppu_register(nes_t* nes,uint16_t address, uint8_t data){
         case 0://Controller ($2000) > write
             // t: ....GH.. ........ <- d: ......GH
             //     <used elsewhere> <- d: ABCDEF..
-            nes->nes_ppu.ppu_ctrl = data;
-            nes->nes_ppu.t.nametable = nes->nes_ppu.CTRL_N;
+            {
+                uint8_t old_nmi = nes->nes_ppu.CTRL_V;
+                nes->nes_ppu.ppu_ctrl = data;
+                nes->nes_ppu.t.nametable = nes->nes_ppu.CTRL_N;
+                // Toggling NMI enable from 0→1 while VBlank flag is set triggers NMI
+                if (!old_nmi && nes->nes_ppu.CTRL_V && nes->nes_ppu.STATUS_V) {
+                    nes->nes_cpu.irq_nmi = 1;
+                }
+            }
             break;
         case 1://Mask ($2001) > write
             nes->nes_ppu.ppu_mask = data;

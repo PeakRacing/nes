@@ -1324,14 +1324,7 @@ static inline void nes_nmi(nes_t* nes){
 }
 
 void nes_cpu_irq(nes_t* nes){
-    if (nes->nes_cpu.I==0){
-        NES_PUSHW(nes,nes->nes_cpu.PC);
-        NES_PUSH(nes,nes->nes_cpu.P);
-        NES_B_CLR;
-        NES_I_SET;
-        nes->nes_cpu.PC = nes_readw_cpu(nes,NES_VERCTOR_IRQBRK);
-        nes->nes_cpu.cycles += 7;
-    }
+    nes->nes_cpu.irq_pending = 1;
 }
 
 // https://www.nesdev.org/wiki/CPU_power_up_state#After_reset
@@ -1399,6 +1392,7 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
         // }
         // cycles_old = nes->nes_cpu.cycles;
 #endif
+        uint8_t prev_I = nes->nes_cpu.I;
         nes->nes_cpu.opcode = nes_read_cpu(nes,nes->nes_cpu.PC++);
 
         // https://www.nesdev.org/wiki/CPU_unofficial_opcodes
@@ -1668,11 +1662,31 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
         // cycles += nes->nes_cpu.cycles - cycles_old;
         // fprintf(debug_fp,"\nopcode: %s \n",nes_opcode_name[nes->nes_cpu.opcode]);
 #endif
-        // Check NMI after instruction execution (more accurate timing)
-        // This allows BIT $2002 to read VBlank flag and set N before NMI fires
+        // RTI (0x40) restores I flag with NO delay (unlike CLI/SEI/PLP).
+        // Override prev_I so the IRQ poll uses the restored I value.
+        if (nes->nes_cpu.opcode == 0x40) {
+            prev_I = nes->nes_cpu.I;
+        }
+        // Check NMI after instruction execution.
         if (nes->nes_cpu.irq_nmi) {
             nes_nmi(nes);
             nes->nes_cpu.irq_nmi = 0;
+        }
+        // Poll IRQ line (level-triggered).
+        // Use pre-instruction I flag: on real 6502, IRQ is sampled during the
+        // penultimate cycle, so CLI/SEI/PLP have a 1-instruction delay.
+        // RTI is an exception (prev_I updated above).
+        // Don't clear irq_pending after servicing: IRQ is level-triggered,
+        // the line stays asserted until the source is acknowledged
+        // (e.g., read $4015 for APU, write $E000 for MMC3).
+        if (prev_I == 0 && nes->nes_cpu.irq_pending) {
+            NES_PUSHW(nes, nes->nes_cpu.PC);
+            NES_U_SET;
+            NES_B_CLR;
+            NES_PUSH(nes, nes->nes_cpu.P);
+            NES_I_SET;
+            nes->nes_cpu.PC = nes_readw_cpu(nes, NES_VERCTOR_IRQBRK);
+            nes->nes_cpu.cycles += 7;
         }
     }
     nes->nes_cpu.cycles -= ticks;
