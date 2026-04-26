@@ -62,7 +62,7 @@ int nes_fclose(FILE *stream ){
 #if (NES_ENABLE_SOUND == 1)
 
 rt_weak int nes_sound_output(uint8_t *buffer, size_t len){
-#error "Sound output function is not implemented!"
+#warning "Sound output function is not implemented!"
     return 0;
 }
 #endif
