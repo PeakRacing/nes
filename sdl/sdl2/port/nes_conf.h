@@ -33,6 +33,9 @@
 
 #define NES_USE_FS              (1)       /* use file system */
 #define NES_ROM_STREAM          (0)       /* stream ROM banks from file (saves RAM) */
+/* Enable mappers that require significant heap/stack (>512B per instance).
+ * Enabled on desktop; set to 0 for resource-constrained MCUs. */
+#define NES_ENABLE_HEAVY_MAPPERS (1)
 /*
 *  - NES_LOG_LEVEL_NONE     Do not log anything.
 *  - NES_LOG_LEVEL_ERROR    Log error.

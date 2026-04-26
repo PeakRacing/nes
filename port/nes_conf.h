@@ -32,6 +32,9 @@
 #define NES_RAM_LACK            (0)       /* lack of RAM */
 
 #define NES_USE_FS              (1)       /* use file system */
+/* Enable mappers that require significant heap/stack (>512B per instance).
+ * Set to 0 for resource-constrained MCUs. */
+#define NES_ENABLE_HEAVY_MAPPERS (0)
 /*
 *  - NES_LOG_LEVEL_NONE     Do not log anything.
 *  - NES_LOG_LEVEL_ERROR    Log error.
