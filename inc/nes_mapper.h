@@ -30,6 +30,8 @@ typedef struct {
     void (*mapper_sram)(nes_t* nes, uint16_t write_addr, uint8_t data);
     void (*mapper_apu)(nes_t* nes, uint16_t write_addr, uint8_t data);
     uint8_t (*mapper_read_apu)(nes_t* nes, uint16_t write_addr);
+    /* Callback after CPU instructions consume cycles */
+    void (*mapper_cpu_clock)(nes_t* nes, uint16_t cycles);
     /* Callback at VSync */
     void (*mapper_vsync)(nes_t* nes);
     /* Callback at HSync */

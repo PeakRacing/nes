@@ -36,6 +36,12 @@ static inline void nes_write_joypad(nes_t* nes,uint8_t data){
     // NES_LOG_DEBUG("nes_write joypad %04X %02X %d\n",address,data,nes->nes_cpu.joypad.mask);
 }
 
+static inline void nes_mapper_cpu_tick(nes_t* nes, uint16_t cycles) {
+    if (cycles && nes->nes_mapper.mapper_cpu_clock) {
+        nes->nes_mapper.mapper_cpu_clock(nes, cycles);
+    }
+}
+
 static inline uint8_t nes_read_cpu(nes_t* nes,uint16_t address){
     switch (address & 0xE000){
         case 0x0000://$0000-$1FFF 2KB internal RAM + Mirrors of $0000-$07FF
@@ -49,7 +55,7 @@ static inline uint8_t nes_read_cpu(nes_t* nes,uint16_t address){
 #if (NES_ENABLE_SOUND == 1)
                 return nes_read_apu_register(nes, address);
 #endif
-            }else if (address >= 0x5000){
+            }else if (address >= 0x4020){
                 if (nes->nes_mapper.mapper_read_apu)
                     return nes->nes_mapper.mapper_read_apu(nes, address);
             }else{
@@ -97,6 +103,7 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
                 nes_write_joypad(nes,data);
             else if (address == 0x4014){
                 // NES_LOG_DEBUG("nes_write DMA data:0x%02X oam_addr:0x%02X\n",data,nes->nes_ppu.oam_addr);
+                uint16_t dma_cycles_before = nes->nes_cpu.cycles;
                 if (nes->nes_ppu.oam_addr) {
                     uint8_t* dst = nes->nes_ppu.oam_data;
                     const uint8_t len = nes->nes_ppu.oam_addr;
@@ -108,11 +115,12 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
                 }
                 nes->nes_cpu.cycles += 513;
                 nes->nes_cpu.cycles += nes->nes_cpu.cycles & 1; //奇数周期需要多sleep 1个CPU时钟周期
+                nes_mapper_cpu_tick(nes, (uint16_t)(nes->nes_cpu.cycles - dma_cycles_before));
             }else if (address < 0x4016 || address == 0x4017){
 #if (NES_ENABLE_SOUND == 1)
                 nes_write_apu_register(nes, address,data);
 #endif
-            }else if (address >= 0x5000){
+            }else if (address >= 0x4020){
                 if (nes->nes_mapper.mapper_apu)
                     nes->nes_mapper.mapper_apu(nes, address, data);
             }else{
@@ -1321,6 +1329,7 @@ static inline void nes_nmi(nes_t* nes){
     NES_I_SET;
     nes->nes_cpu.PC = nes_readw_cpu(nes,NES_VERCTOR_NMI);
     nes->nes_cpu.cycles += 7;
+    nes_mapper_cpu_tick(nes, 7);
 }
 
 void nes_cpu_irq(nes_t* nes){
@@ -1392,6 +1401,7 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
         // }
         // cycles_old = nes->nes_cpu.cycles;
 #endif
+        uint16_t cpu_cycles_before = nes->nes_cpu.cycles;
         uint8_t prev_I = nes->nes_cpu.I;
         nes->nes_cpu.opcode = nes_read_cpu(nes,nes->nes_cpu.PC++);
 
@@ -1667,6 +1677,7 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
         if (nes->nes_cpu.opcode == 0x40) {
             prev_I = nes->nes_cpu.I;
         }
+        nes_mapper_cpu_tick(nes, (uint16_t)(nes->nes_cpu.cycles - cpu_cycles_before));
         // Check NMI after instruction execution.
         if (nes->nes_cpu.irq_nmi) {
             nes_nmi(nes);
@@ -1687,6 +1698,7 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
             NES_I_SET;
             nes->nes_cpu.PC = nes_readw_cpu(nes, NES_VERCTOR_IRQBRK);
             nes->nes_cpu.cycles += 7;
+            nes_mapper_cpu_tick(nes, 7);
         }
     }
     nes->nes_cpu.cycles -= ticks;
