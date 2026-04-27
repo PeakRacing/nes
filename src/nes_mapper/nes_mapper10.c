@@ -47,6 +47,14 @@ static void nes_mapper_init(nes_t* nes) {
     r->latch[0] = 1;
     r->latch[1] = 1;
 
+    /* MMC4 battery-backed games use $6000-$7FFF as working RAM; allocate if not yet done */
+    if (nes->nes_rom.sram == NULL) {
+        nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
+        if (nes->nes_rom.sram) {
+            nes_memset(nes->nes_rom.sram, 0, SRAM_SIZE);
+        }
+    }
+
     mapper10_update_prg(nes);
     nes_load_chrrom_4k(nes, 0, r->chr_bank[0][r->latch[0]]);
     nes_load_chrrom_4k(nes, 1, r->chr_bank[1][r->latch[1]]);
