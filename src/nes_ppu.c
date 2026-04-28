@@ -35,11 +35,15 @@ static inline void nes_write_ppu_memory(nes_t* nes,uint8_t data){
     if (address < (uint16_t)0x3F00) {// BANK
         nes->nes_ppu.chr_banks[(uint8_t)(address >> 10)][(uint16_t)(address & (uint16_t)0x3FF)] = data;
     } else {// 调色板
-        if ((uint8_t)address & 0x03) {
-            nes->nes_ppu.palette_indexes[(uint8_t)address & 0x1f] = data & 0x3F;
-        } else {
-            const uint8_t offset = (uint8_t)address & 0x0f;
+        // Only the every-4th (backdrop) entries mirror:
+        // $3F10/$3F14/$3F18/$3F1C <-> $3F00/$3F04/$3F08/$3F0C
+        // All other palette entries are independent.
+        const uint8_t raw = (uint8_t)address & 0x1F;
+        if ((raw & 0x03) == 0) {
+            const uint8_t offset = raw & 0x0F;
             nes->nes_ppu.palette_indexes[offset] = nes->nes_ppu.palette_indexes[offset | 0x10] = data & 0x3F;
+        } else {
+            nes->nes_ppu.palette_indexes[raw] = data & 0x3F;
         }
     }
 }
