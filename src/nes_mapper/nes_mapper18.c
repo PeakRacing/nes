@@ -22,8 +22,9 @@ typedef struct {
     uint8_t  prg[3];        /* 8KB PRG bank indices for $8000/$A000/$C000 */
     uint8_t  chr[8];        /* 1KB CHR bank indices */
     uint8_t  irq_enable;
-    uint16_t irq_counter;   /* Live down-counter (scanline-based) */
-    uint16_t irq_latch;     /* Reloaded on $F001 acknowledge */
+    uint16_t irq_counter;   /* Live CPU-cycle down-counter */
+    uint16_t irq_latch;     /* Reloaded by $F000 */
+    uint16_t irq_mask;      /* Counter width selected by $F001 */
 } nes_mapper18_t;
 
 static void nes_mapper_deinit(nes_t* nes) {
@@ -58,7 +59,17 @@ static void nes_mapper_init(nes_t* nes) {
     nes_memset(m, 0, sizeof(nes_mapper18_t));
 
     m->prg[0] = 0; m->prg[1] = 1; m->prg[2] = 2;
+    m->irq_mask = 0xFFFFu;
     for (int i = 0; i < 8; i++) m->chr[i] = (uint8_t)i;
+
+    if (nes->nes_rom.save_ram && nes->nes_rom.sram == NULL) {
+        nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
+        if (nes->nes_rom.sram != NULL) {
+            nes_memset(nes->nes_rom.sram, 0, SRAM_SIZE);
+        } else {
+            NES_LOG_ERROR("mapper18: failed to allocate SRAM\n");
+        }
+    }
 
     mapper18_update_prg(nes);
     mapper18_update_chr(nes);
@@ -68,6 +79,12 @@ static void nes_mapper_init(nes_t* nes) {
     } else {
         nes_ppu_screen_mirrors(nes, NES_MIRROR_HORIZONTAL);
     }
+}
+
+static void mapper18_reload_irq(nes_t* nes) {
+    nes_mapper18_t* m = (nes_mapper18_t*)nes->nes_mapper.mapper_register;
+    nes->nes_cpu.irq_pending = 0;
+    m->irq_counter = m->irq_latch;
 }
 
 /*
@@ -81,10 +98,10 @@ static void nes_mapper_init(nes_t* nes) {
  * $A000-$D003: 1KB CHR banks 0-7 (two nibble-writes per CHR register)
  * $E000/$E001: IRQ latch bits [7:0]  (low/high nibble)
  * $E002/$E003: IRQ latch bits [15:8] (low/high nibble)
- * $F000:       IRQ enable (bit 0)
- * $F001:       IRQ acknowledge (reload counter from latch)
- * $F002:       IRQ mode (ignored — scanline-only on MCU)
- * $F003:       Mirroring (0=H, 1=V, 2=single0, 3=single1)
+ * $F000:       IRQ acknowledge and reload counter from latch
+ * $F001:       IRQ control (bit0 enable, bits1-3 select counter width)
+ * $F002:       Mirroring (0=H, 1=V, 2=single0, 3=single1)
+ * $F003:       External sound command (ignored)
  */
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     nes_mapper18_t* m = (nes_mapper18_t*)nes->nes_mapper.mapper_register;
@@ -135,22 +152,31 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     case 0xF000:
         switch (address & 0x3u) {
         case 0:
-            m->irq_enable = data & 0x1u;
+            (void)data;
+            mapper18_reload_irq(nes);
             break;
         case 1:
-            /* Acknowledge: clear IRQ, reload counter from latch */
             nes->nes_cpu.irq_pending = 0;
-            m->irq_counter = m->irq_latch;
+            if (data & 0x08u) {
+                m->irq_mask = 0x000Fu;
+            } else if (data & 0x04u) {
+                m->irq_mask = 0x00FFu;
+            } else if (data & 0x02u) {
+                m->irq_mask = 0x0FFFu;
+            } else {
+                m->irq_mask = 0xFFFFu;
+            }
+            m->irq_enable = data & 0x01u;
             break;
         case 2:
-            break; /* IRQ mode — scanline only, ignore */
-        case 3:
             switch (data & 0x3u) {
             case 0: nes_ppu_screen_mirrors(nes, NES_MIRROR_HORIZONTAL);  break;
             case 1: nes_ppu_screen_mirrors(nes, NES_MIRROR_VERTICAL);    break;
             case 2: nes_ppu_screen_mirrors(nes, NES_MIRROR_ONE_SCREEN0); break;
             case 3: nes_ppu_screen_mirrors(nes, NES_MIRROR_ONE_SCREEN1); break;
             }
+            break;
+        case 3:
             break;
         }
         break;
@@ -159,22 +185,29 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     }
 }
 
-/* Scanline IRQ: counter decrements each scanline; fires at 0. */
-static void nes_mapper_hsync(nes_t* nes) {
+static void nes_mapper_cpu_clock(nes_t* nes, uint16_t cycles) {
     nes_mapper18_t* m = (nes_mapper18_t*)nes->nes_mapper.mapper_register;
-    if (!m->irq_enable) return;
-    if (m->irq_counter > 0) {
-        m->irq_counter--;
-        if (m->irq_counter == 0) {
-            nes_cpu_irq(nes);
-        }
+    if (!m->irq_enable || cycles == 0) {
+        return;
+    }
+
+    uint16_t masked = m->irq_counter & m->irq_mask;
+    if (masked == 0) {
+        return;
+    }
+
+    if (cycles >= masked) {
+        m->irq_counter = (uint16_t)(m->irq_counter - masked);
+        nes_cpu_irq(nes);
+    } else {
+        m->irq_counter = (uint16_t)(m->irq_counter - cycles);
     }
 }
 
 int nes_mapper18_init(nes_t* nes) {
-    nes->nes_mapper.mapper_init   = nes_mapper_init;
-    nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
-    nes->nes_mapper.mapper_write  = nes_mapper_write;
-    nes->nes_mapper.mapper_hsync  = nes_mapper_hsync;
+    nes->nes_mapper.mapper_init      = nes_mapper_init;
+    nes->nes_mapper.mapper_deinit    = nes_mapper_deinit;
+    nes->nes_mapper.mapper_write     = nes_mapper_write;
+    nes->nes_mapper.mapper_cpu_clock = nes_mapper_cpu_clock;
     return NES_OK;
 }
