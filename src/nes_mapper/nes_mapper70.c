@@ -21,10 +21,10 @@
 /*
  * Write to $8000-$FFFF:
  *   7  bit  0
- *   CCCC PPPP
+ *   PPPP CCCC
  *   |||| ||||
- *   |||| ++++-- 16KB PRG bank at $8000-$BFFF; $C000-$FFFF fixed to last bank
- *   ++++------- 8KB CHR bank at $0000-$1FFF
+ *   |||| ++++-- 8KB CHR bank at $0000-$1FFF
+ *   ++++------- 16KB PRG bank at $8000-$BFFF; $C000-$FFFF fixed to last bank
  *
  * Mirroring is fixed from the ROM header (no in-cart control).
  */
@@ -43,8 +43,8 @@ static void nes_mapper_init(nes_t* nes) {
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     (void)address;
-    nes_load_prgrom_16k(nes, 0, (data & 0x0F) % nes->nes_rom.prg_rom_size);
-    nes_load_chrrom_8k(nes, 0, (uint8_t)((data >> 4) & 0x0F) % nes->nes_rom.chr_rom_size);
+    nes_load_prgrom_16k(nes, 0, ((data >> 4) & 0x0F) % nes->nes_rom.prg_rom_size);
+    nes_load_chrrom_8k(nes, 0, (data & 0x0F) % nes->nes_rom.chr_rom_size);
 }
 
 int nes_mapper70_init(nes_t* nes) {
