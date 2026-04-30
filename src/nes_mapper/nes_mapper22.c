@@ -20,7 +20,7 @@
  * Mapper 22 - VRC2a (Konami).
  * PRG: 8KB switchable at $8000 and $A000; $C000-$FFFF fixed (last 16KB).
  * CHR: 8x1KB banks ($0000-$1C00), switched via nibble-pair registers.
- * Address decode: A1 = nibble select, A0 = bank-within-block (same as VRC4c/d).
+ * CHR address decode: A1 = nibble select, A0 = bank-within-block (same as VRC4c/d).
  * CHR data nibble: bits[4:1] of written byte (shifted right by 1), unlike VRC4.
  * No IRQ.
  */
@@ -36,6 +36,11 @@ static void nes_mapper_deinit(nes_t* nes) {
     nes->nes_mapper.mapper_register = NULL;
 }
 
+static inline uint16_t mapper22_prg_bank(nes_t* nes, uint8_t bank) {
+    const uint16_t prg_banks = (uint16_t)(nes->nes_rom.prg_rom_size * 2u);
+    return (prg_banks == 0u) ? 0u : (uint16_t)(bank % prg_banks);
+}
+
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
         nes->nes_mapper.mapper_register = nes_malloc(sizeof(mapper22_register_t));
@@ -44,9 +49,11 @@ static void nes_mapper_init(nes_t* nes) {
     mapper22_register_t* r = (mapper22_register_t*)nes->nes_mapper.mapper_register;
     nes_memset(r, 0, sizeof(mapper22_register_t));
 
-    uint16_t prg_banks = (uint16_t)(nes->nes_rom.prg_rom_size * 2u);
-    nes_load_prgrom_8k(nes, 0, 0);
-    nes_load_prgrom_8k(nes, 1, 1);
+    const uint16_t prg_banks = (uint16_t)(nes->nes_rom.prg_rom_size * 2u);
+    r->prg[0] = 0;
+    r->prg[1] = 1;
+    nes_load_prgrom_8k(nes, 0, mapper22_prg_bank(nes, r->prg[0]));
+    nes_load_prgrom_8k(nes, 1, mapper22_prg_bank(nes, r->prg[1]));
     nes_load_prgrom_8k(nes, 2, (uint16_t)(prg_banks - 2u));
     nes_load_prgrom_8k(nes, 3, (uint16_t)(prg_banks - 1u));
 
@@ -77,13 +84,14 @@ static void mapper22_write_chr(mapper22_register_t* r, nes_t* nes,
     } else {
         r->chr[idx] = (r->chr[idx] & 0x0Fu) | (uint8_t)(ndata << 4);
     }
-    nes_load_chrrom_1k(nes, idx, r->chr[idx]);
+    const uint16_t chr_banks = (uint16_t)(nes->nes_rom.chr_rom_size * 8u);
+    nes_load_chrrom_1k(nes, idx, (uint8_t)(r->chr[idx] % chr_banks));
 }
 
 /*
  * $8000        : 8KB PRG bank at $8000, bits[4:0]
- * $9000 (A0=0) : 8KB PRG bank at $A000, bits[4:0]
- * $9001 (A0=1) : mirroring, bit0: 0=vertical, 1=horizontal
+ * $9000        : mirroring, bit0: 0=vertical, 1=horizontal
+ * $A000        : 8KB PRG bank at $A000, bits[4:0]
  * $B000-$E003  : 8x1KB CHR banks via nibble pairs
  */
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
@@ -91,18 +99,17 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     switch (address & 0xF000u) {
     case 0x8000u:
         r->prg[0] = data & 0x1Fu;
-        nes_load_prgrom_8k(nes, 0, r->prg[0]);
+        nes_load_prgrom_8k(nes, 0, mapper22_prg_bank(nes, r->prg[0]));
         break;
     case 0x9000u:
-        if (address & 0x0001u) { /* A0=1: mirroring */
-            r->mirror = data & 0x01u;
-            if (nes->nes_rom.four_screen == 0) {
-                nes_ppu_screen_mirrors(nes, r->mirror ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
-            }
-        } else { /* A0=0: PRG bank at $A000 */
-            r->prg[1] = data & 0x1Fu;
-            nes_load_prgrom_8k(nes, 1, r->prg[1]);
+        r->mirror = data & 0x01u;
+        if (nes->nes_rom.four_screen == 0) {
+            nes_ppu_screen_mirrors(nes, r->mirror ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
         }
+        break;
+    case 0xA000u:
+        r->prg[1] = data & 0x1Fu;
+        nes_load_prgrom_8k(nes, 1, mapper22_prg_bank(nes, r->prg[1]));
         break;
     case 0xB000u:
     case 0xC000u:
