@@ -55,9 +55,9 @@ void nes_load_prgrom_16k(nes_t* nes,uint8_t des, uint16_t src);
 void nes_load_prgrom_32k(nes_t* nes,uint8_t des, uint16_t src);
 
 /* chr rom */
-void nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint8_t src);
-void nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint8_t src);
-void nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint8_t src);
+void nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint16_t src);
+void nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src);
+void nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint16_t src);
 
 /* mapper */
 int nes_load_mapper(nes_t* nes);

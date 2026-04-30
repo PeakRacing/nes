@@ -16,6 +16,21 @@
 
 #include "nes.h"
 
+static inline uint8_t nes_ppu_chr_bank_is_rom(nes_t* nes, uint8_t index) {
+    if (index >= 8u || nes->nes_rom.chr_rom_size == 0u || nes->nes_rom.chr_rom == NULL) {
+        return 0;
+    }
+
+    const uintptr_t bank = (uintptr_t)nes->nes_ppu.chr_banks[index];
+    const uintptr_t chr_rom = (uintptr_t)nes->nes_rom.chr_rom;
+#if (NES_ROM_STREAM == 1)
+    const uintptr_t chr_rom_end = chr_rom + (uintptr_t)NES_CHR_CACHE_SLOTS * 1024u;
+#else
+    const uintptr_t chr_rom_end = chr_rom + (uintptr_t)nes->nes_rom.chr_rom_size * CHR_ROM_UNIT_SIZE;
+#endif
+    return bank >= chr_rom && bank < chr_rom_end;
+}
+
 static inline uint8_t nes_read_ppu_memory(nes_t* nes){
     const uint16_t address = nes->nes_ppu.v_reg & (uint16_t)0x3FFF;
     const uint8_t index = address >> 10;
@@ -33,7 +48,10 @@ static inline uint8_t nes_read_ppu_memory(nes_t* nes){
 static inline void nes_write_ppu_memory(nes_t* nes,uint8_t data){
     const uint16_t address = nes->nes_ppu.v_reg & (uint16_t)0x3FFF;
     if (address < (uint16_t)0x3F00) {// BANK
-        nes->nes_ppu.chr_banks[(uint8_t)(address >> 10)][(uint16_t)(address & (uint16_t)0x3FF)] = data;
+        const uint8_t index = (uint8_t)(address >> 10);
+        if (!nes_ppu_chr_bank_is_rom(nes, index)) {
+            nes->nes_ppu.chr_banks[index][(uint16_t)(address & (uint16_t)0x3FF)] = data;
+        }
     } else {// 调色板
         // Only the every-4th (backdrop) entries mirror:
         // $3F10/$3F14/$3F18/$3F1C <-> $3F00/$3F04/$3F08/$3F0C
