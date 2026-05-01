@@ -439,6 +439,10 @@ void nes_write_apu_register(nes_t* nes,uint16_t address,uint8_t data){
             nes->nes_apu.frame_counter=data;
             if (nes->nes_apu.irq_inhibit_flag){
                 nes->nes_apu.frame_interrupt = 0;
+                /* IRQ inhibit de-asserts the APU IRQ line.
+                   Only clear irq_pending when frame_interrupt was the source;
+                   mapper IRQs will re-assert on the next cpu_clock tick. */
+                nes->nes_cpu.irq_pending = 0;
             }
             if (nes->nes_apu.mode){
                 nes_apu_length_counter_and_sweep(nes);
