@@ -52,9 +52,7 @@ static void nes_mapper_init(nes_t* nes) {
     nes_memset(r, 0, sizeof(mapper232_reg_t));
     r->outer = 3; /* default to last block */
     mapper232_update(nes);
-    if (nes->nes_rom.chr_rom_size > 0) {
-        nes_load_chrrom_8k(nes, 0, 0);
-    }
+    nes_load_chrrom_8k(nes, 0, 0);
 }
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
