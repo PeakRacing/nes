@@ -16,6 +16,44 @@
 
 #include "nes.h"
 
+static uint32_t nes_crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++)
+            crc = (crc >> 1u) ^ (0xEDB88320u & (uint32_t)(-(int32_t)(crc & 1u)));
+    }
+    return crc;
+}
+
+typedef struct { uint32_t crc32; uint16_t mapper; } nes_romdb_entry_t;
+
+/* PRG+CHR CRC32 table — corrects ROMs with wrong mapper in iNES header */
+static const nes_romdb_entry_t romdb[] = {
+    /* Arkanoid II (J) [!] — header says mapper 70, actually Taito TC0190FMC (mapper 33) */
+    { 0x0F141525u, 33u },
+    /* Super Mario Bros.+Tetris+Nintendo World Cup (E) [!] — header says mapper 4, actually PAL-ZZ (mapper 37) */
+    { 0x73298C87u, 37u },
+};
+
+static void nes_romdb_lookup(nes_t* nes) {
+    if (nes->nes_rom.prg_rom == NULL) return;
+    size_t prg_len = (size_t)PRG_ROM_UNIT_SIZE * nes->nes_rom.prg_rom_size;
+    size_t chr_len = (size_t)CHR_ROM_UNIT_SIZE * nes->nes_rom.chr_rom_size;
+    uint32_t c = 0xFFFFFFFFu;
+    c = nes_crc32_update(c, nes->nes_rom.prg_rom, prg_len);
+    if (chr_len > 0u && nes->nes_rom.chr_rom != NULL)
+        c = nes_crc32_update(c, nes->nes_rom.chr_rom, chr_len);
+    uint32_t crc = c ^ 0xFFFFFFFFu;
+    for (size_t i = 0; i < sizeof(romdb) / sizeof(romdb[0]); i++) {
+        if (romdb[i].crc32 == crc) {
+            NES_LOG_INFO("romdb: CRC32=%08X mapper %d->%d\n",
+                         crc, nes->nes_rom.mapper_number, romdb[i].mapper);
+            nes->nes_rom.mapper_number = romdb[i].mapper;
+            return;
+        }
+    }
+}
+
 #if (NES_USE_FS == 1)
 int nes_load_file(nes_t* nes, const char* file_path ){
     nes_header_ines_t nes_header_info = {0};
@@ -123,6 +161,9 @@ int nes_load_file(nes_t* nes, const char* file_path ){
     nes_apu_init(nes);
 #endif
     nes_ppu_init(nes);
+#if (NES_ROM_STREAM != 1)
+    nes_romdb_lookup(nes);
+#endif
     if(nes_load_mapper(nes)){
         goto error;
     }
@@ -220,6 +261,7 @@ int nes_load_rom(nes_t* nes, const uint8_t* nes_rom){
     nes_apu_init(nes);
 #endif
     nes_ppu_init(nes);
+    nes_romdb_lookup(nes);
     if(nes_load_mapper(nes)){
         return NES_ERROR;
     }
