@@ -189,9 +189,10 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
 }
 
 /*
- * MMC3 scanline counter:
- * Called once per visible scanline (when rendering is enabled).
- * When the counter is clocked to 0, if IRQ is enabled, an IRQ is fired.
+ * MMC3 scanline counter (NESdev accurate):
+ * IRQ fires ONLY when the counter decrements to 0, not when it reloads to 0.
+ * With latch=0: reload always produces counter=0 but does NOT trigger IRQ.
+ * https://www.nesdev.org/wiki/MMC3#IRQ_Specifics
  */
 static void nes_mapper_hsync(nes_t* nes) {
     mapper4_register_t* mapper_reg = (mapper4_register_t*)nes->nes_mapper.mapper_register;
@@ -201,15 +202,14 @@ static void nes_mapper_hsync(nes_t* nes) {
 
     if (mapper_reg->irq_counter == 0 || mapper_reg->irq_reload) {
         mapper_reg->irq_counter = mapper_reg->irq_latch;
+        mapper_reg->irq_reload = 0;
+        /* reload to 0 does NOT fire IRQ */
     } else {
         mapper_reg->irq_counter--;
+        if (mapper_reg->irq_counter == 0 && mapper_reg->irq_enabled) {
+            nes_cpu_irq(nes);
+        }
     }
-
-    if (mapper_reg->irq_counter == 0 && mapper_reg->irq_enabled) {
-        nes_cpu_irq(nes);
-    }
-
-    mapper_reg->irq_reload = 0;
 }
 
 int nes_mapper4_init(nes_t* nes) {

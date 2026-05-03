@@ -102,9 +102,12 @@ void nes_write_ppu_register(nes_t* nes,uint16_t address, uint8_t data){
                 uint8_t old_nmi = nes->nes_ppu.CTRL_V;
                 nes->nes_ppu.ppu_ctrl = data;
                 nes->nes_ppu.t.nametable = nes->nes_ppu.CTRL_N;
-                // Toggling NMI enable from 0→1 while VBlank flag is set triggers NMI
+                // Toggling NMI enable from 0→1 while VBlank flag is set triggers NMI.
+                // On real 6502, NMI is sampled on the second-to-last cycle of each instruction,
+                // and the PPU write happens on the last cycle — so NMI fires after the NEXT
+                // instruction completes. Use irq_nmi_delay to model this 1-instruction latency.
                 if (!old_nmi && nes->nes_ppu.CTRL_V && nes->nes_ppu.STATUS_V) {
-                    nes->nes_cpu.irq_nmi = 1;
+                    nes->nes_cpu.irq_nmi_delay = 1;
                 }
             }
             break;

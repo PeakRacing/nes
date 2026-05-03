@@ -1686,6 +1686,11 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
             nes_nmi(nes);
             nes->nes_cpu.irq_nmi = 0;
         }
+        // Advance delayed NMI counter (from $2000 write during VBlank).
+        // Fires on the next instruction boundary after the write.
+        if (nes->nes_cpu.irq_nmi_delay && --nes->nes_cpu.irq_nmi_delay == 0) {
+            nes->nes_cpu.irq_nmi = 1;
+        }
         // Poll IRQ line (level-triggered).
         // Use pre-instruction I flag: on real 6502, IRQ is sampled during the
         // penultimate cycle, so CLI/SEI/PLP have a 1-instruction delay.
