@@ -17,7 +17,7 @@
 #include "nes.h"
 
 static inline uint8_t nes_ppu_chr_bank_is_rom(nes_t* nes, uint8_t index) {
-    if (index >= 8u || nes->nes_rom.chr_rom_size == 0u || nes->nes_rom.chr_rom == NULL) {
+    if (nes->nes_rom.chr_rom_size == 0u || nes->nes_rom.chr_rom == NULL) {
         return 0;
     }
 
@@ -28,6 +28,9 @@ static inline uint8_t nes_ppu_chr_bank_is_rom(nes_t* nes, uint8_t index) {
 #else
     const uintptr_t chr_rom_end = chr_rom + (uintptr_t)nes->nes_rom.chr_rom_size * CHR_ROM_UNIT_SIZE;
 #endif
+    // Covers all 16 chr_banks slots (pattern tables 0-7 AND nametable slots 8-15).
+    // Mapper 19 (Namco 163) can map nametable slots to CHR ROM; writes to those
+    // addresses must be blocked just like writes to CHR ROM-backed pattern tables.
     return bank >= chr_rom && bank < chr_rom_end;
 }
 

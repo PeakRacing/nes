@@ -89,7 +89,21 @@ static void nes_mapper_init(nes_t* nes) {
 
     m->prg[0] = 0; m->prg[1] = 1; m->prg[2] = 2;
     for (int i = 0; i < 8; i++) m->chr[i] = (uint8_t)i;
-    for (int i = 0; i < 4; i++) m->nta[i] = 0xFFu;
+
+    // Initialize NT banks based on ROM header mirroring.
+    // Real hardware power-on state is undefined, but games that never write
+    // to $C000-$DFFF rely on the initial state matching their expected mirroring.
+    if (nes->nes_rom.mirroring_type) {
+        // Vertical mirroring (horizontal arrangement / horizontal scrolling):
+        // NT0 and NT2 → ppu_vram[0]; NT1 and NT3 → ppu_vram[1]
+        m->nta[0] = 0xE0u; m->nta[1] = 0xE1u;
+        m->nta[2] = 0xE0u; m->nta[3] = 0xE1u;
+    } else {
+        // Horizontal mirroring (vertical arrangement / vertical scrolling):
+        // NT0 and NT1 → ppu_vram[0]; NT2 and NT3 → ppu_vram[1]
+        m->nta[0] = 0xE0u; m->nta[1] = 0xE0u;
+        m->nta[2] = 0xE1u; m->nta[3] = 0xE1u;
+    }
 
     if (nes->nes_rom.sram == NULL) {
         nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
