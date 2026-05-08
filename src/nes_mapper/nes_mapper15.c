@@ -16,44 +16,72 @@
 
 #include "nes.h"
 #include "nes_mapper.h"
-
-/* https://www.nesdev.org/wiki/INES_Mapper_015 */
-
-static void nes_mapper_init(nes_t* nes) {
-    // CPU $8000-$BFFF: First 16 KB PRG ROM bank.
-    nes_load_prgrom_16k(nes, 0, 0);
-    // CPU $C000-$FFFF: Last 16 KB PRG ROM bank.
-    nes_load_prgrom_16k(nes, 1, nes->nes_rom.prg_rom_size - 1);
-    // CHR-RAM: 8 KiB.
-    nes_load_chrrom_8k(nes, 0, 0);
-}
+#include "nes_log.h"
 
 /*
-    Bank select register at $8000-$FFFF:
-    7  bit  0
-    ---- ----
-    BBBB BBSM
-    ||||||||||
-    ||||||+--- M: Mirroring (0: vertical, 1: horizontal)
-    |||||+---- S: Swap bit (0: normal order, 1: swapped)
-    ++++++---- B: 6-bit bank number (selects 32KB-aligned pair of 16KB banks)
-*/
-static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
-    (void)address;
-    uint8_t B = (data >> 2) & 0x3F;
-    uint8_t S = (data >> 1) & 0x01;
-    uint8_t M = data & 0x01;
-    uint8_t base = B * 2;
+ * Mapper 15 — 100-in-1 Contra Function 16 / Waixing/Subor Chinese originals
+ * https://www.nesdev.org/wiki/INES_Mapper_015
+ * Reference: FCEUX src/boards/15.cpp
+ *
+ * Register at $8000-$FFFF (write-only):
+ *   Bit 7:   S  — 8KB bank select within 16KB pair (mode 2 only)
+ *   Bit 6:   M  — Mirroring: 0=vertical, 1=horizontal
+ *   Bits 5-0: B — 6-bit 16KB bank number
+ *
+ * Banking mode = (address & 3) [A1:A0]:
+ *   0: 32KB block → $8000-$BFFF = bank B, $C000-$FFFF = bank B+1
+ *   1: $8000-$BFFF = bank B, $C000-$FFFF = bank (B|7) (last in 8-bank group)
+ *   2: all four 8KB slots = 8KB bank (B*2 + S)
+ *   3: $8000-$BFFF = bank B, $C000-$FFFF = bank B (mirror)
+ */
 
-    if (S == 0) {
-        nes_load_prgrom_16k(nes, 0, base);
-        nes_load_prgrom_16k(nes, 1, base + 1);
-    } else {
-        nes_load_prgrom_16k(nes, 0, base + 1);
-        nes_load_prgrom_16k(nes, 1, base);
+static void mapper15_apply(nes_t* nes, uint16_t address, uint8_t data) {
+    uint8_t  B = data & 0x3Fu;
+    uint8_t  S = data >> 7;
+    uint8_t  M = (data >> 6) & 1u;
+
+    switch (address & 3u) {
+        case 0: /* 32KB aligned block */
+            nes_load_prgrom_16k(nes, 0, B);
+            nes_load_prgrom_16k(nes, 1, (uint16_t)(B + 1u));
+            break;
+        case 1: /* lower=B, upper=last-in-group */
+            nes_load_prgrom_16k(nes, 0, B);
+            nes_load_prgrom_16k(nes, 1, B | 7u);
+            break;
+        case 2: /* all four 8KB slots = same 8KB bank */
+        {
+            uint16_t bank8 = (uint16_t)((uint16_t)B * 2u + S);
+            nes_load_prgrom_8k(nes, 0, bank8);
+            nes_load_prgrom_8k(nes, 1, bank8);
+            nes_load_prgrom_8k(nes, 2, bank8);
+            nes_load_prgrom_8k(nes, 3, bank8);
+            break;
+        }
+        default: /* case 3: mirror lower = upper = B */
+            nes_load_prgrom_16k(nes, 0, B);
+            nes_load_prgrom_16k(nes, 1, B);
+            break;
     }
 
     nes_ppu_screen_mirrors(nes, M ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
+}
+
+static void nes_mapper_init(nes_t* nes) {
+    /* Power-on: latchea=0x8000, latched=0 → case 0, B=0 → first 32KB */
+    nes_load_prgrom_16k(nes, 0, 0);
+    nes_load_prgrom_16k(nes, 1, 1);
+    nes_load_chrrom_8k(nes, 0, 0);
+
+    /* WRAM at $6000-$7FFF (Chinese originals use it extensively) */
+    if (nes->nes_rom.sram == NULL) {
+        nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
+        if (nes->nes_rom.sram) nes_memset(nes->nes_rom.sram, 0, SRAM_SIZE);
+    }
+}
+
+static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
+    mapper15_apply(nes, address, data);
 }
 
 int nes_mapper15_init(nes_t* nes) {
