@@ -38,6 +38,9 @@ void nes_free(void *address){
 }
 
 void *nes_memcpy(void *str1, const void *str2, size_t n){
+    if (str1 == NULL || str2 == NULL || n == 0) {
+        return str1;
+    }
     return SDL_memcpy(str1, str2, n);
 }
 
