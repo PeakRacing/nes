@@ -69,6 +69,8 @@ static inline uint8_t nes_read_cpu(nes_t* nes,uint16_t address){
                 return nes->nes_rom.sram[address & (uint16_t)0x1fff];
             return 0;
         case 0x8000: case 0xA000: case 0xC000: case 0xE000:
+            if (nes->nes_mapper.mapper_read_prg)
+                return nes->nes_mapper.mapper_read_prg(nes, address);
             return nes->nes_cpu.prg_banks[(address >> 13)-4][address & (uint16_t)0x1fff];
         default :
             NES_LOG_DEBUG("nes_read_cpu error %04X\n",address);

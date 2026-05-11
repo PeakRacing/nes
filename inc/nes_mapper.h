@@ -29,6 +29,7 @@ typedef struct {
     void (*mapper_init)(nes_t* nes);
     void (*mapper_deinit)(nes_t* nes);
     void (*mapper_write)(nes_t* nes, uint16_t write_addr, uint8_t data);
+    uint8_t (*mapper_read_prg)(nes_t* nes, uint16_t read_addr);
     void (*mapper_sram)(nes_t* nes, uint16_t write_addr, uint8_t data);
     uint8_t (*mapper_read_sram)(nes_t* nes, uint16_t read_addr);
     void (*mapper_apu)(nes_t* nes, uint16_t write_addr, uint8_t data);

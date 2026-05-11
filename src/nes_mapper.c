@@ -769,6 +769,7 @@ int nes_load_mapper(nes_t* nes){
         NES_CASE_LOAD_MAPPER(13);
         NES_CASE_LOAD_MAPPER(15);
         NES_CASE_LOAD_MAPPER(16);
+        NES_CASE_LOAD_MAPPER(17);
         NES_CASE_LOAD_MAPPER(18);
 #if NES_ENABLE_HEAVY_MAPPERS
         NES_CASE_LOAD_MAPPER(19);
