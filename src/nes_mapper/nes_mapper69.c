@@ -173,15 +173,17 @@ static uint8_t nes_mapper_read_sram(nes_t* nes, uint16_t address) {
 }
 
 /*
- * 16-bit cycle counter: decrements every CPU cycle when both timer and
- * counter enable bits are set.  Fires IRQ on unsigned underflow (0 -> 0xFFFF).
+ * 16-bit cycle counter: decrements every CPU cycle when counter enable
+ * (bit7 of reg $D) is set.  IRQ fires on unsigned underflow only when
+ * IRQ enable (bit0 of reg $D) is also set.
+ * NESdev: counter decrements regardless of IRQ enable bit.
  */
 static void nes_mapper_cpu_clock(nes_t* nes, uint16_t cycles) {
     nes_mapper69_t* m = (nes_mapper69_t*)nes->nes_mapper.mapper_register;
-    if (!(m->irq_timer_en && m->irq_counter_en)) return;
+    if (!m->irq_timer_en) return;
     uint16_t prev = m->irq_counter;
     m->irq_counter -= cycles;
-    if (m->irq_counter > prev) {  /* unsigned underflow */
+    if (m->irq_counter_en && m->irq_counter > prev) {  /* unsigned underflow → IRQ */
         nes_cpu_irq(nes);
     }
 }

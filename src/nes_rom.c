@@ -39,6 +39,11 @@ static const nes_romdb_entry_t romdb[] = {
        never enables PPUMASK. mapper3 (CNROM bus-conflict) gives wrong CHR banks.
        mapper144 = fixed PRG last bank + CHR via bits[7:4], which is the correct behavior. */
     { 0x5CAA3E61u, 144u },
+    /* Family Circuit '91 (J) [!] — header says mapper 19, actual PCB is NAMCOT-175 (mapper 210).
+       NAMCOT-175 has hardwired mirroring, no audio expansion, and no NT-bank redirection.
+       Under mapper 19, CHR banks 0xE0-0xFF (valid CHR-ROM pages in this 256KB CHR ROM)
+       are incorrectly rerouted to PPU VRAM, corrupting all background tiles. */
+    { 0xC247CC80u, 210u },
 };
 
 static void nes_romdb_lookup(nes_t* nes) {
