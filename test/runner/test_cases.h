@@ -50,6 +50,7 @@ int test_stream_consistency(void);
 int test_mapper_dispatch(void);
 int test_mapper_bank_helpers(void);
 int test_mapper4_waixing_window(void);
+int test_mapper4_wram(void);
 int test_mapper_synthetic_smoke(void);
 int test_mapper_write_storm(void);
 int test_mapper_bank_stress(void);

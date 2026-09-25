@@ -207,6 +207,42 @@ int test_mapper4_waixing_window(void) {
     return TEST_PASS;
 }
 
+/*
+ * MMC3 boards carry 8KB of PRG-RAM at $6000-$7FFF even when the iNES header has no
+ * battery bit (TSROM: Super Mario Bros. 2/USA and friends use it as plain work RAM).
+ * Builds with NES_USE_SRAM=0 leave nes_rom.sram NULL, so the board itself has to
+ * provide it - 超级马里奥2 otherwise stops on the yellow level-load screen right
+ * after the character select.
+ */
+int test_mapper4_wram(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 4, 4, 1);
+    spec.save = 0;                          /* TSROM: WRAM but no battery bit */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+
+    /* Both the core (NES_USE_SRAM=1) and the board may have allocated it; drop the
+     * core's buffer and re-run the board init to model a NES_USE_SRAM=0 build. */
+    if (nes->nes_rom.sram != NULL) {
+        nes_free(nes->nes_rom.sram);
+        nes->nes_rom.sram = NULL;
+    }
+    (void)nes->nes_mapper.mapper_init(nes);
+    TEST_CHECK(nes->nes_rom.sram != NULL);
+
+    /* $6000-$7FFF now behaves like work RAM through the CPU bus. */
+    nes_test_cpu_write(nes, 0x61C2, 0x4D);
+    nes_test_cpu_write(nes, 0x7802, 0xFB);
+    TEST_EQ_U32(0x4D, nes_test_cpu_read(nes, 0x61C2));
+    TEST_EQ_U32(0xFB, nes_test_cpu_read(nes, 0x7802));
+    /* SRAM is not battery backed on those boards: the header bit stays clear. */
+    TEST_EQ_U32(0, nes->nes_rom.save_ram);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 static int mapper_fail(const char* what, uint16_t mapper, int variant, const char* detail) {
     char label[96];
     snprintf(label, sizeof(label), "mapper %u%s: %s", (unsigned)mapper,

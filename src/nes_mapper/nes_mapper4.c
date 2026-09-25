@@ -152,7 +152,13 @@ static void nes_mapper_init(nes_t* nes) {
         nes_load_chrrom_8k(nes, 0, 0);
     }
 
-    if (nes->nes_rom.save_ram && nes->nes_rom.sram == NULL) {
+    /* MMC3 boards wire 8KB of PRG-RAM at $6000-$7FFF even when the iNES header
+     * carries no battery bit (TSROM and friends: Super Mario Bros. 2/USA, Super
+     * Mario Bros. 3, ...).  Those games use it as plain work RAM, so the board has
+     * to supply it: the core only allocates nes_rom.sram when NES_USE_SRAM is on,
+     * and with it off every $6000-$7FFF access reads 0 - 超级马里奥2 then hangs on
+     * the yellow level-load screen after the character select. */
+    if (nes->nes_rom.sram == NULL) {
         nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
         if (nes->nes_rom.sram != NULL) {
             nes_memset(nes->nes_rom.sram, 0, SRAM_SIZE);
