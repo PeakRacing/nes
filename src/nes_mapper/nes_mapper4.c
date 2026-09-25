@@ -29,10 +29,22 @@ typedef struct {
     uint8_t irq_enabled;    /* $E001: IRQ enabled */
     uint16_t prg_bank_count; /* Number of 8KB PRG banks */
     uint16_t chr_bank_count; /* Number of 1KB CHR banks */
+    /* Waixing protection board (Chinese originals such as 风云/Feng Yun):
+     * the board answers an $5010 handshake and owns a 2KB CHR-RAM window that it
+     * serves at $0800-$0FFF while R1 selects bank $00.  The game fills that window
+     * itself through $2007 (dialog font and message frame tiles).  See below. */
+    uint8_t* prot_ram;      /* 2KB CHR-RAM window, allocated on the handshake */
 } mapper4_register_t;
+
+#define MAPPER4_PROTECT_RAM_SIZE    (2048u)
 
 
 static void nes_mapper_deinit(nes_t* nes) {
+    mapper4_register_t* mapper_reg = (mapper4_register_t*)nes->nes_mapper.mapper_register;
+    if (mapper_reg != NULL && mapper_reg->prot_ram != NULL) {
+        nes_free(mapper_reg->prot_ram);
+        mapper_reg->prot_ram = NULL;
+    }
     nes_free(nes->nes_mapper.mapper_register);
     nes->nes_mapper.mapper_register = NULL;
 }
@@ -95,6 +107,18 @@ static void mapper4_update_banks(nes_t* nes) {
         nes_load_chrrom_1k(nes, 6, (mapper_reg->bank_values[1] & 0xFE) % mapper_reg->chr_bank_count);
         nes_load_chrrom_1k(nes, 7, (mapper_reg->bank_values[1] | 0x01) % mapper_reg->chr_bank_count);
     }
+
+    /* Waixing protection board: while R1 selects bank $00 the board replaces the
+     * whole $0800-$0FFF window with its own 2KB CHR-RAM instead of the CHR-ROM
+     * bank the MMC3 would page in. 风云.nes writes its dialog font (tiles $C0-$FF)
+     * and its message frame tiles ($80-$93) into that window through $2007, so the
+     * writes must land in RAM that the PPU then reads back.  Every other R1 value
+     * selects a normal CHR-ROM bank, which is why the game switches R1 between $00
+     * and real banks as it draws different screens. */
+    if (mapper_reg->prot_ram != NULL && mapper_reg->bank_values[1] == 0x00u && chr_mode == 0) {
+        nes->nes_ppu.pattern_table[2] = mapper_reg->prot_ram;
+        nes->nes_ppu.pattern_table[3] = mapper_reg->prot_ram + 1024;
+    }
 }
 
 static void nes_mapper_init(nes_t* nes) {
@@ -113,6 +137,7 @@ static void nes_mapper_init(nes_t* nes) {
     mapper_reg->irq_counter = 0;
     mapper_reg->irq_reload = 0;
     mapper_reg->irq_enabled = 0;
+    mapper_reg->prot_ram = NULL;
 
     for (int i = 0; i < 8; i++) {
         mapper_reg->bank_values[i] = 0;
@@ -137,6 +162,33 @@ static void nes_mapper_init(nes_t* nes) {
     }
 
     mapper4_update_banks(nes);
+}
+
+/*
+ * $5000-$5FFF: Waixing protection board registers (not an MMC3 feature).
+ *   $5010 = $8C  board handshake / authentication.  Once the board answers, it owns
+ *                the 2KB CHR-RAM window served at $0800-$0FFF (see update_banks);
+ *                the game writes its Chinese font into that window through $2007.
+ * 风云.nes (外星電腦科技) runs this handshake right after reset, so the board is
+ * detected from the write itself instead of a CRC table, and boards that never
+ * touch $5010 keep plain MMC3 CHR-ROM banking.
+ */
+static void nes_mapper_apu_write(nes_t* nes, uint16_t address, uint8_t data) {
+    mapper4_register_t* mapper_reg = (mapper4_register_t*)nes->nes_mapper.mapper_register;
+    if (address != 0x5010u) {
+        return;
+    }
+    if (data == 0x8Cu) {
+        if (mapper_reg->prot_ram == NULL) {
+            mapper_reg->prot_ram = (uint8_t*)nes_malloc(MAPPER4_PROTECT_RAM_SIZE);
+            if (mapper_reg->prot_ram != NULL) {
+                nes_memset(mapper_reg->prot_ram, 0, MAPPER4_PROTECT_RAM_SIZE);
+                mapper4_update_banks(nes);
+            } else {
+                NES_LOG_ERROR("mapper4: failed to allocate protection CHR-RAM\n");
+            }
+        }
+    }
 }
 
 /*
@@ -225,6 +277,7 @@ int nes_mapper4_init(nes_t* nes) {
     nes->nes_mapper.mapper_init = nes_mapper_init;
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
     nes->nes_mapper.mapper_write = nes_mapper_write;
+    nes->nes_mapper.mapper_apu = nes_mapper_apu_write;
     nes->nes_mapper.mapper_hsync = nes_mapper_hsync;
     return NES_OK;
 }
