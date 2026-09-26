@@ -66,6 +66,9 @@ static inline void nes_write_ppu_memory(nes_t* nes,uint8_t data){
         } else {
             nes->nes_ppu.palette_indexes[raw] = data & 0x3F;
         }
+        /* Games rewrite palette RAM mid-frame (raster splits, text/status bars):
+         * refresh the RGB cache now so the next rendered scanline uses it. */
+        nes_palette_generate(nes);
     }
 }
 
@@ -200,4 +203,5 @@ void nes_ppu_screen_mirrors(nes_t *nes,nes_mirror_type_t mirror_type){
 void nes_ppu_init(nes_t *nes){
     nes_ppu_screen_mirrors(nes,NES_MIRROR_AUTO);
 }
+
 

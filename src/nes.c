@@ -59,7 +59,11 @@ int nes_deinit(nes_t *nes){
     return NES_OK;
 }
 
-static inline void nes_palette_generate(nes_t* nes){
+/* Rebuild the RGB palette cache from palette_indexes[].
+ * Called once per frame and, importantly, on every palette RAM write:
+ * games change palette RAM mid-frame (raster splits) and the change must be
+ * visible from the next rendered scanline on. */
+void nes_palette_generate(nes_t* nes){
     for (uint8_t i = 0; i < 32; i++) {
         nes->nes_ppu.palette[i] = nes_palette[nes->nes_ppu.palette_indexes[i]];
     }

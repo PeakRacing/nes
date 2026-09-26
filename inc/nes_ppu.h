@@ -171,6 +171,8 @@ typedef struct nes_ppu{
 
 void nes_ppu_init(nes_t *nes);
 void nes_ppu_screen_mirrors(nes_t *nes,nes_mirror_type_t mirror_type);
+/* Rebuild the RGB palette cache after palette RAM changes (incl. mid-frame). */
+void nes_palette_generate(nes_t* nes);
 
 uint8_t nes_read_ppu_register(nes_t *nes,uint16_t address);
 void nes_write_ppu_register(nes_t *nes,uint16_t address, uint8_t data);
