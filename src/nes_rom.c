@@ -25,25 +25,38 @@ static uint32_t nes_crc32_update(uint32_t crc, const uint8_t* data, size_t len) 
     return crc;
 }
 
-typedef struct { uint32_t crc32; uint16_t mapper; } nes_romdb_entry_t;
+typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; } nes_romdb_entry_t;
 
 /* PRG+CHR CRC32 table — corrects ROMs with wrong mapper in iNES header */
 static const nes_romdb_entry_t romdb[] = {
     /* Arkanoid II (J) [!] — header says mapper 70, actually Taito TC0190FMC (mapper 33) */
-    { 0x0F141525u, 33u },
+    { 0x0F141525u, 33u, 0u },
     /* Super Mario Bros.+Tetris+Nintendo World Cup (E) [!] — header says mapper 4, actually PAL-ZZ (mapper 37) */
-    { 0x73298C87u, 37u },
+    { 0x73298C87u, 37u, 0u },
     /* Death Race (U) [!] — header says mapper 11, actual hardware is AGCI PCB (mapper 144).
        PRG fixed to last 32KB (bank1); CHR switched via upper nibble of write data.
        mapper11 breaks: PRG-switch at $804C sends CPU to bank0 whose NMI handler
        never enables PPUMASK. mapper3 (CNROM bus-conflict) gives wrong CHR banks.
        mapper144 = fixed PRG last bank + CHR via bits[7:4], which is the correct behavior. */
-    { 0x5CAA3E61u, 144u },
+    { 0x5CAA3E61u, 144u, 0u },
     /* Family Circuit '91 (J) [!] — header says mapper 19, actual PCB is NAMCOT-175 (mapper 210).
        NAMCOT-175 has hardwired mirroring, no audio expansion, and no NT-bank redirection.
        Under mapper 19, CHR banks 0xE0-0xFF (valid CHR-ROM pages in this 256KB CHR ROM)
        are incorrectly rerouted to PPU VRAM, corrupting all background tiles. */
-    { 0xC247CC80u, 210u },
+    { 0xC247CC80u, 210u, 0u },
+    /* Dragon Ball Z 3 - 烈战人造人间 (Waixing, Unl) — header says mapper 74, but the PCB is
+       Waixing board G = mapper 199: CHR banks 0-7 address an 8KB CHR-RAM that the game
+       fills with its Chinese font and dynamic tiles, banks 8+ come from CHR-ROM.
+       Under mapper 74/192 those uploads (8192 bytes at boot, again per screen change)
+       are dropped as CHR-ROM writes, so the game renders the ROM's leftover Japanese
+       glyph pages => "乱码".  Rule verified against MAME's Waixing board G
+       (nes_waixing_g_device::chr_cb: bank < 0x08 ? CHRRAM : CHRROM). */
+    { 0x62DDE924u, 199u, 0u },
+    /* 激龟忍者传2 (TMNT2, Konami) — VRC4d board: the mirroring register is wired with the opposite
+       polarity (0 = horizontal, i.e. NT0 = NT1).  The game writes its status bar into
+       $2000-$23BF and scans it out of $2400, so vertical mirroring leaves the top six tile
+       rows blank and hides the HUD (verified against Mesen, which shows the bar). */
+    { 0x0DBDD55Du, 25u, 1u },
 };
 
 static void nes_romdb_lookup(nes_t* nes) {
@@ -61,6 +74,7 @@ static void nes_romdb_lookup(nes_t* nes) {
             NES_LOG_INFO("romdb: CRC32=%08X mapper %d->%d\n",
                          crc, nes->nes_rom.mapper_number, romdb[i].mapper);
             nes->nes_rom.mapper_number = romdb[i].mapper;
+            nes->nes_rom.vrc4d = romdb[i].vrc4d;
             return;
         }
     }

@@ -118,9 +118,19 @@ static void mapper25_write_chr(mapper25_register_t* r, nes_t* nes,
     nes_load_chrrom_1k(nes, idx, (uint8_t)(r->chr[idx] % chr_banks));
 }
 
+/* VRC2c/VRC4b: 0 = vertical, 1 = horizontal.
+ * VRC4d ROMs (see nes_romdb) drive the same register with the opposite polarity,
+ * so for them 0 selects horizontal (NT0 = NT1). */
 static const nes_mirror_type_t vrc4_mirror_table[4] = {
     NES_MIRROR_VERTICAL,
     NES_MIRROR_HORIZONTAL,
+    NES_MIRROR_ONE_SCREEN0,
+    NES_MIRROR_ONE_SCREEN1,
+};
+
+static const nes_mirror_type_t vrc4d_mirror_table[4] = {
+    NES_MIRROR_HORIZONTAL,
+    NES_MIRROR_VERTICAL,
     NES_MIRROR_ONE_SCREEN0,
     NES_MIRROR_ONE_SCREEN1,
 };
@@ -157,7 +167,7 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     case 0x9001u:
         r->mirror = data & 0x03u;
         if (data != 0xFFu && nes->nes_rom.four_screen == 0) {
-            nes_ppu_screen_mirrors(nes, vrc4_mirror_table[r->mirror]);
+            nes_ppu_screen_mirrors(nes, (nes->nes_rom.vrc4d ? vrc4d_mirror_table : vrc4_mirror_table)[r->mirror]);
         }
         break;
     case 0x9002u:
