@@ -105,6 +105,10 @@ static inline uint8_t* nes_get_dma_address(nes_t* nes,uint8_t data) {
     }
 }
 
+static inline int nes_dma_needs_bus_read(const nes_t* nes, uint8_t data) {
+    return (data >> 5) >= 4 && nes->nes_mapper.mapper_read_prg != NULL;
+}
+
 static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
     switch (address & 0xE000){
         case 0x0000://$0000-$1FFF 2KB internal RAM + Mirrors of $0000-$07FF
@@ -119,9 +123,9 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
             else if (address == 0x4014){
                 // NES_LOG_DEBUG("nes_write DMA data:0x%02X oam_addr:0x%02X\n",data,nes->nes_ppu.oam_addr);
                 const uint8_t dma_odd_cycle = nes->nes_cpu.cycles & 1u;
-                const uint8_t* src = nes_get_dma_address(nes,data);
+                const uint8_t* src = nes_dma_needs_bus_read(nes, data) ? NULL : nes_get_dma_address(nes,data);
                 if (src != NULL) {
-                    /* Fast path: $0000-$1FFF RAM and $8000-$FFFF PRG are direct-mapped. */
+                    /* Fast path: RAM and ordinary PRG mappings stay one memcpy for MCU builds. */
                     if (nes->nes_ppu.oam_addr) {
                         uint8_t* dst = nes->nes_ppu.oam_data;
                         const uint16_t offset = nes->nes_ppu.oam_addr;
@@ -131,9 +135,8 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
                         nes_memcpy(nes->nes_ppu.oam_data, src, NES_PPU_OAM_SIZE);
                     }
                 } else {
-                    /* $2000-$7FFF: real hardware DMA reads the CPU bus, so go
-                     * through nes_read_cpu() instead of dereferencing a NULL
-                     * source pointer. Writes still start at oam_addr and wrap. */
+                    /* $2000-$7FFF, plus boards with custom PRG reads: real hardware DMA
+                     * reads the CPU bus. Writes still start at oam_addr and wrap. */
                     const uint16_t base = (uint16_t)data << 8;
                     for (uint16_t i = 0; i < (uint16_t)NES_PPU_OAM_SIZE; i++) {
                         nes->nes_ppu.oam_data[(uint8_t)(nes->nes_ppu.oam_addr + i)] =

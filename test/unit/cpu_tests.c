@@ -761,3 +761,67 @@ int test_cpu_oam_dma(void) {
     return TEST_PASS;
 }
 
+static uint8_t test_dma_prg_read(nes_t* nes, uint16_t addr) {
+    (void)nes;
+    return (uint8_t)(addr ^ 0x5Au);
+}
+
+int test_cpu_oam_dma_mapper_read(void) {
+    const test_rom_spec_t spec = {
+        .mapper = 0,
+        .prg_units = 2,
+        .chr_units = 1,
+        .fill = TEST_ROM_FILL_RANDOM
+    };
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+
+    /* Mapper 0 has no custom PRG reader, so $8000 still takes the memcpy path. */
+    nes_memset(nes->nes_ppu.oam_data, 0, NES_PPU_OAM_SIZE);
+    nes->nes_ppu.oam_addr = 0;
+    nes->nes_cpu.cycles = 0;
+    nes_test_cpu_write(nes, 0x4014, 0x80);
+    for (unsigned i = 0; i < 4; ++i) {
+        if (nes->nes_ppu.oam_data[i] != nes->nes_cpu.prg_banks[0][i]) {
+            test_record_failure(__FILE__, __LINE__, "OAM DMA direct PRG", "prg_banks[0][i]", "other");
+            test_fixture_free(&f);
+            return TEST_FAIL;
+        }
+    }
+    TEST_EQ_U32(513, nes->nes_cpu.cycles);
+
+    nes->nes_mapper.mapper_read_prg = test_dma_prg_read;
+    nes_memset(nes->nes_ppu.oam_data, 0, NES_PPU_OAM_SIZE);
+    nes->nes_ppu.oam_addr = 0;
+    nes->nes_cpu.cycles = 0;
+    nes_test_cpu_write(nes, 0x4014, 0x80);
+    for (unsigned i = 0; i < 256; ++i) {
+        if (nes->nes_ppu.oam_data[i] != (uint8_t)((0x8000u + i) ^ 0x5Au)) {
+            test_record_failure(__FILE__, __LINE__, "OAM DMA mapper PRG read", "addr^0x5A", "other");
+            test_fixture_free(&f);
+            return TEST_FAIL;
+        }
+    }
+    TEST_EQ_U32(513, nes->nes_cpu.cycles);
+
+    nes->nes_cpu.cycles = 1;
+    nes_test_cpu_write(nes, 0x4014, 0x80);
+    TEST_EQ_U32(515, nes->nes_cpu.cycles);   /* 1 + 513 + 1 */
+
+    /* Bus reads must retain the normal OAMADDR rotation and wrap. */
+    nes_memset(nes->nes_ppu.oam_data, 0, NES_PPU_OAM_SIZE);
+    nes->nes_ppu.oam_addr = 0x10;
+    nes->nes_cpu.cycles = 0;
+    nes_test_cpu_write(nes, 0x4014, 0x80);
+    for (unsigned i = 0; i < 256; ++i) {
+        if (nes->nes_ppu.oam_data[(0x10u + i) & 0xFFu] != (uint8_t)((0x8000u + i) ^ 0x5Au)) {
+            test_record_failure(__FILE__, __LINE__, "OAM DMA mapper rotation", "addr^0x5A", "other");
+            test_fixture_free(&f);
+            return TEST_FAIL;
+        }
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
