@@ -15,6 +15,9 @@
  */
 
 #include "nes.h"
+#if defined(NES_TEST_PROFILE) && (NES_TEST_PROFILE == 1)
+#include "nes_test.h"
+#endif
 
 
 /*
@@ -54,6 +57,12 @@ static inline void nes_mapper_cpu_tick(nes_t* nes, uint16_t cycles) {
 }
 
 static inline uint8_t nes_read_cpu(nes_t* nes,uint16_t address){
+    /* Most instruction and operand reads come from PRG. */
+    if (address >= 0x8000u) {
+        if (nes->nes_mapper.mapper_read_prg)
+            return nes->nes_mapper.mapper_read_prg(nes, address);
+        return nes->nes_cpu.prg_banks[(address >> 13)-4][address & 0x1fffu];
+    }
     switch (address & 0xE000){
         case 0x0000://$0000-$1FFF 2KB internal RAM + Mirrors of $0000-$07FF
             return nes->nes_cpu.cpu_ram[address & (uint16_t)0x07ff];
@@ -79,10 +88,6 @@ static inline uint8_t nes_read_cpu(nes_t* nes,uint16_t address){
             if (nes->nes_rom.sram)
                 return nes->nes_rom.sram[address & (uint16_t)0x1fff];
             return 0;
-        case 0x8000: case 0xA000: case 0xC000: case 0xE000:
-            if (nes->nes_mapper.mapper_read_prg)
-                return nes->nes_mapper.mapper_read_prg(nes, address);
-            return nes->nes_cpu.prg_banks[(address >> 13)-4][address & (uint16_t)0x1fff];
         default :
             NES_LOG_DEBUG("nes_read_cpu error %04X\n",address);
             return address >> 8;
@@ -1433,6 +1438,9 @@ uint8_t cycles_old = 0;
 
 
 void nes_opcode(nes_t* nes,uint16_t ticks){
+#if defined(NES_TEST_PROFILE) && (NES_TEST_PROFILE == 1)
+    nes_test_profile_region_begin(nes, NES_PROF_CPU);
+#endif
     while (ticks > nes->nes_cpu.cycles){
 #ifdef __DEBUG__
         // fprintf(debug_fp,"A:0x%02X X:0x%02X Y:0x%02X SP:0x%02X \nP:0x%02X \nC:0x%02X Z:0x%02X I:0x%02X D:0x%02X B:0x%02X V:0x%02X N:0x%02X \n",
@@ -1752,7 +1760,7 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
         }
     }
     nes->nes_cpu.cycles -= ticks;
+#if defined(NES_TEST_PROFILE) && (NES_TEST_PROFILE == 1)
+    nes_test_profile_region_end(nes, NES_PROF_CPU);
+#endif
 }
-
-
-
