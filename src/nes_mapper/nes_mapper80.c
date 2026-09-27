@@ -59,15 +59,15 @@ static void nes_mapper_sram(nes_t* nes, uint16_t address, uint8_t data) {
     case 0x7EF0u:
         r->chr[0] = (uint8_t)(data & 0x7Fu);
         if (nes->nes_rom.chr_rom_size > 0) {
-            nes_load_chrrom_1k(nes, 0, (uint8_t)(r->chr[0] & 0xFEu));
-            nes_load_chrrom_1k(nes, 1, (uint8_t)(r->chr[0] | 0x01u));
+            nes_load_chrrom_1k(nes, 0, r->chr[0]);
+            nes_load_chrrom_1k(nes, 1, (uint8_t)(r->chr[0] + 1u));
         }
         break;
     case 0x7EF1u:
         r->chr[1] = (uint8_t)(data & 0x7Fu);
         if (nes->nes_rom.chr_rom_size > 0) {
-            nes_load_chrrom_1k(nes, 2, (uint8_t)(r->chr[1] & 0xFEu));
-            nes_load_chrrom_1k(nes, 3, (uint8_t)(r->chr[1] | 0x01u));
+            nes_load_chrrom_1k(nes, 2, r->chr[1]);
+            nes_load_chrrom_1k(nes, 3, (uint8_t)(r->chr[1] + 1u));
         }
         break;
     case 0x7EF2u:
@@ -90,20 +90,24 @@ static void nes_mapper_sram(nes_t* nes, uint16_t address, uint8_t data) {
     case 0x7EF7u:
         r->mirror = (uint8_t)(data & 0x01u);
         if (nes->nes_rom.four_screen == 0)
-            nes_ppu_screen_mirrors(nes, r->mirror ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
+            nes_ppu_screen_mirrors(nes, r->mirror ? NES_MIRROR_VERTICAL : NES_MIRROR_HORIZONTAL);
         break;
-    /* PRG banks sit on the even addresses $7EFA/$7EFC/$7EFE (the board does not decode A0).
-     * Fudou Myouou Den writes exactly these three; listening on the odd addresses instead
-     * leaves $8000-$9FFF on the power-on bank and the game never gets past a grey screen. */
+    /* PRG banks are addressed in pairs (Mesen TaitoX1005): $7EFA/$7EFB -> $8000-$9FFF,
+     * $7EFC/$7EFD -> $A000-$BFFF, $7EFE/$7EFF -> $C000-$DFFF. Fudou Myouou Den only writes
+     * the even ones, and a map that listens on $7EFB/$7EFC/$7EFD alone leaves $8000-$9FFF
+     * on the power-on bank, so the game never gets past a grey screen. */
     case 0x7EFAu:
+    case 0x7EFBu:
         r->prg[0] = (uint8_t)(data & 0x3Fu);
         nes_load_prgrom_8k(nes, 0, r->prg[0]);
         break;
     case 0x7EFCu:
+    case 0x7EFDu:
         r->prg[1] = (uint8_t)(data & 0x3Fu);
         nes_load_prgrom_8k(nes, 1, r->prg[1]);
         break;
     case 0x7EFEu:
+    case 0x7EFFu:
         r->prg[2] = (uint8_t)(data & 0x3Fu);
         nes_load_prgrom_8k(nes, 2, r->prg[2]);
         break;
