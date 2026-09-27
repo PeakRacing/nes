@@ -16,31 +16,33 @@
 
 #include "nes.h"
 
-/* https://www.nesdev.org/wiki/INES_Mapper_097
- * Irem TAM-S1 — fixed first 16KB at $8000-$BFFF; switchable 16KB at $C000-$FFFF.
- * Write $8000-$FFFF:
- *   bits[5:0] = 16KB PRG bank for $C000-$FFFF
- *   bits[7:6] = mirroring: 00=1scr-NT1, 01=1scr-NT0, 10=H, 11=V
+/* Irem TAM-S1 (iNES mapper 97) — 16KB fixed window at $8000-$BFFF, 16KB switchable
+ * window at $C000-$FFFF, 8KB CHR-RAM (the cartridges ship without CHR-ROM).
+ *  - Both windows point at the LAST 16KB bank on power-on (per Mesen's IremTamS1), which
+ *    is where the reset vector's target lives: mapping bank 0 into $8000-$BFFF instead
+ *    leaves the CPU executing ROM data and the game never starts (grey screen).
+ *  - Write $8000-$FFFF:
+ *      bits[3:0] = 16KB PRG bank for $C000-$FFFF
+ *      bits[7:6] = mirroring: 00=1scr-NT0, 01=H, 10=V, 11=1scr-NT1
  */
 
 static const nes_mirror_type_t mapper97_mirror[4] = {
-    NES_MIRROR_ONE_SCREEN1,
     NES_MIRROR_ONE_SCREEN0,
     NES_MIRROR_HORIZONTAL,
     NES_MIRROR_VERTICAL,
+    NES_MIRROR_ONE_SCREEN1,
 };
 
 static void nes_mapper_init(nes_t* nes) {
-    nes_load_prgrom_16k(nes, 0, 0);
-    nes_load_prgrom_16k(nes, 1, (uint16_t)(nes->nes_rom.prg_rom_size - 1));
-    if (nes->nes_rom.chr_rom_size > 0) {
-        nes_load_chrrom_8k(nes, 0, 0);
-    }
+    uint16_t last_bank = (uint16_t)(nes->nes_rom.prg_rom_size - 1u);
+    nes_load_prgrom_16k(nes, 0, last_bank);
+    nes_load_prgrom_16k(nes, 1, last_bank);
+    nes_load_chrrom_8k(nes, 0, 0);   /* 8KB CHR-RAM: the game uploads its tiles here */
 }
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     (void)address;
-    nes_load_prgrom_16k(nes, 1, (uint16_t)(data & 0x3Fu));
+    nes_load_prgrom_16k(nes, 1, (uint16_t)(data & 0x0Fu));
     if (nes->nes_rom.four_screen == 0) {
         nes_ppu_screen_mirrors(nes, mapper97_mirror[(data >> 6) & 0x03u]);
     }
