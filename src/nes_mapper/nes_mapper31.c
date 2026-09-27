@@ -80,6 +80,18 @@ static void mapper31_sync_banks(nes_t* nes) {
     nes->nes_cpu.prg_banks[3] = state->prg_buf + 24576;
 }
 
+/* Replay the eight 4KB windows from the restored registers (same helper the write path uses). */
+static void mapper31_state_reapply(nes_t* nes) {
+    mapper31_state_t* r = (mapper31_state_t*)nes->nes_mapper.mapper_register;
+    if (r == NULL) {
+        return;
+    }
+    for (uint8_t i = 0; i < 8u; i++) {
+        mapper31_load_4k(nes, i, r->regs[i]);
+    }
+    nes_load_chrrom_8k(nes, 0, 0);
+}
+
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
         nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper31_state_t));
@@ -117,6 +129,9 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
 
 int nes_mapper31_init(nes_t* nes) {
     nes->nes_mapper.mapper_init = nes_mapper_init;
+#if (NES_USE_FS == 1)
+    nes->nes_mapper.mapper_state_reapply = mapper31_state_reapply;
+#endif
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
     nes->nes_mapper.mapper_write = nes_mapper_write;
     nes->nes_mapper.mapper_apu = nes_mapper_apu_write;

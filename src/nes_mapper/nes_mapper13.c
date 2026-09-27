@@ -38,6 +38,10 @@ static void mapper13_map_chr_ram(nes_t* nes, uint8_t bank) {
     }
 }
 
+typedef struct {
+    uint8_t chr_bank;       /* last 4KB CHR-RAM bank written to $8000-$FFFF */
+} mapper13_state_t;
+
 static void mapper13_select_chr(nes_t* nes, uint8_t bank) {
     bank &= 0x03u;
     if (nes->nes_rom.chr_rom_size > 0) {
@@ -55,6 +59,13 @@ static void nes_mapper_deinit(nes_t* nes) {
         }
         nes_free(nes->nes_mapper.mapper_data);
         nes->nes_mapper.mapper_data = NULL;
+    }
+}
+
+static void mapper13_state_reapply(nes_t* nes) {
+    mapper13_state_t* r = (mapper13_state_t*)nes->nes_mapper.mapper_register;
+    if (r != NULL) {
+        mapper13_select_chr(nes, r->chr_bank);
     }
 }
 
@@ -81,10 +92,17 @@ static void nes_mapper_init(nes_t* nes) {
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     (void)address;
     mapper13_select_chr(nes, data);
+    if (nes->nes_mapper.mapper_register != NULL) {
+        ((mapper13_state_t*)nes->nes_mapper.mapper_register)->chr_bank = data;
+    }
 }
 
 int nes_mapper13_init(nes_t* nes) {
     nes->nes_mapper.mapper_init   = nes_mapper_init;
+    if (nes->nes_mapper.mapper_register == NULL) { (void)nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper13_state_t)); }
+#if (NES_USE_FS == 1)
+    nes->nes_mapper.mapper_state_reapply = mapper13_state_reapply;
+#endif
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
     nes->nes_mapper.mapper_write  = nes_mapper_write;
     return NES_OK;
