@@ -322,15 +322,35 @@ int nes_draw(int x1, int y1, int x2, int y2, nes_color_t* color_data){
 #if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1) && (NES_USE_FS == 1)
 /*
  * Macro isolated test hooks (only compiled into the "nes-test" target, see xmake.lua):
- * drive the save-state path from the environment so automated runs can exercise the real
- * frontend without synthetic keystrokes.
+ * drive the emulator from the environment so automated runs can exercise the real frontend
+ * without synthetic keystrokes.
  *   NES_TEST_SAVE_AT=<frame>   save a state (same code path as F5)
  *   NES_TEST_LOAD_AT=<frame>   load the state written by a previous run (F8)
  *   NES_TEST_EXIT_AT=<frame>   quit once that frame has been rendered
  *   NES_TEST_HASHLOG=<file>    append "frame hash" per frame (framebuffer FNV-1a)
+ *   NES_TEST_KEYS="60:START,90:RIGHT+A,150:"   input script: each entry sets the held buttons
+ *                              from that frame on (empty button list = release), so gameplay
+ *                              can be reached automatically (e.g. to reproduce in-game bugs).
  */
 #include <stdio.h>
 #include <stdlib.h>
+
+#define SDL_TEST_KEY_ENTRIES  (64)
+
+/* Button bits of the script (independent of the joypad bitfield layout). */
+#define SDL_TEST_BTN_A       (0x01u)
+#define SDL_TEST_BTN_B       (0x02u)
+#define SDL_TEST_BTN_SELECT  (0x04u)
+#define SDL_TEST_BTN_START   (0x08u)
+#define SDL_TEST_BTN_UP      (0x10u)
+#define SDL_TEST_BTN_DOWN    (0x20u)
+#define SDL_TEST_BTN_LEFT    (0x40u)
+#define SDL_TEST_BTN_RIGHT   (0x80u)
+
+typedef struct {
+    uint32_t frame;
+    uint8_t  buttons;
+} sdl_test_key_t;
 
 typedef struct {
     int      active;
@@ -339,9 +359,69 @@ typedef struct {
     uint32_t load_at;
     uint32_t exit_at;
     FILE*    log;
+    sdl_test_key_t keys[SDL_TEST_KEY_ENTRIES];
+    uint16_t key_count;
 } sdl_test_driver_t;
 
 static sdl_test_driver_t sdl_test;
+
+/* "START", "RIGHT+A", "SELECT", ... -> button bitmask */
+static uint8_t sdl_test_parse_buttons(const char* text) {
+    uint8_t mask = 0;
+    while (*text != '\0') {
+        if (*text == '+' || *text == ' ') {
+            text++;
+            continue;
+        }
+        if ((text[0] == 'A' || text[0] == 'a') && (text[1] == '+' || text[1] == '\0' || text[1] == ' ')) {
+            mask |= SDL_TEST_BTN_A;
+            text++;
+        } else if ((text[0] == 'B' || text[0] == 'b') && (text[1] == '+' || text[1] == '\0' || text[1] == ' ')) {
+            mask |= SDL_TEST_BTN_B;
+            text++;
+        } else if (strncmp(text, "SELECT", 6) == 0) {
+            mask |= SDL_TEST_BTN_SELECT;
+            text += 6;
+        } else if (strncmp(text, "START", 5) == 0) {
+            mask |= SDL_TEST_BTN_START;
+            text += 5;
+        } else if (strncmp(text, "UP", 2) == 0) {
+            mask |= SDL_TEST_BTN_UP;
+            text += 2;
+        } else if (strncmp(text, "DOWN", 4) == 0) {
+            mask |= SDL_TEST_BTN_DOWN;
+            text += 4;
+        } else if (strncmp(text, "LEFT", 4) == 0) {
+            mask |= SDL_TEST_BTN_LEFT;
+            text += 4;
+        } else if (strncmp(text, "RIGHT", 5) == 0) {
+            mask |= SDL_TEST_BTN_RIGHT;
+            text += 5;
+        } else {
+            text++;     /* unknown token: skip one character */
+        }
+    }
+    return mask;
+}
+
+/* "60:START,90:RIGHT+A,150:" -> one entry per comma separated item */
+static void sdl_test_parse_keys(const char* script) {
+    const char* cursor = script;
+    while (*cursor != '\0' && sdl_test.key_count < SDL_TEST_KEY_ENTRIES) {
+        const char* colon = cursor;
+        sdl_test_key_t* entry = &sdl_test.keys[sdl_test.key_count];
+        while (*colon != '\0' && *colon != ':' && *colon != ',') {
+            colon++;
+        }
+        entry->frame = (*colon == ':') ? (uint32_t)strtoul(cursor, NULL, 10) : 0u;
+        entry->buttons = (*colon == ':') ? sdl_test_parse_buttons(colon + 1) : 0u;
+        sdl_test.key_count++;
+        while (*colon != '\0' && *colon != ',') {
+            colon++;
+        }
+        cursor = (*colon == ',') ? (colon + 1) : colon;
+    }
+}
 
 static void sdl_test_init(void) {
     const char* value;
@@ -354,6 +434,26 @@ static void sdl_test_init(void) {
     if ((value = getenv("NES_TEST_LOAD_AT")) != NULL)  sdl_test.load_at = (uint32_t)atoi(value);
     if ((value = getenv("NES_TEST_EXIT_AT")) != NULL)  sdl_test.exit_at = (uint32_t)atoi(value);
     if ((value = getenv("NES_TEST_HASHLOG")) != NULL)  sdl_test.log = fopen(value, "wb");
+    if ((value = getenv("NES_TEST_KEYS")) != NULL)     sdl_test_parse_keys(value);
+}
+
+/* Held buttons for the current frame: the last entry at or before it wins. */
+static void sdl_test_apply_keys(nes_t* nes) {
+    uint8_t mask = 0;
+    for (uint16_t i = 0; i < sdl_test.key_count; i++) {
+        if (sdl_test.keys[i].frame > sdl_test.frame) {
+            break;
+        }
+        mask = sdl_test.keys[i].buttons;
+    }
+    nes->nes_cpu.joypad.A1  = (mask & SDL_TEST_BTN_A) ? 1u : 0u;
+    nes->nes_cpu.joypad.B1  = (mask & SDL_TEST_BTN_B) ? 1u : 0u;
+    nes->nes_cpu.joypad.SE1 = (mask & SDL_TEST_BTN_SELECT) ? 1u : 0u;
+    nes->nes_cpu.joypad.ST1 = (mask & SDL_TEST_BTN_START) ? 1u : 0u;
+    nes->nes_cpu.joypad.U1  = (mask & SDL_TEST_BTN_UP) ? 1u : 0u;
+    nes->nes_cpu.joypad.D1  = (mask & SDL_TEST_BTN_DOWN) ? 1u : 0u;
+    nes->nes_cpu.joypad.L1  = (mask & SDL_TEST_BTN_LEFT) ? 1u : 0u;
+    nes->nes_cpu.joypad.R1  = (mask & SDL_TEST_BTN_RIGHT) ? 1u : 0u;
 }
 
 static void sdl_test_tick(nes_t* nes) {
@@ -364,6 +464,9 @@ static void sdl_test_tick(nes_t* nes) {
     }
     if (sdl_test.load_at != 0u && sdl_test.frame == sdl_test.load_at) {
         sdl_load_state(nes);
+    }
+    if (sdl_test.key_count != 0u) {
+        sdl_test_apply_keys(nes);
     }
     if (sdl_test.log != NULL) {
         const uint8_t* data = (const uint8_t*)nes->nes_draw_data;
