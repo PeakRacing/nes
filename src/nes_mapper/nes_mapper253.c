@@ -102,7 +102,7 @@ static void mapper253_sync(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(mapper253_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper253_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     mapper253_t* m = (mapper253_t*)nes->nes_mapper.mapper_register;

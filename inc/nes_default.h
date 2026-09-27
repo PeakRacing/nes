@@ -53,6 +53,12 @@
 #define NES_RAM_LACK            (0)
 #endif
 
+#ifndef NES_PATH_MAX
+#define NES_PATH_MAX            (256)     /* max ROM/state path length kept in nes_t (FS builds) */
+#endif
+#ifndef NES_STATE_BATTERY_FILE
+#define NES_STATE_BATTERY_FILE  (1)       /* also write the game's battery RAM as <game>.sav */
+#endif
 #ifndef NES_ROM_STREAM
 #define NES_ROM_STREAM          (0)       /* stream ROM banks from file instead of loading entire ROM into RAM */
 #endif
@@ -119,6 +125,8 @@ size_t nes_fread(void *ptr, size_t size, size_t nmemb, FILE *stream);
 size_t nes_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);
 int nes_fseek(FILE *stream, long int offset, int whence);
 int nes_fclose(FILE *stream );
+long nes_ftell(FILE *stream );
+int nes_remove(const char * filename );
 
 #endif
 

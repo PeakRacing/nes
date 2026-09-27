@@ -62,6 +62,14 @@ int nes_fseek(FILE *stream, long int offset, int whence){
 int nes_fclose(FILE *stream ){
     return fclose(stream);
 }
+
+long nes_ftell(FILE *stream){
+    return ftell(stream);
+}
+
+int nes_remove(const char * filename){
+    return remove(filename);
+}
 #endif
 
 int nes_log_printf(const char *format, ...){
@@ -92,6 +100,10 @@ int nes_sound_output(uint8_t *buffer, size_t len){
 #endif
 
 int nes_initex(nes_t *nes){
+#if (NES_USE_FS == 1)
+    /* Desktop/board frontend: keep the game's battery save on disk. */
+    nes->nes_rom.sram_persist = 1;
+#endif
     return 0;
 }
 

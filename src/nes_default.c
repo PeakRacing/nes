@@ -62,6 +62,14 @@ NES_WEAK int nes_fseek(FILE *stream, long int offset, int whence){
 NES_WEAK int nes_fclose(FILE *stream ){
     return fclose(stream);
 }
+
+NES_WEAK long nes_ftell(FILE *stream){
+    return ftell(stream);
+}
+
+NES_WEAK int nes_remove(const char * filename){
+    return remove(filename);
+}
 #endif
 
 #endif

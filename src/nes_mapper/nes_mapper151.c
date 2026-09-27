@@ -59,7 +59,7 @@ static void mapper151_update_banks(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(mapper151_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper151_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     mapper151_t* m = (mapper151_t*)nes->nes_mapper.mapper_register;

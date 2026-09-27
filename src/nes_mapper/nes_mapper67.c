@@ -55,7 +55,7 @@ static inline void mapper67_load_chr2k(nes_t* nes, uint8_t slot, uint8_t bank) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(nes_mapper67_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(nes_mapper67_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     nes_mapper67_t* r = (nes_mapper67_t*)nes->nes_mapper.mapper_register;

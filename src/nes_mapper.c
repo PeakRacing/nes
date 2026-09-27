@@ -539,6 +539,25 @@ int nes_mapper511_init(nes_t* nes);
 
 #endif
 
+/*
+ * Allocate a mapper's register block and record its size, so save states can carry it
+ * without every mapper implementing its own serializer.  Mappers that keep extra board
+ * specific data (private RAM, IRQ counters, name-table RAM) additionally install
+ * mapper_state_save/mapper_state_load/mapper_state_reapply callbacks.
+ */
+void* nes_mapper_register_alloc(nes_t* nes, uint16_t size) {
+    void* block;
+    if (nes == NULL || size == 0u) {
+        return NULL;
+    }
+    block = nes_malloc(size);
+    if (block != NULL) {
+        nes_memset(block, 0, size);
+        nes->nes_mapper.mapper_state_size = size;
+    }
+    return block;
+}
+
 #if (NES_ROM_STREAM == 1)
 
 static inline uint16_t nes_prgrom_8k_wrap(nes_t* nes, uint16_t src) {
@@ -560,6 +579,11 @@ static inline uint16_t nes_cache_tick(nes_rom_info_t* rom) {
 
 static inline uint8_t* nes_prg_cache_get(nes_t* nes, uint16_t src) {
     nes_rom_info_t* rom = &nes->nes_rom;
+    if (rom->rom_file == NULL) {
+        /* Image loaded from memory (nes_load_rom): there is no stream cache, so
+         * banks are plain pointers into the caller's buffer. */
+        return rom->prg_rom + (uint32_t)8192 * src;
+    }
     uint16_t tick = nes_cache_tick(rom);
     /* Search for cache hit */
     for (int i = 0; i < NES_PRG_CACHE_SLOTS; i++) {
@@ -594,6 +618,10 @@ static inline uint8_t* nes_prg_cache_get(nes_t* nes, uint16_t src) {
 
 static inline uint8_t* nes_chr_cache_get(nes_t* nes, uint16_t src) {
     nes_rom_info_t* rom = &nes->nes_rom;
+    if (rom->rom_file == NULL) {
+        /* Image loaded from memory (nes_load_rom): direct pointer, no cache. */
+        return rom->chr_rom + (uint32_t)1024 * src;
+    }
     uint16_t tick = nes_cache_tick(rom);
     /* Search for cache hit */
     for (int i = 0; i < NES_CHR_CACHE_SLOTS; i++) {
@@ -752,8 +780,25 @@ void nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
 
 #define NES_CASE_LOAD_MAPPER(mapper_id) case mapper_id: return nes_mapper##mapper_id##_init(nes)
 
+/* Default PRG write handler for mappers that own no $8000-$FFFF register.
+ * nes_write_cpu() calls mapper_write unconditionally, so leaving it NULL for
+ * such boards would be a call through a null pointer on any stray PRG write.
+ * Installing a no-op keeps the hot path branch-free (MCU friendly). */
+static void nes_mapper_write_ignore(nes_t* nes, uint16_t write_addr, uint8_t data) {
+    (void)nes;
+    (void)write_addr;
+    (void)data;
+}
+
 int nes_load_mapper(nes_t* nes){
     nes_memset(&nes->nes_mapper, 0, sizeof(nes->nes_mapper));
+    nes->nes_mapper.mapper_write = nes_mapper_write_ignore;
+    /* Give every board a sane default pattern-table mapping before mapper_init
+     * runs: CHR-ROM images get bank 0, CHR-RAM images get the 8KB identity map.
+     * Mappers that bank CHR overwrite these pointers; boards that never map CHR
+     * would otherwise leave pattern_table[] NULL and crash the renderer or any
+     * PPUDATA write into pattern space. */
+    nes_load_chrrom_8k(nes, 0, 0);
     switch (nes->nes_rom.mapper_number){
         NES_CASE_LOAD_MAPPER(0);
         NES_CASE_LOAD_MAPPER(1);

@@ -15,11 +15,13 @@
  */
 #pragma once
 
-#include "nes_default.h"
+
 
 #ifdef __cplusplus
     extern "C" {
 #endif
+
+#include "nes_state_io.h"
 
 struct nes;
 typedef struct nes nes_t;
@@ -53,7 +55,19 @@ typedef struct {
     uint8_t  mapper_chr_hi;
     void* mapper_register;
     void* mapper_data;
+    /* --- save state support (see inc/nes_state_io.h) ---
+     * mapper_state_size is filled in by nes_mapper_register_alloc(); the two callbacks are
+     * optional and carry board specific data (private RAM, IRQ counters, ...) that the core
+     * cannot derive, while mapper_state_reapply rebuilds PRG/CHR/nametable pointers after a
+     * state has been restored. */
+    uint16_t mapper_state_size;
+    int  (*mapper_state_save)(nes_t* nes, nes_state_writer_t* writer);
+    int  (*mapper_state_load)(nes_t* nes, nes_state_reader_t* reader);
+    void (*mapper_state_reapply)(nes_t* nes);
 } nes_mapper_t;
+
+/* Allocate the mapper register block and remember its size for save states. */
+void* nes_mapper_register_alloc(nes_t* nes, uint16_t size);
 
 /* prg rom */
 void nes_load_prgrom_8k(nes_t* nes,uint8_t des, uint16_t src);

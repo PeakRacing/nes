@@ -70,7 +70,7 @@ static void mapper25_update_prg(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(mapper25_register_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper25_register_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     mapper25_register_t* r = (mapper25_register_t*)nes->nes_mapper.mapper_register;

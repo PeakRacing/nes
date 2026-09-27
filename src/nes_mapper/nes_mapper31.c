@@ -58,14 +58,18 @@ static void mapper31_load_4k(nes_t* nes, uint8_t slot, uint8_t page) {
     uint32_t idx = page % prg_4k_count;
     state->regs[slot] = page;
 #if (NES_ROM_STREAM == 1)
-    nes_fseek(nes->nes_rom.rom_file,
-              nes->nes_rom.prg_data_offset + (long)4096 * idx, SEEK_SET);
-    nes_fread(state->prg_buf + (uint32_t)slot * 4096, 4096, 1,
-              nes->nes_rom.rom_file);
-#else
-    nes_memcpy(state->prg_buf + (uint32_t)slot * 4096,
-               nes->nes_rom.prg_rom + (uint32_t)idx * 4096, 4096);
+    if (nes->nes_rom.rom_file != NULL) {
+        nes_fseek(nes->nes_rom.rom_file,
+                  nes->nes_rom.prg_data_offset + (long)4096 * idx, SEEK_SET);
+        nes_fread(state->prg_buf + (uint32_t)slot * 4096, 4096, 1,
+                  nes->nes_rom.rom_file);
+    } else
 #endif
+    {
+        /* In-memory image (nes_load_rom): copy straight out of the buffer. */
+        nes_memcpy(state->prg_buf + (uint32_t)slot * 4096,
+                   nes->nes_rom.prg_rom + (uint32_t)idx * 4096, 4096);
+    }
 }
 
 static void mapper31_sync_banks(nes_t* nes) {
@@ -78,7 +82,7 @@ static void mapper31_sync_banks(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(mapper31_state_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper31_state_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     nes_memset(nes->nes_mapper.mapper_register, 0, sizeof(mapper31_state_t));

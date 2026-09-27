@@ -45,7 +45,7 @@ static void nes_mapper_deinit(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(mapper232_reg_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper232_reg_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     mapper232_reg_t* r = (mapper232_reg_t*)nes->nes_mapper.mapper_register;

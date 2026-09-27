@@ -33,9 +33,14 @@ static void nes_mapper_deinit(nes_t* nes) {
 }
 
 static inline void mapper68_load_chr2k(nes_t* nes, uint8_t slot, uint8_t bank) {
-    uint8_t num_1k = (uint8_t)(nes->nes_rom.chr_rom_size * 8);
-    nes_load_chrrom_1k(nes, (uint8_t)(slot * 2),     (uint8_t)((bank * 2)     % num_1k));
-    nes_load_chrrom_1k(nes, (uint8_t)(slot * 2 + 1), (uint8_t)((bank * 2 + 1) % num_1k));
+    const uint16_t num_1k = (uint16_t)(nes->nes_rom.chr_rom_size * 8u);
+    if (num_1k == 0u) {
+        /* CHR-RAM board: bank numbers are meaningless, keep the 8KB identity
+         * mapping that the core installs for CHR-RAM images. */
+        return;
+    }
+    nes_load_chrrom_1k(nes, (uint8_t)(slot * 2),     (uint16_t)((bank * 2u)     % num_1k));
+    nes_load_chrrom_1k(nes, (uint8_t)(slot * 2 + 1), (uint16_t)((bank * 2u + 1u) % num_1k));
 }
 
 /*
@@ -56,6 +61,10 @@ static void mapper68_update_nt(nes_t* nes) {
     }
 
     uint16_t num_1k = (uint16_t)(nes->nes_rom.chr_rom_size * 8);
+    if (num_1k == 0u) {
+        /* CHR-RAM board: there is no CHR-ROM page to point the name tables at. */
+        return;
+    }
     uint8_t* p0 = nes->nes_rom.chr_rom + ((r->nt_bank[0] & 0x7F) % num_1k) * 0x400;
     uint8_t* p1 = nes->nes_rom.chr_rom + ((r->nt_bank[1] & 0x7F) % num_1k) * 0x400;
     uint8_t** nt  = nes->nes_ppu.name_table;
@@ -76,7 +85,7 @@ static void mapper68_update_nt(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(nes_mapper68_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(nes_mapper68_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     nes_mapper68_t* r = (nes_mapper68_t*)nes->nes_mapper.mapper_register;
@@ -155,9 +164,14 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     }
 }
 
+static void mapper68_state_reapply(nes_t* nes) {
+    mapper68_update_nt(nes);
+}
+
 int nes_mapper68_init(nes_t* nes) {
     nes->nes_mapper.mapper_init   = nes_mapper_init;
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
     nes->nes_mapper.mapper_write  = nes_mapper_write;
+    nes->nes_mapper.mapper_state_reapply = mapper68_state_reapply;
     return NES_OK;
 }

@@ -87,7 +87,7 @@ static void mapper19_update_nt(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(nes_mapper19_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(nes_mapper19_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     nes_mapper19_t* m = (nes_mapper19_t*)nes->nes_mapper.mapper_register;
@@ -232,6 +232,12 @@ static void nes_mapper_cpu_clock(nes_t* nes, uint16_t cycles) {
     }
 }
 
+static void mapper19_state_reapply(nes_t* nes) {
+    mapper19_update_prg(nes);
+    mapper19_update_chr(nes);
+    mapper19_update_nt(nes);
+}
+
 int nes_mapper19_init(nes_t* nes) {
     nes->nes_mapper.mapper_init      = nes_mapper_init;
     nes->nes_mapper.mapper_deinit    = nes_mapper_deinit;
@@ -239,5 +245,6 @@ int nes_mapper19_init(nes_t* nes) {
     nes->nes_mapper.mapper_apu       = nes_mapper_apu;
     nes->nes_mapper.mapper_read_apu  = nes_mapper_read_apu;
     nes->nes_mapper.mapper_cpu_clock = nes_mapper_cpu_clock;
+    nes->nes_mapper.mapper_state_reapply = mapper19_state_reapply;
     return NES_OK;
 }

@@ -76,7 +76,7 @@ static void mapper30_update_banks(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(mapper30_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper30_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     mapper30_t* m = (mapper30_t*)nes->nes_mapper.mapper_register;
@@ -107,9 +107,14 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     mapper30_update_banks(nes);
 }
 
+static void mapper30_state_reapply(nes_t* nes) {
+    mapper30_update_banks(nes);
+}
+
 int nes_mapper30_init(nes_t* nes) {
     nes->nes_mapper.mapper_init   = nes_mapper_init;
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
     nes->nes_mapper.mapper_write  = nes_mapper_write;
+    nes->nes_mapper.mapper_state_reapply = mapper30_state_reapply;
     return NES_OK;
 }

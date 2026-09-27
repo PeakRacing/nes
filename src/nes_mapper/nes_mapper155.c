@@ -84,7 +84,7 @@ static void mapper155_apply(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(mapper155_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper155_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     mapper155_t* m = (mapper155_t*)nes->nes_mapper.mapper_register;

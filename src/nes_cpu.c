@@ -16,6 +16,17 @@
 
 #include "nes.h"
 
+
+/*
+ * https://www.nesdev.org/wiki/Standard_controller
+ * $4016 reads controller 1, $4017 controller 2; each read returns the next bit
+ * in the order A, B, Select, Start, Up, Down, Left, Right.
+ *
+ * Attention: nes_joypad_t declares its bitfields as R2 L2 D2 U2 ST2 SE2 B2 A2
+ * then R1 L1 D1 U1 ST1 SE1 B1 A1, so controller 1 occupies the HIGH byte
+ * (A1 = bit15 … R1 = bit8) and controller 2 the low byte.  Every port assigns
+ * those named fields, hence $4016 must shift out 0x8000 >> n.
+ */
 static inline uint8_t nes_read_joypad(nes_t* nes,uint16_t address){
     uint8_t state = 0;
     if (address == 0x4016){
@@ -108,14 +119,26 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
             else if (address == 0x4014){
                 // NES_LOG_DEBUG("nes_write DMA data:0x%02X oam_addr:0x%02X\n",data,nes->nes_ppu.oam_addr);
                 const uint8_t dma_odd_cycle = nes->nes_cpu.cycles & 1u;
-                if (nes->nes_ppu.oam_addr) {
-                    uint8_t* dst = nes->nes_ppu.oam_data;
-                    const uint16_t offset = nes->nes_ppu.oam_addr;
-                    const uint8_t* src = nes_get_dma_address(nes,data);
-                    nes_memcpy(dst + offset, src, NES_PPU_OAM_SIZE - offset);
-                    nes_memcpy(dst, src + (NES_PPU_OAM_SIZE - offset), offset);
+                const uint8_t* src = nes_get_dma_address(nes,data);
+                if (src != NULL) {
+                    /* Fast path: $0000-$1FFF RAM and $8000-$FFFF PRG are direct-mapped. */
+                    if (nes->nes_ppu.oam_addr) {
+                        uint8_t* dst = nes->nes_ppu.oam_data;
+                        const uint16_t offset = nes->nes_ppu.oam_addr;
+                        nes_memcpy(dst + offset, src, NES_PPU_OAM_SIZE - offset);
+                        nes_memcpy(dst, src + (NES_PPU_OAM_SIZE - offset), offset);
+                    } else {
+                        nes_memcpy(nes->nes_ppu.oam_data, src, NES_PPU_OAM_SIZE);
+                    }
                 } else {
-                    nes_memcpy(nes->nes_ppu.oam_data, nes_get_dma_address(nes,data), NES_PPU_OAM_SIZE);
+                    /* $2000-$7FFF: real hardware DMA reads the CPU bus, so go
+                     * through nes_read_cpu() instead of dereferencing a NULL
+                     * source pointer. Writes still start at oam_addr and wrap. */
+                    const uint16_t base = (uint16_t)data << 8;
+                    for (uint16_t i = 0; i < (uint16_t)NES_PPU_OAM_SIZE; i++) {
+                        nes->nes_ppu.oam_data[(uint8_t)(nes->nes_ppu.oam_addr + i)] =
+                            nes_read_cpu(nes, (uint16_t)(base + i));
+                    }
                 }
                 nes->nes_cpu.cycles += 513;
                 nes->nes_cpu.cycles += dma_odd_cycle; //奇数周期需要多sleep 1个CPU时钟周期
@@ -133,8 +156,11 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
         case 0x6000://$6000-$7FFF SRAM
             if (nes->nes_mapper.mapper_sram)
                 nes->nes_mapper.mapper_sram(nes, address, data);
-            if (nes->nes_rom.sram)
+            if (nes->nes_rom.sram) {
                 nes->nes_rom.sram[address & (uint16_t)0x1fff] = data;
+                /* Mark the battery RAM dirty: it is flushed on state save and on unload. */
+                nes->nes_rom.sram_dirty = 1;
+            }
             return;
         case 0x8000: case 0xA000: case 0xC000: case 0xE000: // $8000-$FFFF PRG-ROM
             nes->nes_mapper.mapper_write(nes, address, data);
@@ -144,6 +170,16 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
             return;
     }
 }
+
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+uint8_t nes_test_cpu_read(nes_t* nes, uint16_t address) {
+    return nes_read_cpu(nes, address);
+}
+
+void nes_test_cpu_write(nes_t* nes, uint16_t address, uint8_t data) {
+    nes_write_cpu(nes, address, data);
+}
+#endif
 
 #define NES_FLAG_C      (1 << 0)
 #define NES_FLAG_Z      (1 << 1)
@@ -1392,6 +1428,7 @@ uint8_t cycles_old = 0;
 // https://www.nesdev.org/wiki/CPU_unofficial_opcodes
 // https://www.oxyron.de/html/opcodes02.html
 
+
 void nes_opcode(nes_t* nes,uint16_t ticks){
     while (ticks > nes->nes_cpu.cycles){
 #ifdef __DEBUG__
@@ -1713,5 +1750,6 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
     }
     nes->nes_cpu.cycles -= ticks;
 }
+
 
 

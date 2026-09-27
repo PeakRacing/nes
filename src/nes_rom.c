@@ -97,6 +97,15 @@ int nes_load_file(nes_t* nes, const char* file_path ){
         NES_LOG_ERROR("nes_load_file: failed to open file %s\n", file_path);
         goto error;
     }
+    /* Remember where the ROM came from: save states and the battery file live next to it. */
+    {
+        size_t path_len = 0;
+        while (file_path[path_len] != '\0' && path_len + 1u < (size_t)NES_PATH_MAX) {
+            nes->nes_rom.rom_path[path_len] = file_path[path_len];
+            path_len++;
+        }
+        nes->nes_rom.rom_path[path_len] = '\0';
+    }
 #if (NES_USE_SRAM == 1)
     nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
     if (nes->nes_rom.sram == NULL) {
@@ -202,6 +211,9 @@ int nes_load_file(nes_t* nes, const char* file_path ){
         goto error;
     }
     nes->nes_mapper.mapper_init(nes);
+    /* Battery RAM is loaded after mapper_init(): mappers may allocate the SRAM themselves
+     * (NES_USE_SRAM == 0 builds), and the game's own save must be in place before it runs. */
+    (void)nes_sram_load(nes);
     return NES_OK;
 error:
     if (nes_file){
@@ -216,6 +228,10 @@ error:
 
 
 int nes_unload_file(nes_t* nes){
+    /* Flush the game's battery save before the mapper (and its SRAM) go away. */
+    if (nes->nes_rom.sram != NULL && nes->nes_rom.sram_dirty && nes->nes_rom.rom_path[0] != '\0') {
+        (void)nes_sram_save(nes);
+    }
     if (nes->nes_mapper.mapper_deinit) {
         nes->nes_mapper.mapper_deinit(nes);
     }
@@ -288,7 +304,17 @@ int nes_load_rom(nes_t* nes, const uint8_t* nes_rom){
     nes_bin += PRG_ROM_UNIT_SIZE * nes->nes_rom.prg_rom_size;
 
     if (nes->nes_rom.chr_rom_size){
+        /* CHR-ROM lives in the caller's buffer. */
         nes->nes_rom.chr_rom = nes_bin;
+    } else {
+        /* CHR-RAM board: allocate the writable backing store, mirroring
+         * nes_load_file(). Without it every mapper that maps CHR-RAM into the
+         * pattern tables would end up with pointers based on a NULL base. */
+        nes->nes_rom.chr_rom = (uint8_t*)nes_malloc(CHR_ROM_UNIT_SIZE);
+        if (nes->nes_rom.chr_rom == NULL){
+            goto error;
+        }
+        nes_memset(nes->nes_rom.chr_rom, 0, CHR_ROM_UNIT_SIZE);
     }
     nes_cpu_init(nes);
 #if (NES_ENABLE_SOUND==1)
@@ -315,6 +341,12 @@ int nes_unload_rom(nes_t* nes){
     if (nes->nes_rom.sram) {
         nes_free(nes->nes_rom.sram);
         nes->nes_rom.sram = NULL;
+    }
+    /* CHR-RAM boards own an allocated backing store; CHR-ROM pointers alias the
+     * caller's image buffer and must not be freed here. */
+    if (nes->nes_rom.chr_rom_size == 0u && nes->nes_rom.chr_rom != NULL) {
+        nes_free(nes->nes_rom.chr_rom);
+        nes->nes_rom.chr_rom = NULL;
     }
     return NES_OK;
 }

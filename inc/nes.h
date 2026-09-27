@@ -22,6 +22,7 @@
 #include "nes_ppu.h"
 #include "nes_apu.h"
 #include "nes_mapper.h"
+#include "nes_state.h"
 
 #ifdef __cplusplus
     extern "C" {

@@ -64,6 +64,14 @@ int nes_fseek(FILE *stream, long int offset, int whence){
 int nes_fclose(FILE *stream ){
     return fclose(stream);
 }
+
+long nes_ftell(FILE *stream){
+    return ftell(stream);
+}
+
+int nes_remove(const char * filename){
+    return remove(filename);
+}
 #endif
 
 static SDL_Window *window = NULL;
@@ -71,13 +79,51 @@ static SDL_Renderer *renderer = NULL;
 static SDL_Texture *framebuffer = NULL;
 static uint64_t nes_next_frame_tick = 0;
 
+#if (NES_USE_FS == 1)
+static uint32_t sdl_title_until = 0;
+
+/* Show a short lived status message in the window title (there is no OSD yet). */
+static void sdl_status(const char* message) {
+    if (window != NULL) {
+        SDL_SetWindowTitle(window, message);
+        sdl_title_until = SDL_GetTicks() + 2000u;
+    }
+    NES_LOG_INFO("%s\n", message);
+}
+
+static void sdl_save_state(nes_t* nes) {
+    char path[NES_PATH_MAX];
+    if (nes_state_default_path(nes, path, sizeof(path)) != NES_OK) {
+        sdl_status("NES - save failed: no ROM path");
+        return;
+    }
+    sdl_status(nes_state_save(nes, path) == NES_OK ? "NES - state saved (F5)" : "NES - save FAILED");
+}
+
+static void sdl_load_state(nes_t* nes) {
+    char path[NES_PATH_MAX];
+    if (nes_state_default_path(nes, path, sizeof(path)) != NES_OK) {
+        sdl_status("NES - load failed: no ROM path");
+        return;
+    }
+    sdl_status(nes_state_load(nes, path) == NES_OK ? "NES - state loaded (F8)" : "NES - load FAILED");
+}
+#endif
+
 static void sdl_event(nes_t *nes) {
     SDL_Event event;
     while (SDL_PollEvent(&event)){
         switch (event.type) {
             case SDL_KEYDOWN:
                 switch (event.key.keysym.scancode){
-                    case 26://W
+#if (NES_USE_FS == 1)
+                    case 62://F5 save state
+                        sdl_save_state(nes);
+                        break;
+                    case 65://F8 load state
+                        sdl_load_state(nes);
+                        break;
+#endif                    case 26://W
                         nes->nes_cpu.joypad.U1 = 1;
                         break;
                     case 22://S
@@ -206,6 +252,10 @@ int nes_sound_output(uint8_t *buffer, size_t len){
 #endif
 
 int nes_initex(nes_t *nes){
+#if (NES_USE_FS == 1)
+    /* Desktop/board frontend: keep the game's battery save on disk. */
+    nes->nes_rom.sram_persist = 1;
+#endif
     if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_JOYSTICK| SDL_INIT_TIMER)) {
         SDL_Log("Can not init video, %s", SDL_GetError());
         return -1;
@@ -269,6 +319,14 @@ int nes_draw(int x1, int y1, int x2, int y2, nes_color_t* color_data){
 
 void nes_frame(nes_t* nes){
     const uint64_t freq = SDL_GetPerformanceFrequency();
+#if (NES_USE_FS == 1)
+    if (sdl_title_until != 0u && SDL_GetTicks() > sdl_title_until) {
+        sdl_title_until = 0;
+        if (window != NULL) {
+            SDL_SetWindowTitle(window, NES_NAME);
+        }
+    }
+#endif
     const uint64_t frame_ticks = freq / 60;
 
     if (nes_next_frame_tick == 0){

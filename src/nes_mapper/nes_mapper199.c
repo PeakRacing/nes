@@ -106,7 +106,7 @@ static void mapper199_update_banks(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(mapper199_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper199_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     mapper199_t* m = (mapper199_t*)nes->nes_mapper.mapper_register;
@@ -187,10 +187,15 @@ static void nes_mapper_hsync(nes_t* nes) {
     m->irq_reload = 0;
 }
 
+static void mapper199_state_reapply(nes_t* nes) {
+    mapper199_update_banks(nes);
+}
+
 int nes_mapper199_init(nes_t* nes) {
     nes->nes_mapper.mapper_init      = nes_mapper_init;
     nes->nes_mapper.mapper_deinit    = nes_mapper_deinit;
     nes->nes_mapper.mapper_write     = nes_mapper_write;
     nes->nes_mapper.mapper_hsync     = nes_mapper_hsync;
+    nes->nes_mapper.mapper_state_reapply = mapper199_state_reapply;
     return NES_OK;
 }

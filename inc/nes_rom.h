@@ -145,6 +145,11 @@ typedef struct nes_rom_info{
     uint8_t  save_ram;                  /*  0: Not present 1: Present */
     uint32_t rom_crc;                   /*  PRG+CHR CRC32 computed at load time */
     uint8_t  vrc4d;                     /*  1: VRC4d wiring (romdb): mirroring bit polarity inverted vs VRC2c/VRC4b */
+    uint8_t  sram_dirty;
+    uint8_t  sram_persist;               /*  1: frontend opted into <game>.sav persistence */                /*  1: battery RAM changed since the last flush to disk */
+#if (NES_USE_FS == 1)
+    char     rom_path[NES_PATH_MAX];     /*  path passed to nes_load_file(), used to derive state/save paths */
+#endif
 #if (NES_ROM_STREAM == 1)
     FILE*    rom_file;                  /*  ROM file handle (kept open for streaming) */
     long     prg_data_offset;           /*  PRG-ROM data start offset in file */

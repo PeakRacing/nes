@@ -89,7 +89,7 @@ static void mapper17_update_mirr(nes_t* nes) {
 
 static void nes_mapper_init(nes_t* nes) {
     if (!nes->nes_mapper.mapper_register) {
-        nes->nes_mapper.mapper_register = nes_malloc(sizeof(nes_mapper17_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(nes_mapper17_t));
         if (!nes->nes_mapper.mapper_register) return;
     }
     nes_mapper17_t* m = (nes_mapper17_t*)nes->nes_mapper.mapper_register;
