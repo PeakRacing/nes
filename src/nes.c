@@ -39,12 +39,28 @@ static nes_color_t nes_palette[]={
 #endif /* NES_COLOR_DEPTH */
 };
 
+/* PAL: 312 lines/frame at 50Hz, CPU:PPU = 3.2 dots per CPU cycle => 341/3.2 = 106.5625
+ * CPU cycles per line (106 + 9/16), 80 cycles in the first chunk (256 dots). */
+void nes_timing_set_pal(nes_t* nes) {
+    nes->timing.line_clocks       = 106u;
+    nes->timing.line_split        = 80u;
+    nes->timing.remainder_add     = 9u;
+    nes->timing.remainder_mod     = 16u;
+    nes->timing.vblank_lines      = 70u;
+    nes->timing.apu_frame_divisor = 78u;
+}
+
 nes_t* nes_init(void){
-    nes_t* nes = (nes_t *)nes_malloc(sizeof(nes_t));
-    if (nes == NULL) {
-        return NULL;
-    }
+    nes_t* nes = nes_malloc(sizeof(nes_t));
+    if (nes == NULL) { return NULL; }
     nes_memset(nes, 0, sizeof(nes_t));
+    /* NTSC timing is the default; a PAL ROM only swaps these numbers (see nes_timing_t). */
+    nes->timing.line_clocks       = 113u;
+    nes->timing.line_split        = 85u;
+    nes->timing.remainder_add     = 2u;
+    nes->timing.remainder_mod     = 3u;
+    nes->timing.vblank_lines      = 20u;
+    nes->timing.apu_frame_divisor = 66u;
     nes_initex(nes);
     return nes;
 }
@@ -451,7 +467,7 @@ void nes_run(nes_t* nes){
                 nes_render_sprite_line(nes, &sprite_line,nes->nes_draw_data + nes->scanline * NES_WIDTH);
 #endif
             }
-            nes_opcode(nes,85); // ppu cycles: 85*3=255
+            nes_opcode(nes,nes->timing.line_split); // ppu cycles: 85*3=255 (NTSC)
             // https://www.nesdev.org/wiki/PPU_scrolling#Wrapping_around
             if (nes->nes_ppu.MASK_b || nes->nes_ppu.MASK_s){
                 // Rendering resets OAMADDR during sprite evaluation; at line granularity,
@@ -480,9 +496,9 @@ void nes_run(nes_t* nes){
             if (nes->nes_mapper.mapper_hsync) {
                 nes->nes_mapper.mapper_hsync(nes);
             }
-            nes_opcode(nes,scanline_ticks-85);
+            nes_opcode(nes,scanline_ticks-nes->timing.line_split);
 #if (NES_ENABLE_SOUND==1)
-            if (nes->scanline % 66 == 65) nes_apu_frame(nes);
+            if (nes->scanline % nes->timing.apu_frame_divisor == nes->timing.apu_frame_divisor - 1u) nes_apu_frame(nes);
 #endif
 #if (NES_RAM_LACK == 1)
 #if (NES_FRAME_SKIP != 0)
@@ -506,9 +522,9 @@ void nes_run(nes_t* nes){
         }
 #endif
         {
-            uint16_t scanline_ticks = 113;
-            dot_remainder += 2;
-            if (dot_remainder >= 3) { dot_remainder -= 3; scanline_ticks = 114; }
+            uint16_t scanline_ticks = nes->timing.line_clocks;
+            dot_remainder += nes->timing.remainder_add;
+            if (dot_remainder >= nes->timing.remainder_mod) { dot_remainder -= nes->timing.remainder_mod; scanline_ticks++; }
             nes_opcode(nes,scanline_ticks); //240 Post-render line
         }
         
@@ -520,17 +536,17 @@ void nes_run(nes_t* nes){
             nes->nes_cpu.irq_nmi=1;
         }
 
-        for(uint8_t i = 0; i < 20; i++){ // 241-260行 垂直空白行 x20
-            uint16_t scanline_ticks = 113;
-            dot_remainder += 2;
-            if (dot_remainder >= 3) { dot_remainder -= 3; scanline_ticks = 114; }
+        for(uint8_t i = 0; i < nes->timing.vblank_lines; i++){ // 241-260行 垂直空白行 x20 (NTSC)
+            uint16_t scanline_ticks = nes->timing.line_clocks;
+            dot_remainder += nes->timing.remainder_add;
+            if (dot_remainder >= nes->timing.remainder_mod) { dot_remainder -= nes->timing.remainder_mod; scanline_ticks++; }
             nes_opcode(nes,scanline_ticks);
         }
         nes->nes_ppu.ppu_status = 0;    // Clear:VBlank,Sprite 0,Overflow
         {
-            uint16_t scanline_ticks = 113;
-            dot_remainder += 2;
-            if (dot_remainder >= 3) { dot_remainder -= 3; scanline_ticks = 114; }
+            uint16_t scanline_ticks = nes->timing.line_clocks;
+            dot_remainder += nes->timing.remainder_add;
+            if (dot_remainder >= nes->timing.remainder_mod) { dot_remainder -= nes->timing.remainder_mod; scanline_ticks++; }
             nes_opcode(nes,scanline_ticks); // Pre-render scanline (-1 or 261)
         }
 

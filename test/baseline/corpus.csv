@@ -6,8 +6,7 @@ BASE,ok,0b3b4b026bd00354b0b9a60397469790aef5290c0e3703bbafdfc896ad4199f5,rom/Ark
 BASE,ok,6358ec94bd282c4665b465f4548db3d6a76d9337fd0b2f0a6318f9f163580d2b,rom/Armadillo (J) [!].nes,-1,118,118,180,1241248246,11
 BASE,load_fail,9beb07437fdff64b3f492f86f92b01ef89811fa2f0259669272c9c56b38e34ff,rom/Holy Diver (UE) (CE).nes,-1,448,-1,180,0,0
 BASE,ok,971783427c1c52fcffb93c79a6962b165d4b6859fd6accc44ba78958a1f3c09b,rom/NEStress.NES,-1,0,0,180,2455386726,4
-BASE,ok,6ba7e6d7a696114693c99b188a053b79e61a0ec7c0da3db46a97d9fad33ed734,rom/Oeka Kids - Anpanman to Oekaki Shiyou!! (J) [!].nes,-1,96,96,180,83837317,40
-BASE,ok,b86c3f54a3070b9a46ef51c09c9016c8d3b6f32193877306ba9f22918f7407aa,rom/Pin Bot (E) [!].nes,-1,119,119,180,3907465325,20
+BASE,ok,b86c3f54a3070b9a46ef51c09c9016c8d3b6f32193877306ba9f22918f7407aa,rom/Pin Bot (E) [!].nes,-1,119,119,180,3555116675,17
 BASE,load_fail,f4fad87c5a236adaccbe5ad77d99ddfa0ebea8d9463472a605891e3cebe92298,rom/Racermate Challenge 2 (U) (v9.03.128) [!].nes,-1,168,-1,180,0,0
 BASE,ok,7410cd0eff9370de7fd1bdeb92b737fb2902dae70d1d6e10b5d2179d1e566f25,rom/Road Runner (U) [!].nes,-1,64,64,180,1931316982,8
 BASE,ok,a8e269f9533f194c5915973a3d58664a3acacefebc10b1179ad490dea1f89191,rom/Splatterhouse - Wanpaku Graffiti (W) (NC).nes,-1,210,210,180,2250346200,9
@@ -186,6 +185,7 @@ BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/map
 BASE,ok,2097623b1949604f0753e42075ccfd00516f2fb793354a939e456299abdd9ab6,rom/mapper95/Dragon Buster (J) [!].nes,95,95,95,180,102467109,6
 BASE,ok,9ce6d60ede17bf485bdd4cdbafa34a8535b5d55af3a79fcceb2200798bd08314,rom/mapper95/Dragon Buster (W) (NC).nes,95,95,95,180,1835455381,6
 BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper95/Senjou no Ookami (J) [!].nes,95,94,94,180,3543845892,6
+BASE,ok,6ba7e6d7a696114693c99b188a053b79e61a0ec7c0da3db46a97d9fad33ed734,rom/mapper96/Oeka Kids - Anpanman to Oekaki Shiyou!! (J) [!].nes,96,96,96,180,83837317,40
 BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper96/Senjou no Ookami (J) [!].nes,96,94,94,180,3543845892,6
 BASE,ok,238cb4c247187cf0ca1b77462a574b2495981307c9701725d8a111cb401d94d1,rom/mapper97/Kaiketsu Yanchamaru (J) [!].nes,97,97,97,180,3424771277,24
 BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper97/Senjou no Ookami (J) [!].nes,97,94,94,180,3543845892,6

@@ -33,6 +33,7 @@ typedef struct {
     uint8_t prg_bank_count;
     uint8_t chr_bank_count;
     uint8_t chr_ram[8192];  /* 8KB CHR-RAM */
+    uint8_t chr_ram_select;/* 1:  bit6 set => all CHR reads come from the RAM above */
 } mapper119_t;
 
 static void nes_mapper_deinit(nes_t* nes) {
@@ -41,8 +42,9 @@ static void nes_mapper_deinit(nes_t* nes) {
 }
 
 static void mapper119_load_chr1k(nes_t* nes, mapper119_t* m, uint8_t slot, uint8_t bank) {
-    if (bank & 0x40u) {
-        /* CHR-RAM: bits[2:0] of bank select 1KB page within 8KB CHR-RAM */
+    if (m->chr_ram_select) {
+        /* TQROM: bit 6 of the $8000 register switches every CHR read to the 8KB CHR-RAM;
+         * the MMC3 bank number then selects a 1KB page inside it. */
         nes->nes_ppu.pattern_table[slot] = m->chr_ram + ((bank & 0x07u) << 10);
     } else if (m->chr_bank_count > 0u) {
         nes_load_chrrom_1k(nes, slot, bank % m->chr_bank_count);
@@ -107,7 +109,11 @@ static void nes_mapper_init(nes_t* nes) {
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     mapper119_t* m = (mapper119_t*)nes->nes_mapper.mapper_register;
     switch (address & 0xE001u) {
-    case 0x8000: m->bank_select = data; mapper119_update_banks(nes); break;
+    case 0x8000:
+        m->bank_select = data;
+        m->chr_ram_select = (uint8_t)((data & 0x40u) ? 1u : 0u);
+        mapper119_update_banks(nes);
+        break;
     case 0x8001: {
         uint8_t reg = m->bank_select & 0x07u;
         m->bank_values[reg] = data;

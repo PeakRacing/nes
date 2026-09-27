@@ -51,6 +51,18 @@
 #define NES_OK                  (0) 
 #define NES_ERROR               (-1)
 
+/* Per TV system PPU/CPU timing.  Data driven on purpose: the NTSC values below are the
+ * status quo, so an NTSC machine loads exactly the same numbers as before (no branch, no
+ * extra work in the scanline loop); PAL only changes the data a ROM selects. */
+typedef struct {
+    uint16_t line_clocks;       /* CPU cycles in one scanline (NTSC 113 = 341/3)   */
+    uint8_t  line_split;        /* first CPU chunk of a visible line (NTSC 85)     */
+    uint8_t  remainder_add;     /* fractional CPU cycle accumulator (NTSC 2/3)     */
+    uint8_t  remainder_mod;
+    uint8_t  vblank_lines;      /* NTSC 20, PAL 70                                 */
+    uint8_t  apu_frame_divisor; /* APU frame counter period in lines (NTSC 66)     */
+} nes_timing_t;
+
 typedef struct nes{
     uint8_t nes_quit;
 #if (NES_FRAME_SKIP != 0)
@@ -59,7 +71,8 @@ typedef struct nes{
     uint16_t scanline;
     nes_rom_info_t nes_rom;
     nes_cpu_t nes_cpu;
-    nes_ppu_t nes_ppu;
+    nes_ppu_t  nes_ppu;
+    nes_timing_t timing;
 #if (NES_ENABLE_SOUND==1)
     nes_apu_t nes_apu;
 #endif
@@ -73,6 +86,7 @@ typedef struct nes{
  * Returns a pointer to the initialized instance, or NULL on failure.
  */
 nes_t* nes_init(void);
+void nes_timing_set_pal(nes_t* nes);
 
 /*
  * Deinitialize a NES instance created by nes_init and free its memory.

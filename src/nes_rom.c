@@ -25,7 +25,7 @@ static uint32_t nes_crc32_update(uint32_t crc, const uint8_t* data, size_t len) 
     return crc;
 }
 
-typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; } nes_romdb_entry_t;
+typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; } nes_romdb_entry_t;
 
 /* PRG+CHR CRC32 table — corrects ROMs with wrong mapper in iNES header */
 static const nes_romdb_entry_t romdb[] = {
@@ -64,6 +64,7 @@ static const nes_romdb_entry_t romdb[] = {
        polarity (0 = horizontal, i.e. NT0 = NT1).  The game writes its status bar into
        $2000-$23BF and scans it out of $2400, so vertical mirroring leaves the top six tile
        rows blank and hides the HUD (verified against Mesen, which shows the bar). */
+    { 0x9247C38Du, 119u, 0u, 1u }, /* Pin Bot (E) - PAL cartridge, header carries no region bit */
     { 0x0DBDD55Du, 25u, 1u },
 };
 
@@ -79,6 +80,7 @@ static void nes_romdb_lookup(nes_t* nes) {
     nes->nes_rom.rom_crc = crc;
     for (size_t i = 0; i < sizeof(romdb) / sizeof(romdb[0]); i++) {
         if (romdb[i].crc32 == crc) {
+        if (romdb[i].pal) { nes_timing_set_pal(nes); }
             NES_LOG_INFO("romdb: CRC32=%08X mapper %d->%d\n",
                          crc, nes->nes_rom.mapper_number, romdb[i].mapper);
             nes->nes_rom.mapper_number = romdb[i].mapper;
