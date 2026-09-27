@@ -89,6 +89,19 @@ static void nes_mapper_init(nes_t* nes) {
         mapper68_load_chr2k(nes, i, i);
     }
     nes_ppu_screen_mirrors(nes, nes->nes_rom.mirroring_type ? NES_MIRROR_VERTICAL : NES_MIRROR_HORIZONTAL);
+
+    /* Sunsoft-4 boards carry 8KB of work/save RAM at $6000-$7FFF.  Maharaja keeps its
+     * screen/level data there: the core only allocates nes_rom.sram when NES_USE_SRAM
+     * is on, and with it off (the SDL/port builds) every access reads 0, so the game
+     * stays on a blank grey screen instead of drawing anything. */
+    if (nes->nes_rom.sram == NULL) {
+        nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
+        if (nes->nes_rom.sram != NULL) {
+            nes_memset(nes->nes_rom.sram, 0, SRAM_SIZE);
+        } else {
+            NES_LOG_ERROR("mapper68: failed to allocate WRAM\n");
+        }
+    }
 }
 
 /*
