@@ -24,6 +24,7 @@ int test_cpu_stack(void);
 int test_cpu_undocumented(void);
 int test_cpu_interrupts(void);
 int test_cpu_oam_dma(void);
+int test_cpu_oam_dma_mapper_read(void);
 int test_cpu_stress(void);
 
 /* ppu */
@@ -33,7 +34,9 @@ int test_ppu_palette(void);
 int test_ppu_chr_protection(void);
 int test_ppu_mirroring(void);
 int test_ppu_sprite0(void);
+int test_ppu_sprite0_frameskip(void);
 int test_ppu_render(void);
+int test_ppu_timing_regions(void);
 
 /* apu */
 int test_apu_length_counters(void);
@@ -45,6 +48,7 @@ int test_rom_layout(void);
 int test_rom_errors(void);
 int test_rom_header_variants(void);
 int test_stream_consistency(void);
+int test_stream_short_read(void);
 
 /* mapper */
 int test_mapper_dispatch(void);

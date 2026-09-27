@@ -390,3 +390,133 @@ int test_ppu_render(void) {
     test_fixture_free(&g);
     return TEST_PASS;
 }
+
+/* ---------------------------------------------------------------- */
+/* Region timing: NTSC and PAL scanline length                       */
+/* ---------------------------------------------------------------- */
+
+/* Sum of the cycle budgets nes_opcode() is asked for, in CPU cycles.
+ * nes->nes_cpu.cycles is the residual left over by the last call (every call runs
+ * whole instructions until the requested budget is covered), so the exact frame
+ * budget is executed + seeded_reset_leftover - residual. */
+static uint32_t ppu_tick_probe_total;
+
+static void ppu_tick_probe(nes_t* nes, uint16_t cycles) {
+    (void)nes;
+    ppu_tick_probe_total += cycles;
+}
+
+int test_ppu_timing_regions(void) {
+    test_fixture_t f;
+    TEST_CHECK(ppu_fixture(&f, 1, 0, 0));
+    nes_t* nes = f.nes;
+    nes->nes_mapper.mapper_cpu_clock = ppu_tick_probe;
+
+    /* NTSC: 240 visible + 1 post-render + 20 vblank + 1 pre-render = 262 lines
+     * of 341/3 = 113.667 CPU cycles -> 29780 cycles per frame. */
+    ppu_tick_probe_total = 0;
+    TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
+    const uint32_t ntsc_cycles = ppu_tick_probe_total - (uint32_t)nes->nes_cpu.cycles + 7u;
+
+    /* PAL: 240 + 1 + 70 + 1 = 312 lines of 341/3.2 = 106.5625 CPU cycles
+     * -> 33247 cycles per frame.  Visible lines used to be hard coded to the NTSC
+     * 113/114 pattern, which made PAL frames ~1700 cycles too long. */
+    nes_timing_set_pal(nes);
+    ppu_tick_probe_total = 0;
+    TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
+    const uint32_t pal_cycles = ppu_tick_probe_total - (uint32_t)nes->nes_cpu.cycles + 7u;
+
+    printf("    ntsc frame = %u CPU cycles, pal frame = %u CPU cycles\n", ntsc_cycles, pal_cycles);
+    TEST_CHECK(ntsc_cycles >= 29778u && ntsc_cycles <= 29782u);
+    TEST_CHECK(pal_cycles >= 33244u && pal_cycles <= 33250u);
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/* ---------------------------------------------------------------- */
+/* Sprite 0 hit while frames are skipped                             */
+/* ---------------------------------------------------------------- */
+
+/* The sprite 0 flag is cleared by the pre-render line at the end of the frame, so
+ * a frame's hit has to be sampled while the line is running: mapper_hsync() is
+ * called once per visible scanline, right after the sprite pass. */
+static uint8_t ppu_hit_probe_seen;
+static uint16_t ppu_hit_probe_scanline;
+static uint8_t ppu_probe_map11, ppu_probe_map12;
+
+static void ppu_hit_probe(nes_t* nes) {
+    if (nes->scanline == 1) {
+        ppu_probe_map11 = nes->nes_ppu.bg_opaque[11];
+        ppu_probe_map12 = nes->nes_ppu.bg_opaque[12];
+    }
+    if (!ppu_hit_probe_seen && nes->nes_ppu.STATUS_S) {
+        ppu_hit_probe_seen = 1;
+        ppu_hit_probe_scanline = nes->scanline;
+    }
+}
+
+int test_ppu_sprite0_frameskip(void) {
+#if (NES_FRAME_SKIP == 0)
+    printf("    (needs the nes-tests-frameskip target)\n");
+    TEST_SKIP_MSG("built without NES_FRAME_SKIP");
+#else
+    test_fixture_t f;
+    TEST_CHECK(ppu_scene_fixture(&f));
+    nes_t* nes = f.nes;
+    nes->nes_mapper.mapper_hsync = ppu_hit_probe;
+    /* The scene program never writes the name table, so the whole screen shows
+     * tile 0: sprite 0 reads row 0 of that tile (dy = 0 on scanline 1) while the
+     * background under it reads row 1, so row 1 can be blanked on its own. */
+    uint8_t* const bg_tile = nes->nes_rom.chr_rom;
+    const uint8_t bg_bit0 = bg_tile[1];
+    const uint8_t bg_bit1 = bg_tile[9];
+    TEST_CHECK(bg_bit0 != 0 && bg_bit1 != 0);
+
+    /* Drawn frame: the hit fires on scanline 1 and the opacity map describes it. */
+    nes->nes_frame_skip_count = 0;
+    ppu_hit_probe_seen = 0;
+    TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
+    TEST_EQ_U32(1, ppu_hit_probe_seen);
+    TEST_EQ_U32(1, ppu_hit_probe_scanline);
+    TEST_EQ_U32(1, nes->nes_ppu.bg_opaque[11]);
+    TEST_EQ_U32(1, nes->nes_ppu.bg_opaque[12]);
+    uint8_t drawn_map[256];
+    nes_memcpy(drawn_map, nes->nes_ppu.bg_opaque, sizeof(drawn_map));
+
+    /* Skipped frame with the pattern blanked: the hit must clear.  Reusing the
+     * previous frame's opacity map would keep it set. */
+    bg_tile[1] = 0x00;
+    bg_tile[9] = 0x00;
+    nes->nes_frame_skip_count = 1;
+    ppu_hit_probe_seen = 0;
+    TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
+    printf("    [dbg] line1 map11=%u map12=%u chr1=%02X chr9=%02X chr0=%02X chr8=%02X S=%u probe=%u line=%u\n",
+           (unsigned)ppu_probe_map11, (unsigned)ppu_probe_map12,
+           (unsigned)nes->nes_rom.chr_rom[1], (unsigned)nes->nes_rom.chr_rom[9],
+           (unsigned)nes->nes_rom.chr_rom[0], (unsigned)nes->nes_rom.chr_rom[8],
+           (unsigned)nes->nes_ppu.STATUS_S, (unsigned)ppu_hit_probe_seen,
+           (unsigned)ppu_hit_probe_scanline);
+    TEST_EQ_U32(0, ppu_hit_probe_seen);
+    TEST_EQ_U32(0, nes->nes_ppu.bg_opaque[11]);
+    TEST_EQ_U32(0, nes->nes_ppu.bg_opaque[12]);
+
+    /* Drawn frame, same blank background: still no hit. */
+    nes->nes_frame_skip_count = 0;
+    ppu_hit_probe_seen = 0;
+    TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
+    TEST_EQ_U32(0, ppu_hit_probe_seen);
+
+    /* Skipped frame with the pattern restored: the hit is back, and the opacity
+     * map rebuilt without drawing equals the one the renderer produced. */
+    bg_tile[1] = bg_bit0;
+    bg_tile[9] = bg_bit1;
+    nes->nes_frame_skip_count = 1;
+    ppu_hit_probe_seen = 0;
+    TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
+    TEST_EQ_U32(1, ppu_hit_probe_seen);
+    TEST_CHECK(nes_memcmp(drawn_map, nes->nes_ppu.bg_opaque, sizeof(drawn_map)) == 0);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+#endif
+}

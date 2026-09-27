@@ -2,6 +2,7 @@ param(
     [ValidateSet("all", "cpu", "ppu", "apu", "rom", "mapper", "stress", "corpus")][string]$Filter = "all",
     [string]$Report = "out/report.csv",
     [switch]$Stream,            # build/run the NES_ROM_STREAM=1 target
+    [switch]$FrameSkip,         # build/run the NES_FRAME_SKIP=1 target
     [switch]$Isolated,          # corpus only: one process per ROM, so a crash costs one image
     [int]$Frames = 180,         # corpus: frames per image
     [int]$Mapper = -1,          # corpus: only images whose folder is mapperN
@@ -15,6 +16,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Push-Location $root
 try {
     $target = if ($Stream) { "nes-tests-stream" } else { "nes-tests" }
+    if ($FrameSkip) { $target = "nes-tests-frameskip" }
     $exe = "out/bin/$target.exe"
     xmake f -m debug -y | Out-Null
     xmake build $target

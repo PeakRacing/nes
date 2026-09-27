@@ -15,3 +15,7 @@ end
 
 target("nes-tests", function () common(); add_defines("NES_ROM_STREAM=0") end)
 target("nes-tests-stream", function () common(); add_defines("NES_ROM_STREAM=1") end)
+-- Frame skipping changes the render path (opacity only background pass, sprite 0
+-- hit without pixels), so it gets its own target instead of riding along with the
+-- normal one where NES_FRAME_SKIP == 0 compiles that code out.
+target("nes-tests-frameskip", function () common(); add_defines("NES_ROM_STREAM=0", "NES_FRAME_SKIP=1") end)
