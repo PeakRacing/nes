@@ -16,6 +16,10 @@
 
 #include "nes.h"
 
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+#include "nes_test.h"
+#endif
+
 /* Forward declarations for implemented mapper init functions */
 
 /* iNES 1.0 mapper Plane 0 table 0~255 */
@@ -577,8 +581,13 @@ static inline uint16_t nes_cache_tick(nes_rom_info_t* rom) {
     return rom->cache_tick;
 }
 
-static inline uint8_t* nes_prg_cache_get(nes_t* nes, uint16_t src) {
+static inline void nes_stream_record_error(nes_rom_info_t* rom, int error) {
+    if (rom->stream_error == NES_STREAM_OK) rom->stream_error = (int16_t)error;
+}
+
+static inline uint8_t* nes_prg_cache_get(nes_t* nes, uint16_t src, uint8_t** fallback) {
     nes_rom_info_t* rom = &nes->nes_rom;
+    *fallback = NULL;
     if (rom->rom_file == NULL) {
         /* Image loaded from memory (nes_load_rom): there is no stream cache, so
          * banks are plain pointers into the caller's buffer. */
@@ -588,10 +597,16 @@ static inline uint8_t* nes_prg_cache_get(nes_t* nes, uint16_t src) {
     /* Search for cache hit */
     for (int i = 0; i < NES_PRG_CACHE_SLOTS; i++) {
         if (rom->prg_cache[i].tag == src) {
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+            nes_test_profile_stream(nes, 0, 1);
+#endif
             rom->prg_cache[i].last_used = tick;
             return rom->prg_rom + (uint32_t)8192 * i;
         }
     }
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+    nes_test_profile_stream(nes, 0, 0);
+#endif
     /* Cache miss — find LRU entry not currently active */
     int lru_idx = -1;
     uint16_t lru_min = 0xFFFF;
@@ -607,17 +622,32 @@ static inline uint8_t* nes_prg_cache_get(nes_t* nes, uint16_t src) {
         }
     }
     if (lru_idx < 0) lru_idx = 0; /* fallback */
-    /* Load from file */
+    uint8_t* buf = rom->prg_rom + (uint32_t)8192 * lru_idx;
+    if (nes_fseek(rom->rom_file, rom->prg_data_offset + (long)8192 * src, SEEK_SET) != 0) {
+        nes_memset(buf, 0, 8192);
+        /* A failed read may have replaced an evicted bank.  Leave this slot
+         * empty rather than letting its old tag hit the cleared buffer. */
+        rom->prg_cache[lru_idx].tag = 0xFFFFu;
+        nes_stream_record_error(rom, NES_STREAM_ERR_SEEK);
+        *fallback = buf;
+        return NULL;
+    }
+    if (nes_fread(buf, 8192, 1, rom->rom_file) != 1u) {
+        nes_memset(buf, 0, 8192);
+        /* Do not associate the failed source page with this slot. */
+        rom->prg_cache[lru_idx].tag = 0xFFFFu;
+        nes_stream_record_error(rom, NES_STREAM_ERR_READ);
+        *fallback = buf;
+        return NULL;
+    }
     rom->prg_cache[lru_idx].tag = src;
     rom->prg_cache[lru_idx].last_used = tick;
-    uint8_t* buf = rom->prg_rom + (uint32_t)8192 * lru_idx;
-    nes_fseek(rom->rom_file, rom->prg_data_offset + (long)8192 * src, SEEK_SET);
-    nes_fread(buf, 8192, 1, rom->rom_file);
     return buf;
 }
 
-static inline uint8_t* nes_chr_cache_get(nes_t* nes, uint16_t src) {
+static inline uint8_t* nes_chr_cache_get(nes_t* nes, uint16_t src, uint8_t** fallback) {
     nes_rom_info_t* rom = &nes->nes_rom;
+    *fallback = NULL;
     if (rom->rom_file == NULL) {
         /* Image loaded from memory (nes_load_rom): direct pointer, no cache. */
         return rom->chr_rom + (uint32_t)1024 * src;
@@ -626,10 +656,16 @@ static inline uint8_t* nes_chr_cache_get(nes_t* nes, uint16_t src) {
     /* Search for cache hit */
     for (int i = 0; i < NES_CHR_CACHE_SLOTS; i++) {
         if (rom->chr_cache[i].tag == src) {
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+            nes_test_profile_stream(nes, 1, 1);
+#endif
             rom->chr_cache[i].last_used = tick;
             return rom->chr_rom + (uint32_t)1024 * i;
         }
     }
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+    nes_test_profile_stream(nes, 1, 0);
+#endif
     /* Cache miss — find LRU entry not currently active */
     int lru_idx = -1;
     uint16_t lru_min = 0xFFFF;
@@ -645,73 +681,114 @@ static inline uint8_t* nes_chr_cache_get(nes_t* nes, uint16_t src) {
         }
     }
     if (lru_idx < 0) lru_idx = 0; /* fallback */
-    /* Load from file */
+    uint8_t* buf = rom->chr_rom + (uint32_t)1024 * lru_idx;
+    if (nes_fseek(rom->rom_file, rom->chr_data_offset + (long)1024 * src, SEEK_SET) != 0) {
+        nes_memset(buf, 0, 1024);
+        /* A failed read may have replaced an evicted bank.  Leave this slot
+         * empty rather than letting its old tag hit the cleared buffer. */
+        rom->chr_cache[lru_idx].tag = 0xFFFFu;
+        nes_stream_record_error(rom, NES_STREAM_ERR_SEEK);
+        *fallback = buf;
+        return NULL;
+    }
+    if (nes_fread(buf, 1024, 1, rom->rom_file) != 1u) {
+        nes_memset(buf, 0, 1024);
+        /* Do not associate the failed source page with this slot. */
+        rom->chr_cache[lru_idx].tag = 0xFFFFu;
+        nes_stream_record_error(rom, NES_STREAM_ERR_READ);
+        *fallback = buf;
+        return NULL;
+    }
     rom->chr_cache[lru_idx].tag = src;
     rom->chr_cache[lru_idx].last_used = tick;
-    uint8_t* buf = rom->chr_rom + (uint32_t)1024 * lru_idx;
-    nes_fseek(rom->rom_file, rom->chr_data_offset + (long)1024 * src, SEEK_SET);
-    nes_fread(buf, 1024, 1, rom->rom_file);
     return buf;
 }
 
 /* load 8k PRG-ROM from file with LRU cache */
-void nes_load_prgrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_prgrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
+    uint8_t* fallback;
+    uint8_t* bank;
     src = nes_prgrom_8k_wrap(nes, src);
-    nes->nes_cpu.prg_banks[des] = nes_prg_cache_get(nes, src);
+    bank = nes_prg_cache_get(nes, src, &fallback);
+    if (bank != NULL) {
+        nes->nes_cpu.prg_banks[des] = bank;
+        return NES_STREAM_OK;
+    }
+    if (nes->nes_cpu.prg_banks[des] == NULL) nes->nes_cpu.prg_banks[des] = fallback;
+    return nes_rom_stream_error(nes);
 }
 
 /* load 16k PRG-ROM from file with LRU cache */
-void nes_load_prgrom_16k(nes_t* nes,uint8_t des, uint16_t src) {
-    nes_load_prgrom_8k(nes, (uint8_t)(des * 2),     (uint16_t)(src * 2u));
-    nes_load_prgrom_8k(nes, (uint8_t)(des * 2 + 1), (uint16_t)(src * 2u + 1u));
+int nes_load_prgrom_16k(nes_t* nes,uint8_t des, uint16_t src) {
+    int result = nes_load_prgrom_8k(nes, (uint8_t)(des * 2), (uint16_t)(src * 2u));
+    int next = nes_load_prgrom_8k(nes, (uint8_t)(des * 2 + 1), (uint16_t)(src * 2u + 1u));
+    return (result != NES_STREAM_OK) ? result : next;
 }
 
 /* load 32k PRG-ROM from file with LRU cache */
-void nes_load_prgrom_32k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_prgrom_32k(nes_t* nes,uint8_t des, uint16_t src) {
+    int result = NES_STREAM_OK;
     (void)des;
     for (int i = 0; i < 4; i++) {
-        nes_load_prgrom_8k(nes, (uint8_t)i, (uint16_t)(src * 4u + (uint16_t)i));
+        int next = nes_load_prgrom_8k(nes, (uint8_t)i, (uint16_t)(src * 4u + (uint16_t)i));
+        if (result == NES_STREAM_OK) result = next;
     }
+    return result;
 }
 
 /* load 1k CHR-ROM from file with LRU cache */
-void nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint16_t src) {
     if (nes->nes_rom.chr_rom_size) {
+        uint8_t* fallback;
+        uint8_t* bank;
         uint16_t total_1k = (uint16_t)(nes->nes_rom.chr_rom_size * 8);
         src = (uint16_t)(src % total_1k);
-        nes->nes_ppu.pattern_table[des] = nes_chr_cache_get(nes, src);
+        bank = nes_chr_cache_get(nes, src, &fallback);
+        if (bank != NULL) {
+            nes->nes_ppu.pattern_table[des] = bank;
+            return NES_STREAM_OK;
+        }
+        if (nes->nes_ppu.pattern_table[des] == NULL) nes->nes_ppu.pattern_table[des] = fallback;
+        return nes_rom_stream_error(nes);
     } else {
         nes->nes_ppu.pattern_table[des] = nes->nes_rom.chr_rom + (uint32_t)1024 * des;
+        return NES_STREAM_OK;
     }
 }
 
 /* load 4k CHR-ROM from file with LRU cache */
-void nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src) {
+    int result = NES_STREAM_OK;
     if (nes->nes_rom.chr_rom_size) {
         uint16_t total_4k = (uint16_t)(nes->nes_rom.chr_rom_size * 2);
         src = (uint16_t)(src % total_4k);
         for (int i = 0; i < 4; i++) {
-            nes->nes_ppu.pattern_table[des * 4 + i] = nes_chr_cache_get(nes, (uint16_t)(src * 4 + i));
+            int next = nes_load_chrrom_1k(nes, (uint8_t)(des * 4 + i), (uint16_t)(src * 4 + i));
+            if (result == NES_STREAM_OK) result = next;
         }
     } else {
         for (int i = 0; i < 4; i++) {
             nes->nes_ppu.pattern_table[des * 4 + i] = nes->nes_rom.chr_rom + (uint32_t)1024 * (des * 4 + i);
         }
     }
+    return result;
 }
 
 /* load 8k CHR-ROM from file with LRU cache */
-void nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
+    int result = NES_STREAM_OK;
     if (nes->nes_rom.chr_rom_size) {
         src = (uint16_t)(src % nes->nes_rom.chr_rom_size);
         for (int i = 0; i < 8; i++) {
-            nes->nes_ppu.pattern_table[des + i] = nes_chr_cache_get(nes, (uint16_t)(src * 8 + i));
+            int next = nes_load_chrrom_1k(nes, (uint8_t)(des + i), (uint16_t)(src * 8 + i));
+            if (result == NES_STREAM_OK) result = next;
         }
     } else {
         for (int i = 0; i < 8; i++) {
             nes->nes_ppu.pattern_table[des + i] = nes->nes_rom.chr_rom + (uint32_t)1024 * (des + i);
         }
     }
+    return result;
 }
 
 #else
@@ -721,27 +798,30 @@ static inline uint16_t nes_prgrom_8k_wrap(nes_t* nes, uint16_t src) {
     return (src < total_8k) ? src : (uint16_t)(src % total_8k);
 }
 
-void nes_load_prgrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_prgrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
     src = nes_prgrom_8k_wrap(nes, src);
     nes->nes_cpu.prg_banks[des] = nes->nes_rom.prg_rom + 8 * 1024 * src;
+    return NES_STREAM_OK;
 }
 
 /* load 16k PRG-ROM */
-void nes_load_prgrom_16k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_prgrom_16k(nes_t* nes,uint8_t des, uint16_t src) {
     nes_load_prgrom_8k(nes, (uint8_t)(des * 2),     (uint16_t)(src * 2u));
     nes_load_prgrom_8k(nes, (uint8_t)(des * 2 + 1), (uint16_t)(src * 2u + 1u));
+    return NES_STREAM_OK;
 }
 
 /* load 32k PRG-ROM */
-void nes_load_prgrom_32k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_prgrom_32k(nes_t* nes,uint8_t des, uint16_t src) {
     (void)des;
     for (uint8_t i = 0; i < 4; i++) {
         nes_load_prgrom_8k(nes, i, (uint16_t)(src * 4u + i));
     }
+    return NES_STREAM_OK;
 }
 
 /* load 1k CHR-ROM */
-void nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint16_t src) {
     if (nes->nes_rom.chr_rom_size > 0) {
         uint16_t total_1k = (uint16_t)(nes->nes_rom.chr_rom_size * 8);
         src = (uint16_t)(src % total_1k);
@@ -749,10 +829,11 @@ void nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint16_t src) {
         src = des;
     }
     nes->nes_ppu.pattern_table[des] = nes->nes_rom.chr_rom + (uint32_t)1024 * src;
+    return NES_STREAM_OK;
 }
 
 /* load 4k CHR-ROM */
-void nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src) {
     if (nes->nes_rom.chr_rom_size > 0) {
         uint16_t total_4k = (uint16_t)(nes->nes_rom.chr_rom_size * 2);
         src = (uint16_t)(src % total_4k);
@@ -762,10 +843,11 @@ void nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src) {
     for (size_t i = 0; i < 4; i++){
         nes->nes_ppu.pattern_table[des * 4 + i] = nes->nes_rom.chr_rom + (uint32_t)1024 * (src * 4 + i);
     }
+    return NES_STREAM_OK;
 }
 
 /* load 8k CHR-ROM */
-void nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
+int nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
     if (nes->nes_rom.chr_rom_size > 0) {
         src = (uint16_t)(src % nes->nes_rom.chr_rom_size);
     } else {
@@ -774,6 +856,7 @@ void nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
     for (size_t i = 0; i < 8; i++){
         nes->nes_ppu.pattern_table[des + i] = nes->nes_rom.chr_rom + (uint32_t)1024 * (src * 8 + i);
     }
+    return NES_STREAM_OK;
 }
 
 #endif /* NES_ROM_STREAM */

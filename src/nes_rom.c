@@ -16,6 +16,15 @@
 
 #include "nes.h"
 
+int nes_rom_stream_error(const nes_t* nes) {
+#if (NES_ROM_STREAM == 1)
+    return (nes != NULL) ? nes->nes_rom.stream_error : NES_STREAM_ERR_NO_FILE;
+#else
+    (void)nes;
+    return NES_STREAM_OK;
+#endif
+}
+
 static uint32_t nes_crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
     for (size_t i = 0; i < len; i++) {
         crc ^= data[i];
@@ -152,6 +161,7 @@ int nes_load_file(nes_t* nes, const char* file_path ){
         /* Stream mode: only allocate LRU cache buffers, keep file open */
         nes->nes_rom.prg_data_offset = (long)sizeof(nes_header_info) + (nes_header_info.trainer ? TRAINER_SIZE : 0);
         nes->nes_rom.chr_data_offset = nes->nes_rom.prg_data_offset + (long)PRG_ROM_UNIT_SIZE * nes->nes_rom.prg_rom_size;
+        nes->nes_rom.stream_error = NES_STREAM_OK;
         /* PRG: NES_PRG_CACHE_SLOTS x 8KB LRU cache */
         nes->nes_rom.prg_rom = (uint8_t*)nes_malloc(8192 * NES_PRG_CACHE_SLOTS);
         if (nes->nes_rom.prg_rom == NULL) {
@@ -262,6 +272,9 @@ int nes_unload_file(nes_t* nes){
 
 int nes_load_rom(nes_t* nes, const uint8_t* nes_rom){
     nes_header_ines_t* nes_header_info = (nes_header_ines_t*)nes_rom;
+#if (NES_ROM_STREAM == 1)
+    nes->nes_rom.stream_error = NES_STREAM_OK;
+#endif
 #if (NES_USE_SRAM == 1)
     nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
     if (nes->nes_rom.sram == NULL) {

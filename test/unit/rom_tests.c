@@ -179,3 +179,71 @@ int test_stream_consistency(void) {
     TEST_SKIP_MSG("built without NES_ROM_STREAM=1");
 #endif
 }
+
+int test_stream_short_read(void) {
+#if (NES_ROM_STREAM == 1)
+    test_rom_spec_t spec;
+    size_t size = 0;
+    uint8_t* rom;
+    char full_path[600];
+    char short_path[600];
+    FILE* out;
+    nes_t* nes;
+    const size_t prg_before_missing = 16u + (size_t)3u * PRG_ROM_UNIT_SIZE;
+
+    memset(&spec, 0, sizeof(spec));
+    spec.mapper = 0;
+    spec.prg_units = 4;
+    spec.chr_units = 1;
+    spec.fill = TEST_ROM_FILL_STUB;
+    rom = test_make_ines_ex(&size, &spec);
+    TEST_CHECK(rom != NULL);
+
+    test_path(full_path, sizeof(full_path), "test/out/stream_short_read_full.nes");
+    test_path(short_path, sizeof(short_path), "test/out/stream_short_read_truncated.nes");
+    out = fopen(full_path, "wb");
+    TEST_CHECK(out != NULL);
+    TEST_CHECK(fwrite(rom, 1, size, out) == size);
+    fclose(out);
+    /* Keep the header and only the first three 16KB PRG units.  The header
+     * still advertises four units, so streaming discovers the short read when
+     * mapper 0 maps its fixed final bank. */
+    out = fopen(short_path, "wb");
+    TEST_CHECK(out != NULL);
+    TEST_CHECK(fwrite(rom, 1, prg_before_missing, out) == prg_before_missing);
+    fclose(out);
+    test_free_rom(rom);
+
+    nes = nes_init();
+    TEST_CHECK(nes != NULL);
+    TEST_EQ_I32(NES_OK, nes_load_file(nes, short_path));
+    TEST_EQ_I32(NES_STREAM_ERR_READ, nes_rom_stream_error(nes));
+    for (int i = 0; i < NES_PRG_CACHE_SLOTS; ++i) {
+        TEST_CHECK(nes->nes_rom.prg_cache[i].tag != 6u);
+        TEST_CHECK(nes->nes_rom.prg_cache[i].tag != 7u);
+    }
+    TEST_CHECK(nes->nes_cpu.prg_banks[3] != NULL);
+    TEST_EQ_U32(0u, nes_test_cpu_read(nes, 0xE000u));
+    nes_unload_file(nes);
+    nes_deinit(nes);
+
+    nes = nes_init();
+    TEST_CHECK(nes != NULL);
+    TEST_EQ_I32(NES_OK, nes_load_file(nes, full_path));
+    TEST_EQ_I32(NES_STREAM_OK, nes_rom_stream_error(nes));
+    TEST_CHECK(nes_test_bank_check(nes) == NES_OK);
+    const uint32_t crc_before = nes_test_bank_crc(nes);
+    TEST_CHECK(crc_before != 0u);
+    TEST_EQ_I32(NES_STREAM_OK, nes_load_prgrom_8k(nes, 0, 6));
+    TEST_EQ_I32(NES_STREAM_OK, nes_load_prgrom_8k(nes, 1, 7));
+    TEST_CHECK(nes_test_bank_check(nes) == NES_OK);
+    TEST_EQ_U32(crc_before, nes_test_bank_crc(nes));
+    nes_unload_file(nes);
+    nes_deinit(nes);
+    remove(full_path);
+    remove(short_path);
+    return TEST_PASS;
+#else
+    TEST_SKIP_MSG("built without NES_ROM_STREAM=1");
+#endif
+}

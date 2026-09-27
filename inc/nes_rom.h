@@ -30,6 +30,13 @@
 struct nes;
 typedef struct nes nes_t;
 
+typedef enum {
+    NES_STREAM_OK = 0,
+    NES_STREAM_ERR_NO_FILE = -1,
+    NES_STREAM_ERR_SEEK = -2,
+    NES_STREAM_ERR_READ = -3
+} nes_stream_error_t;
+
 /* INES:    https://www.nesdev.org/wiki/INES */
 typedef struct {
     uint8_t identification[4];          /*  0-3   Constant $4E $45 $53 $1A (ASCII "NES" followed by MS-DOS end-of-file) */
@@ -154,11 +161,14 @@ typedef struct nes_rom_info{
     FILE*    rom_file;                  /*  ROM file handle (kept open for streaming) */
     long     prg_data_offset;           /*  PRG-ROM data start offset in file */
     long     chr_data_offset;           /*  CHR-ROM data start offset in file */
+    int16_t  stream_error;              /*  first stream I/O error, NES_STREAM_OK when healthy */
     uint16_t cache_tick;                /*  global LRU access counter */
     nes_stream_cache_t prg_cache[NES_PRG_CACHE_SLOTS];
     nes_stream_cache_t chr_cache[NES_CHR_CACHE_SLOTS];
 #endif
 } nes_rom_info_t;
+
+int nes_rom_stream_error(const nes_t* nes);
 
 #ifdef __cplusplus          
     }
