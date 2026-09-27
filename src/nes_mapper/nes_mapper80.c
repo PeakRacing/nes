@@ -92,7 +92,10 @@ static void nes_mapper_sram(nes_t* nes, uint16_t address, uint8_t data) {
         if (nes->nes_rom.four_screen == 0)
             nes_ppu_screen_mirrors(nes, r->mirror ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
         break;
-    case 0x7EFBu:
+    /* PRG banks sit on the even addresses $7EFA/$7EFC/$7EFE (the board does not decode A0).
+     * Fudou Myouou Den writes exactly these three; listening on the odd addresses instead
+     * leaves $8000-$9FFF on the power-on bank and the game never gets past a grey screen. */
+    case 0x7EFAu:
         r->prg[0] = (uint8_t)(data & 0x3Fu);
         nes_load_prgrom_8k(nes, 0, r->prg[0]);
         break;
@@ -100,7 +103,7 @@ static void nes_mapper_sram(nes_t* nes, uint16_t address, uint8_t data) {
         r->prg[1] = (uint8_t)(data & 0x3Fu);
         nes_load_prgrom_8k(nes, 1, r->prg[1]);
         break;
-    case 0x7EFDu:
+    case 0x7EFEu:
         r->prg[2] = (uint8_t)(data & 0x3Fu);
         nes_load_prgrom_8k(nes, 2, r->prg[2]);
         break;
