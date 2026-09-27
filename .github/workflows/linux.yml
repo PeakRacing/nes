@@ -27,13 +27,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: prepare software
         run: |
-          sudo add-apt-repository ppa:xmake-io/xmake -y
-          # sudo dpkg --add-architecture i386
+          # SDL2 comes from apt only; xmake itself is installed by the official action below,
+          # because the "ppa:xmake-io/xmake" repository has no release file for the current
+          # ubuntu-latest image and made "apt-get update" fail the whole job.
           sudo apt-get update -y
-          # sudo apt-get install -y lib32z1 libc6:i386 libgcc1:i386 libstdc++5:i386 libstdc++6:i386
-          sudo apt-get install -y git make gcc p7zip-full libsdl2-dev xmake
-          sudo apt-get upgrade -y
-          xmake update
+          sudo apt-get install -y git make gcc p7zip-full libsdl2-dev
+      - name: prepare xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
       - name: build sdl2-nes
         run: |
           xrepo update-repo
@@ -48,6 +50,12 @@ jobs:
           xmake -v -y
           # cp build/linux/${{ matrix.arch }}/release/nes ../../nes-linux-${{ matrix.arch }}.bin
           cd ../../
+      - name: build and run tests
+        run: |
+          cd ./test
+          xmake -v -y
+          ./out/bin/nes-tests
+          ./out/bin/nes-tests-stream
 
       - uses: actions/upload-artifact@v4
         with:

@@ -45,6 +45,12 @@ jobs:
           xmake -v -y
           # cp build/macosx/${{ matrix.arch }}/release/nes ../../nes-macos-${{ matrix.arch }}.AppImage
           cd ../../
+      - name: build and run tests
+        run: |
+          cd ./test
+          xmake -v -y
+          ./out/bin/nes-tests
+          ./out/bin/nes-tests-stream
       - uses: actions/upload-artifact@v4
         with:
           name: nes-macos-${{ matrix.arch }}.AppImage
