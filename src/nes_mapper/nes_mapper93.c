@@ -29,6 +29,12 @@
  * compatible latch at $6000, where the written value directly selects PRG.
  */
 
+/* The board has no mirroring register: AUTO mirroring comes from the header, so a state load
+ * only has to re-apply it (PRG/CHR come back through the generic prg_banks/chr_banks restore). */
+static void mapper93_state_reapply(nes_t* nes) {
+    nes_ppu_screen_mirrors(nes, NES_MIRROR_AUTO);
+}
+
 static void nes_mapper_init(nes_t* nes) {
     nes_load_prgrom_16k(nes, 0, 0);
     nes_load_prgrom_16k(nes, 1, (uint16_t)(nes->nes_rom.prg_rom_size - 1));
@@ -57,6 +63,9 @@ static void nes_mapper_sram(nes_t* nes, uint16_t address, uint8_t data) {
 
 int nes_mapper93_init(nes_t* nes) {
     nes->nes_mapper.mapper_init  = nes_mapper_init;
+#if (NES_USE_FS == 1)
+    nes->nes_mapper.mapper_state_reapply = mapper93_state_reapply;
+#endif
     nes->nes_mapper.mapper_write = nes_mapper_write;
     nes->nes_mapper.mapper_sram  = nes_mapper_sram;
     return NES_OK;

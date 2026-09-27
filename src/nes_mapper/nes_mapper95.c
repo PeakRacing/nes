@@ -71,6 +71,11 @@ static void mapper95_sync(nes_t* nes) {
     nes_load_chrrom_1k(nes, 7, r->chr[5]);
 }
 
+/* Rebuild PRG/CHR from the restored registers after a state load. */
+static void mapper95_state_reapply(nes_t* nes) {
+    mapper95_sync(nes);
+}
+
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
         nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper95_t));
@@ -161,6 +166,9 @@ static void nes_mapper_render_screen(nes_t* nes, uint8_t mode) {
 
 int nes_mapper95_init(nes_t* nes) {
     nes->nes_mapper.mapper_init     = nes_mapper_init;
+#if (NES_USE_FS == 1)
+    nes->nes_mapper.mapper_state_reapply = mapper95_state_reapply;
+#endif
     nes->nes_mapper.mapper_deinit   = nes_mapper_deinit;
     nes->nes_mapper.mapper_write    = nes_mapper_write;
     nes->nes_mapper.mapper_ppu      = nes_mapper_ppu;
