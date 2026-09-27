@@ -147,7 +147,7 @@ int test_stream_consistency(void) {
     memset(&spec, 0, sizeof(spec));
     spec.mapper = 0;
     spec.prg_units = 2;
-    spec.chr_units = 1;
+    spec.chr_units = 4;
     spec.fill = TEST_ROM_FILL_STUB;
 
     size_t size = 0;
@@ -160,7 +160,6 @@ int test_stream_consistency(void) {
     TEST_CHECK(out != NULL);
     TEST_CHECK(fwrite(rom, 1, size, out) == size);
     fclose(out);
-    test_free_rom(rom);
 
     nes_t* nes = nes_init();
     TEST_CHECK(nes != NULL);
@@ -171,6 +170,20 @@ int test_stream_consistency(void) {
     TEST_CHECK(nes->nes_rom.rom_file != NULL);
     const uint32_t crc = nes_test_bank_crc(nes);
     TEST_CHECK(crc != 0);
+    /* MMC5 extended background may address CHR beyond the resident cache.
+     * Read tile rows across all pages without changing pattern mappings. */
+    uint8_t* mapped[8];
+    nes_memcpy(mapped, nes->nes_ppu.pattern_table, sizeof(mapped));
+    const uint8_t* chr = rom + 16u + 2u * PRG_ROM_UNIT_SIZE;
+    for (uint32_t address = 0; address < 4u * CHR_ROM_UNIT_SIZE; address += 1008u) {
+        const uint8_t* tile = nes_chrrom_tile(nes, address);
+        TEST_CHECK(nes_memcmp(tile, chr + address, 16) == 0);
+        TEST_CHECK(nes_memcmp(mapped, nes->nes_ppu.pattern_table, sizeof(mapped)) == 0);
+        for (int i = 0; i < 8; ++i) {
+            TEST_CHECK(nes_memcmp(mapped[i], chr + (size_t)i * 1024u, 1024u) == 0);
+        }
+    }
+    test_free_rom(rom);
     nes_unload_file(nes);
     nes_deinit(nes);
     return TEST_PASS;

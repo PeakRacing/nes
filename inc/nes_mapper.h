@@ -80,6 +80,10 @@ int nes_load_prgrom_32k(nes_t* nes,uint8_t des, uint16_t src);
 
 /* chr rom */
 int nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint16_t src);
+#if (NES_ROM_STREAM == 1)
+/* Tile-aligned CHR address; pointer is valid until the next cache request. */
+const uint8_t* nes_chrrom_tile(nes_t* nes, uint32_t address);
+#endif
 int nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src);
 int nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint16_t src);
 

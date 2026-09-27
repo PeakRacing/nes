@@ -611,6 +611,7 @@ static inline uint8_t* nes_prg_cache_get(nes_t* nes, uint16_t src, uint8_t** fal
     int lru_idx = -1;
     uint16_t lru_min = 0xFFFF;
     for (int i = 0; i < NES_PRG_CACHE_SLOTS; i++) {
+        if (rom->prg_cache[i].last_used >= lru_min) continue;
         uint8_t* buf = rom->prg_rom + (uint32_t)8192 * i;
         int active = 0;
         for (int j = 0; j < 4; j++) {
@@ -670,6 +671,7 @@ static inline uint8_t* nes_chr_cache_get(nes_t* nes, uint16_t src, uint8_t** fal
     int lru_idx = -1;
     uint16_t lru_min = 0xFFFF;
     for (int i = 0; i < NES_CHR_CACHE_SLOTS; i++) {
+        if (rom->chr_cache[i].last_used >= lru_min) continue;
         uint8_t* buf = rom->chr_rom + (uint32_t)1024 * i;
         int active = 0;
         for (int j = 0; j < 8; j++) {
@@ -703,6 +705,14 @@ static inline uint8_t* nes_chr_cache_get(nes_t* nes, uint16_t src, uint8_t** fal
     rom->chr_cache[lru_idx].last_used = tick;
     return buf;
 }
+
+#if (NES_ROM_STREAM == 1)
+const uint8_t* nes_chrrom_tile(nes_t* nes, uint32_t address) {
+    uint8_t* fallback;
+    uint8_t* bank = nes_chr_cache_get(nes, (uint16_t)(address >> 10), &fallback);
+    return (bank ? bank : fallback) + (address & 1023u);
+}
+#endif
 
 /* load 8k PRG-ROM from file with LRU cache */
 int nes_load_prgrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
@@ -742,7 +752,7 @@ int nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint16_t src) {
         uint8_t* fallback;
         uint8_t* bank;
         uint16_t total_1k = (uint16_t)(nes->nes_rom.chr_rom_size * 8);
-        src = (uint16_t)(src % total_1k);
+        if (src >= total_1k) src = (uint16_t)(src % total_1k);
         bank = nes_chr_cache_get(nes, src, &fallback);
         if (bank != NULL) {
             nes->nes_ppu.pattern_table[des] = bank;
@@ -761,7 +771,7 @@ int nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src) {
     int result = NES_STREAM_OK;
     if (nes->nes_rom.chr_rom_size) {
         uint16_t total_4k = (uint16_t)(nes->nes_rom.chr_rom_size * 2);
-        src = (uint16_t)(src % total_4k);
+        if (src >= total_4k) src = (uint16_t)(src % total_4k);
         for (int i = 0; i < 4; i++) {
             int next = nes_load_chrrom_1k(nes, (uint8_t)(des * 4 + i), (uint16_t)(src * 4 + i));
             if (result == NES_STREAM_OK) result = next;
@@ -778,7 +788,7 @@ int nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src) {
 int nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
     int result = NES_STREAM_OK;
     if (nes->nes_rom.chr_rom_size) {
-        src = (uint16_t)(src % nes->nes_rom.chr_rom_size);
+        if (src >= nes->nes_rom.chr_rom_size) src = (uint16_t)(src % nes->nes_rom.chr_rom_size);
         for (int i = 0; i < 8; i++) {
             int next = nes_load_chrrom_1k(nes, (uint8_t)(des + i), (uint16_t)(src * 8 + i));
             if (result == NES_STREAM_OK) result = next;
@@ -824,7 +834,7 @@ int nes_load_prgrom_32k(nes_t* nes,uint8_t des, uint16_t src) {
 int nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint16_t src) {
     if (nes->nes_rom.chr_rom_size > 0) {
         uint16_t total_1k = (uint16_t)(nes->nes_rom.chr_rom_size * 8);
-        src = (uint16_t)(src % total_1k);
+        if (src >= total_1k) src = (uint16_t)(src % total_1k);
     } else {
         src = des;
     }
@@ -836,7 +846,7 @@ int nes_load_chrrom_1k(nes_t* nes,uint8_t des, uint16_t src) {
 int nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src) {
     if (nes->nes_rom.chr_rom_size > 0) {
         uint16_t total_4k = (uint16_t)(nes->nes_rom.chr_rom_size * 2);
-        src = (uint16_t)(src % total_4k);
+        if (src >= total_4k) src = (uint16_t)(src % total_4k);
     } else {
         src = des;
     }
@@ -849,7 +859,7 @@ int nes_load_chrrom_4k(nes_t* nes,uint8_t des, uint16_t src) {
 /* load 8k CHR-ROM */
 int nes_load_chrrom_8k(nes_t* nes,uint8_t des, uint16_t src) {
     if (nes->nes_rom.chr_rom_size > 0) {
-        src = (uint16_t)(src % nes->nes_rom.chr_rom_size);
+        if (src >= nes->nes_rom.chr_rom_size) src = (uint16_t)(src % nes->nes_rom.chr_rom_size);
     } else {
         src = des;
     }
