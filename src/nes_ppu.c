@@ -24,7 +24,11 @@ static inline uint8_t nes_ppu_chr_bank_is_rom(nes_t* nes, uint8_t index) {
     const uintptr_t bank = (uintptr_t)nes->nes_ppu.chr_banks[index];
     const uintptr_t chr_rom = (uintptr_t)nes->nes_rom.chr_rom;
 #if (NES_ROM_STREAM == 1)
-    const uintptr_t chr_rom_end = chr_rom + (uintptr_t)NES_CHR_CACHE_SLOTS * 1024u;
+    /* File images live in the 12 slot LRU window; an in-memory image keeps the
+     * caller's buffer, so the exact CHR-ROM size is the right bound there. */
+    const uintptr_t chr_rom_end = (nes->nes_rom.rom_file != NULL)
+        ? chr_rom + (uintptr_t)NES_CHR_CACHE_SLOTS * 1024u
+        : chr_rom + (uintptr_t)nes->nes_rom.chr_rom_size * CHR_ROM_UNIT_SIZE;
 #else
     const uintptr_t chr_rom_end = chr_rom + (uintptr_t)nes->nes_rom.chr_rom_size * CHR_ROM_UNIT_SIZE;
 #endif
@@ -44,9 +48,12 @@ static inline uint8_t nes_read_ppu_memory(nes_t* nes){
         return data;
     } else {// 调色板
         nes->nes_ppu.buffer = nes->nes_ppu.chr_banks[index][offset];
-        return nes->nes_ppu.palette_indexes[address & (uint16_t)0x1f];
+        uint8_t raw = (uint8_t)address & 0x1f;
+        if ((raw & 0x03u) == 0u) raw &= 0x0fu;
+        return nes->nes_ppu.palette_indexes[raw];
     }
 }
+
 
 static inline void nes_write_ppu_memory(nes_t* nes,uint8_t data){
     const uint16_t address = nes->nes_ppu.v_reg & (uint16_t)0x3FFF;
@@ -90,8 +97,15 @@ uint8_t nes_read_ppu_register(nes_t* nes,uint16_t address){
             nes->nes_ppu.v_reg += (uint16_t)((nes->nes_ppu.CTRL_I) ? 32 : 1);
             break;
         default : // ($2000 $2001 $2003 $2005 $2006)
-            // NES_LOG_DEBUG("nes_read_ppu_register error %04X\n",address);
-            // break;
+            // NOTE: returning oam_addr here is a deliberate quirk, not open bus.
+            // It reads back as 0 while rendering (oam_addr is reset per scanline).
+            // 激龟忍者传2 (mapper 25) reads this mirror every frame: its
+            // `ISC $37F0,X` (X=0) read-modify-writes PPUCTRL from it, and the
+            // computed value also feeds a VRAM pointer, so games do depend on it.
+            // Measured on that game: 0 and $FF give an identical picture and an
+            // identical (bad) demo timeline, while a true PPU I/O latch ($1E)
+            // sends its VRAM addressing off into CHR space. Keep as is unless a
+            // game is proven to need the real latch.
             return nes->nes_ppu.oam_addr;
     }
     // NES_LOG_DEBUG("nes_read_ppu_register %04X %02X\n",address,data);
@@ -203,5 +217,3 @@ void nes_ppu_screen_mirrors(nes_t *nes,nes_mirror_type_t mirror_type){
 void nes_ppu_init(nes_t *nes){
     nes_ppu_screen_mirrors(nes,NES_MIRROR_AUTO);
 }
-
-
