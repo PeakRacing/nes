@@ -55,4 +55,10 @@ int test_mapper_synthetic_smoke(void);
 int test_mapper_write_storm(void);
 int test_mapper_bank_stress(void);
 
+/* state */
+int test_state_roundtrip(void);
+int test_state_validation(void);
+int test_state_hot_save(void);
+int test_state_rom_roundtrip(void);
+
 const nes_test_case_t* test_cases(size_t* count);

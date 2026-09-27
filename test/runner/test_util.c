@@ -46,6 +46,10 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "write storm", test_mapper_write_storm},
         {"mapper", "bank stress", test_mapper_bank_stress},
         {"rom", "stream consistency", test_stream_consistency},
+        {"state", "round-trip determinism", test_state_roundtrip},
+        {"state", "header and ROM validation", test_state_validation},
+        {"state", "hot save and reload cycles", test_state_hot_save},
+        {"state", "corpus ROM round-trip", test_state_rom_roundtrip},
         {"stress", "CPU million instructions", test_cpu_stress},
         {"corpus", "rom corpus", test_corpus_case},
     };

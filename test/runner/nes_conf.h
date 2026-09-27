@@ -1,0 +1,13 @@
+#pragma once
+#define NES_ENABLE_SOUND 1
+#ifndef NES_USE_SRAM
+#define NES_USE_SRAM 1
+#endif
+#define NES_USE_FS 1
+#define NES_ENABLE_HEAVY_MAPPERS 1
+#define NES_ENABLE_PLANE1_MAPPERS 1
+#define NES_ENABLE_PLANE2_MAPPERS 1
+#define NES_COLOR_DEPTH 32
+#define NES_LOG_LEVEL 0
+#define NES_LOG_LEVEL 0
+

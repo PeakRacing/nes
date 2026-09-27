@@ -1,0 +1,196 @@
+# status,verdict,sha256,label,dir_mapper,header_mapper,effective_mapper,frames,hash_chain,first_render
+BASE,ok,adf40db05560f1b550b7fd6fdba429f467caa90214a4038dcf67215679a322cb,rom/15-in-1 (Maxi 15) (A) [!].nes,-1,234,234,180,1767977202,6
+BASE,load_fail,2c020b4513c61cdd6d80ea32be7321925c3443a313427416718506536f3b5a24,rom/3-in-1 (Akumajou Densetsu) (Unl).nes,-1,357,-1,180,0,0
+BASE,ok,78c8433721c1ae428d306f56616e33112bbf75b58d4a542b5c6a397b742c5562,rom/31_test_16.nes,-1,31,31,180,2496761743,4
+BASE,ok,0b3b4b026bd00354b0b9a60397469790aef5290c0e3703bbafdfc896ad4199f5,rom/Arkanoid II (J) [!].nes,-1,70,33,180,4277796550,14
+BASE,ok,6358ec94bd282c4665b465f4548db3d6a76d9337fd0b2f0a6318f9f163580d2b,rom/Armadillo (J) [!].nes,-1,118,118,180,1241248246,11
+BASE,load_fail,9beb07437fdff64b3f492f86f92b01ef89811fa2f0259669272c9c56b38e34ff,rom/Holy Diver (UE) (CE).nes,-1,448,-1,180,0,0
+BASE,ok,73b29f2cea69159b8a7326f9181b325c5e005cb4b9c36b7ed0d83271eebf438f,rom/Kyuukyoku Harikiri Koushien (J) [!].nes,-1,82,82,180,3059073903,4
+BASE,ok,8d6d1f1d1edfea7348010780b579376483131281b6f872d7822ba4255839e00c,rom/Maharaja.nes,-1,68,68,180,2373979337,5
+BASE,ok,971783427c1c52fcffb93c79a6962b165d4b6859fd6accc44ba78958a1f3c09b,rom/NEStress.NES,-1,0,0,180,2455386726,4
+BASE,load_fail,6ba7e6d7a696114693c99b188a053b79e61a0ec7c0da3db46a97d9fad33ed734,rom/Oeka Kids - Anpanman to Oekaki Shiyou!! (J) [!].nes,-1,96,-1,180,0,0
+BASE,ok,b86c3f54a3070b9a46ef51c09c9016c8d3b6f32193877306ba9f22918f7407aa,rom/Pin Bot (E) [!].nes,-1,119,119,180,3907465325,20
+BASE,load_fail,f4fad87c5a236adaccbe5ad77d99ddfa0ebea8d9463472a605891e3cebe92298,rom/Racermate Challenge 2 (U) (v9.03.128) [!].nes,-1,168,-1,180,0,0
+BASE,ok,7410cd0eff9370de7fd1bdeb92b737fb2902dae70d1d6e10b5d2179d1e566f25,rom/Road Runner (U) [!].nes,-1,64,64,180,1931316982,8
+BASE,ok,a8e269f9533f194c5915973a3d58664a3acacefebc10b1179ad490dea1f89191,rom/Splatterhouse - Wanpaku Graffiti (W) (NC).nes,-1,210,210,180,2250346200,9
+BASE,ok,ccbac4e824eb96ecfe8b82d331a083be186eb6776aa57e25c52251eaf7df9c4f,rom/cpu_interrupts.nes,-1,1,1,180,3676347661,12
+BASE,ok,aa07da5c5b714dc96531fb6163e7eaec9e16b78090f52d0f3df8220ed405bc3a,rom/mapper0/90坦克.nes,0,0,0,180,56907918,10
+BASE,ok,28fe46cc4418d11e3805e6c43c60cb8ad66d70ea06f2ac460a39f2888fd71a37,rom/mapper0/B计划.nes,0,0,0,180,1610750138,17
+BASE,ok,7d42d143cfc282f659ad3f351bcbaf66fac67d5a6ff7d10744c1cf4cdf8a3d1e,rom/mapper0/F1公路赛车(J).nes,0,0,0,180,975799479,7
+BASE,ok,70b77b9f3729346212b01aae6baafb924d250c4403e088fb09b12d333674c496,rom/mapper0/color_test.nes,0,0,0,180,3126653973,4
+BASE,ok,f67d55fd6b3cf0bad1cc85f1df0d739c65b53e79cecb7fea8f77ec0eadab0004,rom/mapper0/nestest.nes,0,0,0,180,1244229987,4
+BASE,ok,f1802a5618aaaa0c4d592caa45b0b13c54082af93fc311bda0c27bceacbc7c7f,rom/mapper0/ram_after_reset.nes,0,0,0,180,2288078164,6
+BASE,ok,a30f33fb6c9f56012fba38dc85ddc3dccc06bfc0b25fef7711b63f8207279715,rom/mapper0/registers.nes,0,0,0,180,465630137,6
+BASE,ok,87ccbff575df8679b7474688090ba758c50334bcf3a794ec64867fddded2c61d,rom/mapper0/spritecans.nes,0,0,0,180,1096035087,5
+BASE,ok,fac86ec81aa86bd3f637b674569266966992b845f3df22bf7aad18eb9381f671,rom/mapper0/super_mario.nes,0,0,0,180,3764259564,32
+BASE,ok,33ef2698375b2377b5e850f3d1d5ceb81f92e0b4f447caa6043d08c12248e887,rom/mapper0/街机4合1.nes,0,71,71,180,496477765,24
+BASE,ok,e7925b67d577b8d05da01d935d9fe74b66f6487e18922f6c065647c5b13aa252,rom/mapper0/马戏团.nes,0,0,0,180,646827503,4
+BASE,ok,288b9082a2728bae257b17b129500516295d265cdd52e09f86bb441834b06075,rom/mapper0/炸弹人.nes,0,0,0,180,3067916018,9
+BASE,ok,f2c1295e1babbf91a44e7b9da03e20f9f47ed4d833b59066117edb8c7e26c6ec,rom/mapper1/Alien Syndrome (J).nes,1,1,1,180,2648383937,5
+BASE,ok,bd987bf8fe5f395671b4b8f13bd8b8277559ab44a509548cf2ca1143acc95ede,rom/mapper1/Bases Loaded II (U) [!].nes,1,1,1,180,868811467,20
+BASE,ok,58d46656ea3820602e17f0450a032e4213a968c07aa130948c1f67c8e6944846,rom/mapper1/Bashi Bazook (U) (Proto) [!].nes,1,1,1,180,3762639007,5
+BASE,ok,b58e7a798304ada6c01098dd790eb3a784fbb49f95eb114e1114cbc3d0161312,rom/mapper1/Demon Sword (U) [!].nes,1,1,1,180,2260368173,6
+BASE,ok,af760597217c2d5fe587fc6d2d0e55956be601bac41d22bdeea5c0b12b421b92,rom/mapper1/High Speed FB (J).nes,1,1,1,180,3134707739,29
+BASE,ok,01eae135185618291dca0fc0b19861a38c8e2af7dfb0efba4642ead612f79aaf,rom/mapper1/Kid Niki - Radical Ninja (U) (PRG0) [!].nes,1,1,1,180,2807018701,25
+BASE,ok,adf6a92625101a829ab48297a744f3fd6e44593e8bfab59d0b7b382cf19d1e76,rom/mapper1/Kid Niki - Radical Ninja (U) (PRG1) [!].nes,1,1,1,180,2807018701,25
+BASE,ok,de628ad010509c18aa0da266655a3f48aa633d4b158605215673187cea1a4f2f,rom/mapper1/暗黑神话.nes,1,1,1,180,2789534780,7
+BASE,ok,e3f63915cee3eb6e4065dce0569ff7d9f9d72c026b0826dcda6354ecc878192c,rom/mapper1/恶魔城2.nes,1,1,1,180,148048055,9
+BASE,ok,cb6ba03a20d8f3a34dda69f16895588a87fcfea0e95473da64c92bd2b6635985,rom/mapper1/古巴战士(完整汉化版).nes,1,1,1,180,2089051287,6
+BASE,ok,51b0f82c5d82c8822089eea1feb667ba5bdc28ee2948824b100ca5033358278d,rom/mapper1/激龟忍者传.nes,1,1,1,180,3425444798,7
+BASE,ok,2a58a10be334f9cc0be0c678b6c1082b0a936de20dc39f528c46d32f3a6a3376,rom/mapper10/Fire Emblem - Ankoku Ryuu to Hikari no Tsurugi (Japan).nes,10,160,10,180,334233765,7
+BASE,ok,a11f28ee090225e63d0a7a4a35046d88c77c2661fa15fbd990c16bbb65fe15bf,rom/mapper10/任天堂战争(Famicom Wars).nes,10,10,10,180,3432049498,16
+BASE,ok,83f66b806a69c41e341ee4d86d88808d0a22bc35c00fc9e63e291ee31bc50e1a,rom/mapper105/3-in-1 (Nintendo World Championships 1990) (U) [!].nes,105,105,105,180,2884247176,16
+BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper105/Senjou no Ookami (J) [!].nes,105,94,94,180,3543845892,6
+BASE,ok,75c7942080ab33d0c6a6d77ed17d0a36e4c2ecaee6031e99f5fdb9c90a624853,rom/mapper11/Death Race (U) [!].nes,11,11,144,180,3921165557,15
+BASE,ok,a5cc4031c927c114e6483ed4939ae1d560f87645d95e5f206b21e9bba778edaa,rom/mapper11/Galactic Crusader (U) [!].nes,11,11,11,180,3070358014,5
+BASE,ok,5cab40af93a3ad5d3091ce6fd716715202b1ef26da555770df8b0fdc19ae7d1a,rom/mapper11/Moon Ranger (U) [!].nes,11,11,11,180,2284122566,3
+BASE,ok,96e80e2d3646906ed47f97013a3453587e578dfc5ec733d81b189b4dd4943e81,rom/mapper113/Papillon (J) [!].nes,113,113,113,180,3780808755,4
+BASE,ok,703ca9b0792ccec83313f4012fb72f243e3bdaf66d53cbd6d1b22943426d48f3,rom/mapper118/Alien Syndrome (U) [!].nes,118,118,118,180,1285282145,5
+BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper118/Senjou no Ookami (J) [!].nes,118,94,94,180,3543845892,6
+BASE,ok,549575dae837426ba964c74f09fd11ee49fdaf82ae2669c157de5612bf76ff70,rom/mapper119/Pin Bot (U) [!].nes,119,119,119,180,3741836621,20
+BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper119/Senjou no Ookami (J) [!].nes,119,94,94,180,3543845892,6
+BASE,ok,0e609dd970a1bc56f519ba7d7d353f0bbfc4d9b4a4b81472b44fbee69168f718,rom/mapper13/Videomation (U) [!].nes,13,13,13,180,2278998561,10
+BASE,ok,2f004789bd07bcb4efd091f2f4e14e8814e76456243aa2fac613356e8a0c04ee,rom/mapper140/Bio Senshi Dan (J) [!].nes,140,140,140,180,3762639007,5
+BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper140/Senjou no Ookami (J) [!].nes,140,94,94,180,3543845892,6
+BASE,ok,08eab08b359387ba902c2882925bc41e6986aa0ec9fc39aa5e00be481102a16c,rom/mapper141/4-in-1 (Sachen Super Cartridge Version 1) (As) [!].nes,141,141,141,180,477739469,7
+BASE,ok,2f004789bd07bcb4efd091f2f4e14e8814e76456243aa2fac613356e8a0c04ee,rom/mapper141/Bio Senshi Dan (J) [!].nes,141,140,140,180,3762639007,5
+BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper141/Senjou no Ookami (J) [!].nes,141,94,94,180,3543845892,6
+BASE,ok,2f004789bd07bcb4efd091f2f4e14e8814e76456243aa2fac613356e8a0c04ee,rom/mapper146/Bio Senshi Dan (J) [!].nes,146,140,140,180,3762639007,5
+BASE,ok,3fcd4905894c23ddb01a6337577ac8ac3ccf6213a84c9cdde80dcfba98abc0ba,rom/mapper146/Galactic Crusader (As) [!].nes,146,146,146,180,3070358014,5
+BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper146/Senjou no Ookami (J) [!].nes,146,94,94,180,3543845892,6
+BASE,ok,5b53b17ac042319597bad53dcc09021336cab807f3e28c593967c7504288e76b,rom/mapper15/大话西游(中文).nes,15,15,15,180,1869595687,43
+BASE,ok,55fee2fb27bb5e2fc7d549b9c65acb0b6bb68876eb91622b5f4e2a42d7186dae,rom/mapper159/Dragon Ball Z - Kyoushuu! Saiyajin (J) (PRG1).nes,159,249,159,180,4069282292,12
+BASE,ok,9219ae879765fafba2b10a3732209c5581f0c886676d564b17b5c901226fe17f,rom/mapper16/Akuma-kun - Makai no Wana (J) [!].nes,16,16,16,180,2941407792,5
+BASE,ok,11586339e4f8833846e0894ee7e590d4fa0e0c7e9dde5ccc5988ad9ce6d42d2a,rom/mapper16/Dragon Ball Z - Kyoushuu! Saiyajin (J) (PRG0) [!].nes,16,16,16,180,4229472998,11
+BASE,ok,1c79f2c4c8d398726778dc5929b7335235039f0e13a869d49f613695dc5f83f7,rom/mapper16/龙珠2-大魔王复活.nes,16,16,16,180,4022056793,7
+BASE,ok,3b5929ecf790e39bf6dc435e3add5aa6bdbdd3bfec5ce41cffb798bcea1f9da3,rom/mapper16/龙珠3-悟空传.nes,16,16,16,180,1911204513,5
+BASE,ok,c16be2b0ea096bce69231c65b02dda8ce5111eb73887f30381b906dc94aa5a8b,rom/mapper16/龙珠Z2-激斗弗利撒.nes,16,16,16,180,2862369524,18
+BASE,ok,c5067a0cd0b5616305a8cc8ee5596df0197e0d3f89230f15886fc1e578bb8928,rom/mapper163/暗黑破坏神.nes,163,163,163,180,3154067966,37
+BASE,ok,d8e067b4bd8e1e28d43b819e959d4aacc1c399afda48ca52c1c18f145f051dd5,rom/mapper163/葫芦金刚.nes,163,163,163,180,3816649183,49
+BASE,ok,59bdc5140c1cfd6577d489f5a092527edf80940ea23cdb506e8a7cd7d83dc1a6,rom/mapper17/b2.nes,17,17,17,180,3399099769,55
+BASE,ok,59bdc5140c1cfd6577d489f5a092527edf80940ea23cdb506e8a7cd7d83dc1a6,rom/mapper17/batman2.nes,17,17,17,180,3399099769,55
+BASE,ok,59bdc5140c1cfd6577d489f5a092527edf80940ea23cdb506e8a7cd7d83dc1a6,rom/mapper17/蝙蝠侠2.nes,17,17,17,180,3399099769,55
+BASE,ok,fd07ba29cc9da86181eb23fa3697f5a556ca97abed6f264f83178050770e4093,rom/mapper18/Jajamaru Gekimaden - Maboroshi no Kinmajou (Japan).nes,18,33,18,180,2555473064,7
+BASE,ok,1e9d9412e43a2fb39f48e6f54ca0b0507bedd456084281f57c4b4e9a86efd9fe,rom/mapper180/Crazy Climber (J) [!].nes,180,180,180,180,3483278897,9
+BASE,ok,66e9ad1643dee12fb580eba978f1729e26185f6f602dd7a2613821a1cd04602e,rom/mapper184/Atlantis no Nazo (Japan) (Virtual Console_ Switch Online).nes,184,184,184,180,3975847641,2
+BASE,ok,40ab99e6c8aec2741503b7e69d2597fbff518ece062f78a1b028b5fac3b6b9ae,rom/mapper185/B-Wings (J) [!].nes,185,185,185,180,1758335257,40
+BASE,ok,3ed484388302df09761db68339547c7e2738f74475fb686436fae379955dc5c2,rom/mapper189/Gluk the Thunder Warrior (S).nes,189,189,189,180,45327733,6
+BASE,ok,6eba6a209e0d60c63d73e2e02b858b9580fd40e719775ffe43ae940a61ba57a2,rom/mapper189/Thunder Warrior (As).nes,189,189,189,180,1042331055,6
+BASE,ok,b6dfd7db48e3cafa55626d2b6287888b497bd8ff9f5bda4703fa2b146305e184,rom/mapper189/街头霸王II.nes,189,189,189,180,1061836113,4
+BASE,ok,907ce17a372f1ce0b020cd5fb52be27dae3df0cc848268ba8bb6a7cba77ab566,rom/mapper19/Battle Fleet (J) [!].nes,19,19,19,180,2973318303,12
+BASE,ok,6e9863ffdd2f817bda922c186550745a70a12efee295799fea8d9ab6baba7e83,rom/mapper19/Chibi Maruko-chan - Uki Uki Shopping (J) [!].nes,19,19,19,180,2469962444,6
+BASE,ok,0fb8022ff81d3ab09403c15839bd7cfd93765a662b7f63f3753dbb9f784a821b,rom/mapper19/Dream Master (J) [!].nes,19,19,19,180,891281526,4
+BASE,ok,f8cd2bc7af9fea3534f9f92e2bafaaf3db40a64f9c4c11df69e06434586f00e4,rom/mapper19/Family Circuit '91 (J) [!].nes,19,19,210,180,875701772,5
+BASE,ok,799f3ee9a38af6dffcb476e45f6a8bd7e0de6ddcb12c7188da8e29823e096365,rom/mapper19/Heisei Tensai Bakabon (J) [!].nes,19,19,19,180,4228258005,10
+BASE,ok,505f4b7fab14745df48d910deb589b5b7c67cbe0ee658f8a3771bfea252ad2b5,rom/mapper19/Splatterhouse - Wanpaku Graffiti (J) [!].nes,19,19,19,180,1625733204,9
+BASE,ok,c108b323af157dbf4ec70cd5dc0d8ceac9e559eac4363d042f0854b0843c87fa,rom/mapper193/War in the Gulf (Unl) [!].nes,193,193,193,180,3652256134,20
+BASE,ok,42664d5b34381a00f6d92214620a73ab851c8679c7a805a1f4239b8e9b1726e5,rom/mapper2/Commando (U) [!].nes,2,2,2,180,314470691,6
+BASE,ok,26541a5550ee22deeb3d5484e4a96130219b58cff74d068fb1eb6567fa5e5519,rom/mapper2/contra.nes,2,2,2,180,3321522495,14
+BASE,ok,532a58e9c0fee848c3419206e5ee7dbca2a6900c499245efda20b58b39b773eb,rom/mapper2/彩虹岛 (J).nes,2,2,2,180,2537071974,9
+BASE,ok,98ed6d10391cccef249ce45cd935eb6263163f727fbf2fc11adb8116aa49f31d,rom/mapper2/赤色要塞.NES,2,2,2,180,1817617717,20
+BASE,ok,cfae7f26fc382d2619f21090fe07b17e62104576d490a9e12ffdd50568eba73e,rom/mapper2/恶魔城.nes,2,2,2,180,1521204504,9
+BASE,ok,1c8885892051d79db757746e2281f417cd5b156a86988b0010ad95d7bd4276c5,rom/mapper2/洛克人1.nes,2,2,2,180,3428804423,8
+BASE,ok,a606c6c4c6d81b72ee783c5ad9b91cb8e1d09206c4ad2ba881698fa15fa3af57,rom/mapper2/沙罗曼蛇 .nes,2,2,2,180,1189095713,11
+BASE,ok,548c05ab294916fe1306a5f703b6037232ac7db859a667bf999a5b5fed4590a1,rom/mapper206/The Tower of Babel (J) (NC).nes,206,236,206,180,1226607972,4
+BASE,ok,fcf434724ae95193744ef203e66d742b69717767c117e05b12836e63ab572ff1,rom/mapper21/Ganbare Goemon Gaiden 2 (J) [!].nes,21,21,21,180,3122142261,12
+BASE,ok,5efe8f930d8f052787d128fba032438d1905db7de36e29c79a0f4475ce2db3e9,rom/mapper22/Ganbare Pennant Race! (J) [!].nes,22,22,22,180,3601208029,9
+BASE,ok,8421537d9e4013c3bac1c0407d2122595140e274a0db796cc6820bb44bb37848,rom/mapper228/52-in-1 (Action 52) (Unl) (Rev A) [!].nes,228,228,228,180,197136181,34
+BASE,ok,217ee7715eee22f616cb0ae167e43695f76259aba48ca0193a578c4d5fff65b8,rom/mapper228/52-in-1 (Action 52) (Unl) (Rev B).nes,228,78,228,180,197136181,34
+BASE,ok,5d7fcec0fe96796cac020d45b79072d971dc0dd6f8d856ceeb30046ad002e3ce,rom/mapper228/52-in-1 (Action 52) (Unl) [!].nes,228,228,228,180,197136181,34
+BASE,ok,10bee1e62e247701cf05811888e2dc297352be722f861756ce5912ba7d40941f,rom/mapper23/Akumajou Special - Boku Dracula-kun (J) [!].nes,23,23,23,180,848007615,9
+BASE,ok,445e4d761894e5c0d8c6bb623cfd3536e80612b1cebda5bb5379ac1843df0c9d,rom/mapper23/Kid Dracula (UE) (CAC).nes,23,113,23,180,2488460118,12
+BASE,ok,b46d67594dc8e75d04d8a96c288782a892c4f3ea0621994c5d2eeaa0e38f2b74,rom/mapper23/搬运工.nes,23,23,23,180,1230380693,8
+BASE,ok,a4b7dee2ad709cf03c15f918044189d9b04498346f6d356c2811207b29c92390,rom/mapper232/4-in-1 (Quattro Adventure) (U) [!].nes,232,232,232,180,1924548901,24
+BASE,ok,56020bf3496db7a91e97431c3b912141eb5356af2c0f91485c22bde43eaf1e60,rom/mapper232/4-in-1 (Super Adventure Quests) (E).nes,232,142,232,180,3381400221,24
+BASE,ok,cfb4a2bfedb84fe0808deea1a06e4339dfce081dce4780c4b78d43eb0097f9e7,rom/mapper24/Akumajou Densetsu.nes,24,24,24,180,2561119640,8
+BASE,ok,f3596ffda5c1b83821e58d15827a3a2fbc94c85352b7a5b834c1039e70509a25,rom/mapper246/封神榜.nes,246,246,246,180,3408427795,2
+BASE,ok,141a017a053c19e7455323c47a573c22fba11f7be685eed67d466d8c6c6b4909,rom/mapper25/Bio Miracle Bokutte Upa (J) [!].nes,25,25,25,180,3235507425,11
+BASE,ok,518980ce03f751392b3696ed4923c077deaff79e6bd8212a2c730fd59cf46807,rom/mapper253/龙珠Z2_激神弗利萨.nes,253,253,253,180,2364491001,61
+BASE,ok,e99abbfd109c9fa9bef59dfa84dda5b18ce1470be1f95fe57dc62deb3f42007b,rom/mapper253/龙珠Z_强袭赛亚人.nes,253,253,253,180,2322914665,1
+BASE,ok,9dff8bc590cf73e9063575dd77707964c69f81573bb84ecd5c13aab874db1717,rom/mapper26/Esper Dream 2 (J) [!].nes,26,26,26,180,2410409457,18
+BASE,ok,a9a38184c2061309e97ca8543322d74f56d7788e48f0328899dbebeb7ebe9f35,rom/mapper3/Die Bian (ChT).nes,3,3,3,180,4097785064,4
+BASE,ok,17b38fd086e671ce15fefb2e916af87f4e3799b8758c5bc42f6727bcdc926313,rom/mapper3/高桥名人的冒险岛.nes,3,3,3,180,4071506707,6
+BASE,ok,78c8433721c1ae428d306f56616e33112bbf75b58d4a542b5c6a397b742c5562,rom/mapper31/31_test_16.nes,31,31,31,180,2496761743,4
+BASE,ok,79daee6490fa1ab23f430880fc9220c8e516da45dfdeba0ca3d4ab2e02e40c49,rom/mapper32/Image Fight (J) [!].nes,32,32,32,180,4140386785,8
+BASE,ok,316f5d957e0f672929570bd7f2f2a04eb9f39b11f587ca53b3c1a780c7252ce4,rom/mapper32/Image Fight (U) [!].nes,32,4,4,180,3344180462,10
+BASE,ok,a50917bf01f0d41d5de435564c02f4fa7ce761c57112a056bea9a569248a33a6,rom/mapper33/Akira (J) [!].nes,33,33,33,180,3771011191,6
+BASE,ok,143dcbb409c9efcfc8a9f2016770d6294e08eef8e5e4c2291f81905f7cd09be2,rom/mapper33/Bakushou!! Jinsei Gekijou 2 (J) [!].nes,33,33,33,180,1012885917,7
+BASE,ok,fcdd9c3057bf3fe23b705c0590999218e74c229c18fbca96e0b6bd738a53a86b,rom/mapper33/Bakushou!! Jinsei Gekijou 3 (J) [!].nes,33,33,33,180,287853237,15
+BASE,ok,6420868fdef3ee0b39f7674b8664a0eaf85ed5e4f3219b417a3626b1fefcae2c,rom/mapper33/Don Doko Don 2 (J) [!].nes,33,33,33,180,365064280,43
+BASE,ok,7d508c367728115333b2463059e72365412f4c5897ab424eea39ffa4b8f740a4,rom/mapper34/Deadly Towers (U) [!].nes,34,34,34,180,404211217,16
+BASE,ok,6c5d3ef526c5f59ecb74d3a4ffc2fe5066a9ba6387ef0a1a6a7001a6f677fc22,rom/mapper34/Mashou (J) [!].nes,34,34,34,180,3552611389,16
+BASE,ok,223d8590284ce8fc35523dfab5bb14e5aeb6d16abd064314a0cc4be6178b5815,rom/mapper37/Super Mario Bros. + Tetris + Nintendo World Cup (Europe).nes,37,4,37,180,1452177331,7
+BASE,ok,bb78cce09cbfbb839b3e92edf432ba855aa2f2809041941bfa1cd90c8777b817,rom/mapper38/Crime Busters (Bra) [!].nes,38,38,38,180,25722005,22
+BASE,ok,67f3a838cb6e0b0ce1a683615d7728d91e57817c5556c45981392afba7b4c4e2,rom/mapper4/Babel (J) [!].nes,4,4,4,180,3996713805,4
+BASE,ok,9306e35fe4ded640c8b917f15a7fb778a0bb0e89051cdd8ac56187fab07512d4,rom/mapper4/Blackjack by Nice Code V2 (Unl) [o1].nes,4,64,0,180,1450220429,7
+BASE,ok,be00592d75927186808a3b1a99b21c6ecd7bcfc898aa11f0ff38e2250feaa78c,rom/mapper4/Blackjack by Nice Code V2 (Unl).nes,4,64,0,180,1450220429,7
+BASE,ok,fbe284790b938e406d04661c43e7ce9181d96b2f85cf728111d99f552f15ddc7,rom/mapper4/FC原人.nes,4,4,4,180,3049130249,21
+BASE,ok,144dcc6642bb602dff40fa165dd7c9a964eb597a0df85bd5d298a40f3f1ca55c,rom/mapper4/Fantasy Zone (U) [!].nes,4,4,4,180,620562462,18
+BASE,ok,c9ec22347d5560b94d0a4094048a637caec1711a162a98b0ccfc6f997176ab64,rom/mapper4/SD街头快打(快打旋风).nes,4,4,4,180,2841653347,6
+BASE,ok,5c986ab39fc32cd2d46d65d765a1ea187dc7a0f86e8cc515c3f318b6ec4abfbb,rom/mapper4/Super Mario Bros - Tetris - Nintendo World Cup (E).nes,4,4,4,180,1452177331,7
+BASE,ok,9f73e5a91857ff58024769fb299bf8c2404dd9b7e4e0cb26cb7f346df05409da,rom/mapper4/超级马里奥2.nes,4,4,4,180,2318326612,6
+BASE,ok,2dbff658378216b3d4e59fdb38926d0bddabd9e78d75e8819e3824d5554daed8,rom/mapper4/超级马里奥3.nes,4,4,4,180,485225176,11
+BASE,ok,4d3f602bb88a1f64ba9b7836401dc91861d0ce5b50ff4b9f5a5ffd1428851b0c,rom/mapper4/风云.nes,4,4,4,180,4109884373,25
+BASE,ok,d6a843a4d158079c6d5fc9afcb63545acbdc918500576a0b01461394ed83beeb,rom/mapper4/街头霸王.nes,4,4,4,180,634110745,6
+BASE,ok,ebafbebc55ce25642b647c42d0983b8ceade208560c95e64a86ed96b52383cde,rom/mapper4/洛克人.nes,4,4,4,180,4167362245,5
+BASE,ok,b309ba13d978ce2cc12bc0878886cc1560b8eacbff55015e56aa7f3609f8cfec,rom/mapper4/蝙蝠侠.nes,4,4,4,180,1348937695,7
+BASE,ok,141530a430d5ac59bfead691e485bcb0928a8b31220172d82615b1fb288d8d4d,rom/mapper45/6-in-1 (YG6023) (Unl).nes,45,45,45,180,2507924309,45
+BASE,ok,dbd8f793bd841cf967d499f80fd042b7abd40f7a6567db479ff081ccb984af4c,rom/mapper47/2-in-1 (Super Spike V'Ball + Nintendo World Cup) (U) [!].nes,47,47,47,180,858107942,32
+BASE,ok,c623a3ae5f22561cfbd21e911643a083021ecd9a14d3e3fa9d9bd009d28c5359,rom/mapper5/Gun Sight (J).nes,5,5,5,180,41167593,12
+BASE,ok,69d4101d79854e08a1f08b8e0ac9348c60f131791d641bbb1b61cd3a5c884498,rom/mapper5/L'Empereur (J) [!].nes,5,5,5,180,1695033139,16
+BASE,ok,89fbeb3e9720bf5b48e07271a601d195e089f82cadf866472f7e749ce1379223,rom/mapper5/L'Empereur (U) [!].nes,5,5,5,180,1695033139,16
+BASE,ok,616c4ca80377a9b497fae7ca7214bb557571ed753f4b5bb0e41882b34195514b,rom/mapper64/Klax (J) [!].nes,64,4,4,180,1021258861,3
+BASE,ok,d010708d6e4bfd208d9ce0a5ae55a6319700b05d87eabbebc1df5527781773e0,rom/mapper64/Klax (U) [!].nes,64,64,64,180,1021258861,3
+BASE,ok,277810771a7fc71630b4e50ceab9662ef30ecf7c5ef732c2f1dc3c4cc66eff86,rom/mapper65/Daiku no Gen-san 2 (J) [!].nes,65,65,65,180,2873584845,16
+BASE,ok,613c780b0d66f6ae82ecc89e3ffe23debe208c6a9f664fac12542e820d5dea1b,rom/mapper65/Hammerin' Harry 2 (U) (Retro-Bit).nes,65,65,65,180,3623863946,4
+BASE,ok,881d44e2572ff308edb813f059afd7385e00503cc5ff7ab78fdc8d13d4c0005b,rom/mapper66/龙珠1-神龙之迷.nes,66,66,66,180,659873040,23
+BASE,ok,5b893aa05d2ff2534a3173bd7b587bf6cdb944da8bc737a3801420a937c5caf0,rom/mapper67/Fantasy Zone II Opa-Opa no Namida.nes,67,67,67,180,3130609630,47
+BASE,ok,e6f3cd13577cb09887165e6123f6d8352e93e06d78cc285801f51a97c483ba86,rom/mapper69/Barcode World (J) [!].nes,69,69,69,180,4130734851,19
+BASE,ok,721be1420476d69359f0695b92cb998add9b7e09d765e322c9660e20d9e3609b,rom/mapper7/城市猎人.nes,7,7,7,180,2563480587,14
+BASE,ok,5ce4fc1a4735a48dd5f79daf6268df38d7e2202de39069db09df470c01728500,rom/mapper7/老虎机.NES,7,7,7,180,377372527,6
+BASE,ok,298b3672642db48768ba438f390cb28741c29ae06edc29b05199b83572015ebc,rom/mapper70/Family Trainer 5 - Meiro Daisakusen (J) [!].nes,70,70,70,180,884492293,13
+BASE,ok,fab0b816d1223d6b540c985557e95033da002e4f6f859c99fc6db8b52b558272,rom/mapper70/Gegege no Kitarou 2 (J) [!].nes,70,70,70,180,984954882,6
+BASE,ok,9a07814fec8d374b092da27b1daa8a88da21530964e37808a78a1d3f9ee934e0,rom/mapper70/Juu Ouken no Nazo (J) [!].nes,70,70,70,180,3272326497,5
+BASE,ok,0415efc2e06c77c26bed23c3c8c13bea1fed1361591fc453bb2fee5c75f72364,rom/mapper70/圣斗士星矢.nes,70,70,70,180,2681374730,5
+BASE,ok,670a9a05b01236312e08f03e6e6617c6794b8d12fe7d60dac6a12933121f223d,rom/mapper72/Moero!! Juudou Warriors (J) [!].nes,72,72,72,180,2007803325,7
+BASE,ok,2fba8972300eda88ea49146bd21a4d39707c95c4618946a977e417c60e2b664d,rom/mapper74/龙珠Z3_烈战人造人间.nes,74,74,199,180,2233918464,11
+BASE,ok,7603e464c3ab19bf92b8b4db3c8028f42b5b67113b047bd7a39407e74bc139da,rom/mapper75/Exciting Boxing (J).nes,75,75,75,180,3716701529,13
+BASE,ok,dbb93042c9f4c6ea4eb1e60c6a1bcd797c34b85f856e2307110796d353da4173,rom/mapper75/金刚2.nes,75,75,75,180,221443879,16
+BASE,ok,89f2aa8aad69ff8551e5addc85ba67dd061141f37e8e3224adc2787c1a85a9a5,rom/mapper76/Megami Tensei (J) (PRG0) [!].nes,76,76,76,180,1006685581,7
+BASE,ok,d01a004f9bc2767d4d6363f04b36b6363277e962d89ba0a813f66119cc6aa7d2,rom/mapper76/Megami Tensei (J) (PRG1).nes,76,196,76,180,1006685581,7
+BASE,ok,0a45b46c226cdf4f7b6ad5c50327d09a1370e7ef3390ed9da9ac8b5ee7e72753,rom/mapper77/Napoleon Senki (Japan).nes,77,77,77,180,1221547301,7
+BASE,ok,4bfefecbaffa32903473c00217f0c57044a8194f1165c49c5f519258b3c9e89e,rom/mapper78/Holy Diver (J) [!].nes,78,78,78,180,2003198372,5
+BASE,ok,03e5cc4dbde0ea16f2c862e929bd7f8a27e7f62c3fa5b0b186c2d0e5ef1752f9,rom/mapper79/Deathbots (U) (PRG0) [!].nes,79,79,79,180,505707005,48
+BASE,ok,014b6223445567b02f610124d097b11ec43ceb242efc7dc8c16a7cd7b5697374,rom/mapper79/Deathbots (U) (PRG1) [!].nes,79,79,79,180,2918671517,64
+BASE,ok,a2465ef086ce3826c2f62d96d044241f2900eca9cbc98b0ebd331802d811a8d1,rom/mapper80/Fudou Myouou Den (J) [!].nes,80,80,80,180,2456741735,3
+BASE,ok,8b31c5e7e3fbd749b6ea4a04e3854fdb89865aaa4bd8681c0e05659f438c41de,rom/mapper80/Kyonshiizu 2 (J).nes,80,80,80,180,2170571118,3
+BASE,ok,b03bdf4353b99ccbe8baa025f92f6b22cbd73afbd33bc61432b610fd7aa9942f,rom/mapper83/龙珠4合1.nes,83,83,83,180,3084037477,12
+BASE,ok,3e8b4b68da3424a03c51aeceb5acb345d1d2738ad87342899a4053064a243b25,rom/mapper85/Lagrange Point (J) [!].nes,85,85,85,180,3332160781,90
+BASE,ok,45cb6a711ffd7b850ab1ab81c53378b4064e8d607eba9e17dc591b8f60d222fd,rom/mapper87/Choplifter (J) (PRG0) [!].nes,87,87,87,180,873688235,5
+BASE,ok,bf8878b68b180834b59e6602e069741942c23de7f31ba515a81e8f81f9fa1fac,rom/mapper87/Choplifter (J) (PRG1).nes,87,117,87,180,873688235,5
+BASE,ok,f0a960108d634a2120966bf152acd095f72b25599ec6aeff6396b41c0a8ec5b9,rom/mapper88/Devil Man (J) [!].nes,88,88,88,180,1155369604,9
+BASE,ok,f364e0a4327689652ab906e6f2c3f6769f84d04796b9676b70bc31546355acff,rom/mapper88/Dragon Spirit (J) [!].nes,88,88,88,180,3267214467,10
+BASE,ok,7cde9880742aac8f253da094498c360d5950cf1aef353a305f6d23f1b0406f72,rom/mapper88/Dragon Spirit (U) [!].nes,88,4,4,180,1376479231,10
+BASE,ok,259091dc701344f85e58d69c0ba52dc7711a08ea1fbd2350b641e607205a8b8e,rom/mapper89/Mito Koumon (J) [!].nes,89,89,89,180,3323840007,44
+BASE,blank,6d1285cc0e0cb403c8b00f49acf16f1bf07a8cebf856df9411d04c427765e98f,rom/mapper9/Mike Tyson's Punch-Out!! (E) (PRG0) [!].nes,9,9,9,180,2190202303,0
+BASE,blank,b4481a3c6f356f0991f5d0da8168c6312b2af88bf23660e4e77a4935f6021f68,rom/mapper9/Mike Tyson's Punch-Out!! (E) (PRG1) [!].nes,9,9,9,180,2190202303,0
+BASE,blank,0435f6d9bcfeb474a592c3a950530a99c03a6f6cacff793dc88f822bb8cc6952,rom/mapper9/Mike Tyson's Punch-Out!! (JU) (PRG0) [!].nes,9,9,9,180,2190202303,0
+BASE,blank,60ef51f55f6addb7a1893f816aad75ee3e146dd646958a865d3bece5b429b600,rom/mapper9/Mike Tyson's Punch-Out!! (JU) (PRG1) [!].nes,9,9,9,180,2190202303,0
+BASE,ok,b5cc8b38ce2b0149b7d90c612dd88d8c5fd58285f68c90e52f7485637e8107a9,rom/mapper90/超级马里奥世界.nes,90,90,90,180,1326550217,3
+BASE,ok,c5d84f046f4da3f77d6ec537fd7b68e9752338a217911cfbb967604c1be8c390,rom/mapper90/快打旋风3.nes,90,90,90,180,5854612,4
+BASE,ok,7a91dd8b2a2b404e3c06ce8a1e3cd885de822ab5d63178bad04b9da107792327,rom/mapper91/街头霸王III.nes,91,91,91,180,294663572,5
+BASE,ok,32ccb69edfd0858397b9e567a0e52c901bff9120ffac4397667e426574c8ba63,rom/mapper92/Moero!! Pro Yakyuu '88 - Ketteiban (J) [!].nes,92,92,92,180,2297662182,16
+BASE,ok,32ccb69edfd0858397b9e567a0e52c901bff9120ffac4397667e426574c8ba63,rom/mapper92/Moero!! Pro Yakyuu ’88.nes,92,92,92,180,2297662182,16
+BASE,ok,6413ed0e543ee984f77a4a384c3de75fe15903e17cb1604969bc8e51bb2bff40,rom/mapper93/Fantasy Zone (J) [!].nes,93,93,93,180,1145334575,2
+BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper94/Senjou no Ookami (J) [!].nes,94,94,94,180,3543845892,6
+BASE,ok,2097623b1949604f0753e42075ccfd00516f2fb793354a939e456299abdd9ab6,rom/mapper95/Dragon Buster (J) [!].nes,95,95,95,180,102467109,6
+BASE,ok,9ce6d60ede17bf485bdd4cdbafa34a8535b5d55af3a79fcceb2200798bd08314,rom/mapper95/Dragon Buster (W) (NC).nes,95,95,95,180,1835455381,6
+BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper95/Senjou no Ookami (J) [!].nes,95,94,94,180,3543845892,6
+BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper96/Senjou no Ookami (J) [!].nes,96,94,94,180,3543845892,6
+BASE,ok,238cb4c247187cf0ca1b77462a574b2495981307c9701725d8a111cb401d94d1,rom/mapper97/Kaiketsu Yanchamaru (J) [!].nes,97,97,97,180,3424771277,24
+BASE,ok,56a72cd018e7fffbc556789b6e170ae062f5e3792c322b912d7ab5615bcaa863,rom/mapper97/Senjou no Ookami (J) [!].nes,97,94,94,180,3543845892,6
+BASE,blank,5ebb0ffa1bcf60668e1d87b0ec4dffc8091c890744251a2ad03f0605a7a3ee27,rom/大航海7.nes,-1,178,178,180,3774021877,0
+BASE,ok,630edc4e50b5ab59e673ee51d006c84df6ff701861bead357a332301e2fea596,rom/激龟忍者传2.nes,-1,25,25,180,1870360303,10
+BASE,ok,a606c6c4c6d81b72ee783c5ad9b91cb8e1d09206c4ad2ba881698fa15fa3af57,rom/沙罗曼蛇 .nes,-1,2,2,180,1189095713,11
+BASE,ok,d8425a97176698de732904404eecc8a1bc94738b762f0cd5c9df49b1be6b6d47,rom/沙罗曼蛇2.nes,-1,25,25,180,1943449823,8
+BASE,ok,fce0e800062bb97fa6f583f6af2799771d5d5decf31aa336812ffb75d527169e,rom/沙罗曼蛇3.nes,-1,73,73,180,3343867917,13
