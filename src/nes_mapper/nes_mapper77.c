@@ -64,6 +64,12 @@ static void nes_mapper_deinit(nes_t* nes) {
     nes->nes_mapper.mapper_register = NULL;
 }
 
+/* Rebuild PRG/CHR from the restored latch; this board is always four screen. */
+static void mapper77_state_reapply(nes_t* nes) {
+    mapper77_sync(nes);
+    nes_ppu_screen_mirrors(nes, NES_MIRROR_FOUR_SCREEN);
+}
+
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
         nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(nes_mapper77_t));
@@ -96,7 +102,10 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
 }
 
 int nes_mapper77_init(nes_t* nes) {
-    nes->nes_mapper.mapper_init   = nes_mapper_init;
+    nes->nes_mapper.mapper_init = nes_mapper_init;
+#if (NES_USE_FS == 1)
+    nes->nes_mapper.mapper_state_reapply = mapper77_state_reapply;
+#endif
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
     nes->nes_mapper.mapper_write  = nes_mapper_write;
     return NES_OK;

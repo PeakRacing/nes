@@ -94,6 +94,13 @@ static void mapper6_update_chr(nes_t* nes) {
     }
 }
 
+/* Rebuild mirroring, PRG and CHR from the restored registers. */
+static void mapper6_state_reapply(nes_t* nes) {
+    mapper6_update_mirroring(nes);
+    mapper6_update_prg(nes);
+    mapper6_update_chr(nes);
+}
+
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
         nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper6_register_t));
@@ -179,6 +186,9 @@ static void nes_mapper_cpu_clock(nes_t* nes, uint16_t cycles) {
 
 int nes_mapper6_init(nes_t* nes) {
     nes->nes_mapper.mapper_init = nes_mapper_init;
+#if (NES_USE_FS == 1)
+    nes->nes_mapper.mapper_state_reapply = mapper6_state_reapply;
+#endif
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
     nes->nes_mapper.mapper_write = nes_mapper_write;
     nes->nes_mapper.mapper_apu = nes_mapper_apu;
