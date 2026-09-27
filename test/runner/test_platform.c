@@ -1,3 +1,5 @@
+/* clock_gettime/CLOCK_MONOTONIC are POSIX: -std=c11 hides them without this. */
+#define _POSIX_C_SOURCE 200809L
 /*
 
 
