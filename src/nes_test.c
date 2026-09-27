@@ -128,6 +128,7 @@ static uint32_t test_frame_budget;
 /* Hot path profiling                                                  */
 /* ------------------------------------------------------------------ */
 
+#if defined(NES_TEST_PROFILE) && (NES_TEST_PROFILE == 1)
 static nes_test_profile_t test_profile;
 static uint64_t test_profile_region_start[NES_PROF_COUNT];
 static int test_profile_active;
@@ -154,7 +155,7 @@ int nes_test_profile_regions_enabled(void) {
 
 void nes_test_profile_region_begin(nes_t* nes, int region) {
     (void)nes;
-    if (!test_profile_active || !test_profile_regions) return;
+    if (!test_profile_active || (!test_profile_regions && region != NES_PROF_FRAME)) return;
     if (region < 0 || region >= NES_PROF_COUNT) return;
     test_profile_region_start[region] = nes_test_time_us();
 }
@@ -162,7 +163,7 @@ void nes_test_profile_region_begin(nes_t* nes, int region) {
 void nes_test_profile_region_end(nes_t* nes, int region) {
     uint64_t delta;
     (void)nes;
-    if (!test_profile_active || !test_profile_regions) return;
+    if (!test_profile_active || (!test_profile_regions && region != NES_PROF_FRAME)) return;
     if (region < 0 || region >= NES_PROF_COUNT) return;
     delta = nes_test_time_us() - test_profile_region_start[region];
     if (region == NES_PROF_FRAME) {
@@ -184,6 +185,8 @@ void nes_test_profile_stream(nes_t* nes, int chr, int hit) {
         if (hit) test_profile.stream_prg_hit++; else test_profile.stream_prg_miss++;
     }
 }
+
+#endif
 
 void nes_test_frame_tick(nes_t* nes) {
     if (nes == NULL || test_frame_budget == 0u) return;
