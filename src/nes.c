@@ -498,7 +498,7 @@ void nes_run(nes_t* nes){
             }
             nes_opcode(nes,scanline_ticks-nes->timing.line_split);
 #if (NES_ENABLE_SOUND==1)
-            if (nes->scanline % nes->timing.apu_frame_divisor == nes->timing.apu_frame_divisor - 1u) nes_apu_frame(nes);
+            if ((uint16_t)nes->scanline % nes->timing.apu_frame_divisor == (uint16_t)(nes->timing.apu_frame_divisor - 1u)) nes_apu_frame(nes);
 #endif
 #if (NES_RAM_LACK == 1)
 #if (NES_FRAME_SKIP != 0)
