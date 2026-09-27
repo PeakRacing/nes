@@ -482,6 +482,30 @@ static void sdl_test_tick(nes_t* nes) {
     }
 }
 #endif
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+uint64_t nes_test_time_us(void) {
+    const uint64_t frequency = SDL_GetPerformanceFrequency();
+    const uint64_t counter = SDL_GetPerformanceCounter();
+    return (counter / frequency) * 1000000u +
+           (counter % frequency) * 1000000u / frequency;
+}
+static void sdl_test_pacing_tick(void) {
+    static int initialized;
+    static FILE* log;
+    static uint64_t previous;
+    if (!initialized) {
+        const char* path = getenv("NES_TEST_PACINGLOG");
+        if (path && *path) log = fopen(path, "w");
+        initialized = 1;
+    }
+    if (log) {
+        const uint64_t now = nes_test_time_us();
+        if (previous) fprintf(log, "%llu\n", (unsigned long long)(now - previous));
+        previous = now;
+        fflush(log);
+    }
+}
+#endif
 void nes_frame(nes_t* nes){
     const uint64_t freq = SDL_GetPerformanceFrequency();
 #if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1) && (NES_USE_FS == 1)
@@ -495,7 +519,7 @@ void nes_frame(nes_t* nes){
         }
     }
 #endif
-    const uint64_t frame_ticks = freq / 60;
+    const uint64_t frame_ticks = freq / (nes->timing.vblank_lines == 70 ? 50u : 60u);
 
     if (nes_next_frame_tick == 0){
         nes_next_frame_tick = SDL_GetPerformanceCounter();
@@ -503,16 +527,24 @@ void nes_frame(nes_t* nes){
 
     SDL_RenderCopy(renderer, framebuffer, NULL, NULL);
     SDL_RenderPresent(renderer);
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+    sdl_test_pacing_tick();
+#endif
     sdl_event(nes);
 
     nes_next_frame_tick += frame_ticks;
     uint64_t now = SDL_GetPerformanceCounter();
-    if (now < nes_next_frame_tick){
+    while (now < nes_next_frame_tick){
         uint32_t delay_ms = (uint32_t)((nes_next_frame_tick - now) * 1000 / freq);
-        if (delay_ms > 0){
-            SDL_Delay(delay_ms);
+        if (delay_ms > 1){
+            SDL_Delay(delay_ms - 1);
+        } else {
+            /* Yield the final short interval, then check the actual deadline. */
+            SDL_Delay(0);
         }
-    }else if ((now - nes_next_frame_tick) > (frame_ticks * 2)){
+        now = SDL_GetPerformanceCounter();
+    }
+    if ((now - nes_next_frame_tick) > (frame_ticks * 2)){
         // If we are far behind, resync to avoid long-term drift.
         nes_next_frame_tick = now;
     }
