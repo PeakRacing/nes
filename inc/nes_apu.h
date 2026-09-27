@@ -21,6 +21,9 @@
 
 #define NES_APU_SAMPLE_RATE         (44100)
 #define NES_APU_SAMPLE_PER_SYNC     (NES_APU_SAMPLE_RATE/60)
+/* PAL runs at 50Hz: 882 samples per frame.  Buffers are sized for the larger value; the
+ * per frame count comes from nes->timing.samples_per_frame. */
+#define NES_APU_SAMPLE_PER_SYNC_MAX (NES_APU_SAMPLE_RATE/50)
 
 struct nes;
 typedef struct nes nes_t;
@@ -207,7 +210,7 @@ typedef struct nes_apu{
 
     uint64_t clock_count;
     // sample_buffer: pulse1 pulse2 triangle noise dmc output
-    uint8_t sample_buffer[NES_APU_SAMPLE_PER_SYNC];
+    uint8_t sample_buffer[NES_APU_SAMPLE_PER_SYNC_MAX];
     uint16_t sample_index;
 } nes_apu_t;
 

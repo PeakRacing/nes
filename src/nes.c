@@ -48,6 +48,8 @@ void nes_timing_set_pal(nes_t* nes) {
     nes->timing.remainder_mod     = 16u;
     nes->timing.vblank_lines      = 70u;
     nes->timing.apu_frame_divisor = 78u;
+    nes->timing.cpu_clock         = 1662607u;   /* PAL PPU 5.320342MHz / 3.2 */
+    nes->timing.samples_per_frame = (uint16_t)(NES_APU_SAMPLE_RATE / 50u);
 }
 
 nes_t* nes_init(void){
@@ -61,6 +63,8 @@ nes_t* nes_init(void){
     nes->timing.remainder_mod     = 3u;
     nes->timing.vblank_lines      = 20u;
     nes->timing.apu_frame_divisor = 66u;
+    nes->timing.cpu_clock         = 1789773u;   /* NTSC 21.47727MHz / 12 */
+    nes->timing.samples_per_frame = (uint16_t)(NES_APU_SAMPLE_RATE / 60u);
     nes_initex(nes);
     return nes;
 }

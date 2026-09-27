@@ -126,12 +126,50 @@ static SDL_Renderer *renderer = NULL;
 static SDL_Texture *framebuffer = NULL;
 static uint64_t nes_next_frame_tick = 0;
 
+#if (NES_USE_FS == 1)
+static uint32_t sdl_title_until = 0;
+
+static void sdl_status(const char* message) {
+    if (window != NULL) {
+        SDL_SetWindowTitle(window, message);
+        sdl_title_until = SDL_GetTicks() + 2000u;
+    }
+    NES_LOG_INFO("%s\n", message);
+}
+
+static void sdl_save_state(nes_t* nes) {
+    char path[NES_PATH_MAX];
+    if (nes_state_default_path(nes, path, sizeof(path)) != NES_OK) {
+        sdl_status("NES - save failed: no ROM path");
+        return;
+    }
+    sdl_status(nes_state_save(nes, path) == NES_OK ? "NES - state saved (F5)" : "NES - save FAILED");
+}
+
+static void sdl_load_state(nes_t* nes) {
+    char path[NES_PATH_MAX];
+    if (nes_state_default_path(nes, path, sizeof(path)) != NES_OK) {
+        sdl_status("NES - load failed: no ROM path");
+        return;
+    }
+    sdl_status(nes_state_load(nes, path) == NES_OK ? "NES - state loaded (F8)" : "NES - load FAILED");
+}
+#endif
+
 static void sdl_event(nes_t *nes) {
     SDL_Event event;
     while (SDL_PollEvent(&event)){
         switch (event.type) {
             case SDL_EVENT_KEY_DOWN:
                 switch (event.key.scancode){
+#if (NES_USE_FS == 1)
+                    case 62://F5 save state
+                        sdl_save_state(nes);
+                        break;
+                    case 65://F8 load state
+                        sdl_load_state(nes);
+                        break;
+#endif
                     case 26://W
                         nes->nes_cpu.joypad.U1 = 1;
                         break;
@@ -186,6 +224,14 @@ static void sdl_event(nes_t *nes) {
                 break;
             case SDL_EVENT_KEY_UP:
                 switch (event.key.scancode){
+#if (NES_USE_FS == 1)
+                    case 62://F5 save state
+                        sdl_save_state(nes);
+                        break;
+                    case 65://F8 load state
+                        sdl_load_state(nes);
+                        break;
+#endif
                     case 26://W
                         nes->nes_cpu.joypad.U1 = 0;
                         break;
@@ -349,6 +395,14 @@ int nes_draw(int x1, int y1, int x2, int y2, nes_color_t* color_data){
 }
 
 void nes_frame(nes_t* nes){
+#if (NES_USE_FS == 1)
+    if (sdl_title_until != 0u && SDL_GetTicks() > sdl_title_until) {
+        sdl_title_until = 0;
+        if (window != NULL) {
+            SDL_SetWindowTitle(window, NES_NAME);
+        }
+    }
+#endif
     const uint64_t freq = SDL_GetPerformanceFrequency();
     const uint64_t frame_ticks = freq / 60;
 

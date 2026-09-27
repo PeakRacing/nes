@@ -54,6 +54,10 @@ typedef struct {
     uint8_t* mapper_exram;
     uint8_t  mapper_chr_hi;
     void* mapper_register;
+    /* Optional board battery: when set, <game>.sav stores this buffer instead of the
+     * core's 8KB nes_rom.sram (used by boards whose battery IS the CHR-RAM). */
+    uint8_t* mapper_battery;
+    uint32_t mapper_battery_size;
     void* mapper_data;
     /* --- save state support (see inc/nes_state_io.h) ---
      * mapper_state_size is filled in by nes_mapper_register_alloc(); the two callbacks are

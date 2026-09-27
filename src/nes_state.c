@@ -1125,6 +1125,26 @@ int nes_sram_save(nes_t* nes) {
     if (nes == NULL || nes->nes_rom.sram_persist == 0u) {
         return NES_OK;  /* tests and the corpus run without persistent battery RAM */
     }
+    {
+        char path[NES_PATH_MAX];
+        /* Boards whose battery is a mapper owned buffer (e.g. Racermate's 64KB CHR-RAM). */
+        if (nes->nes_mapper.mapper_battery != NULL && nes->nes_mapper.mapper_battery_size != 0u) {
+            if (nes_state_build_path(nes->nes_rom.rom_path, NES_STATE_SRAM_EXT, path, sizeof(path)) != NES_OK) {
+                return NES_STATE_ERR_ARG;
+            }
+            file = (FILE*)nes_fopen(path, "wb");
+            if (file == NULL) {
+                return NES_STATE_ERR_IO;
+            }
+            if (nes_fwrite(nes->nes_mapper.mapper_battery, 1, nes->nes_mapper.mapper_battery_size, file) != nes->nes_mapper.mapper_battery_size) {
+                nes_fclose(file);
+                return NES_STATE_ERR_IO;
+            }
+            nes_fclose(file);
+            nes->nes_rom.sram_dirty = 0;
+            return NES_OK;
+        }
+    }
     char path[NES_PATH_MAX];
     int ret;
     if (nes == NULL || nes->nes_rom.sram == NULL) {
@@ -1159,6 +1179,30 @@ int nes_sram_load(nes_t* nes) {
 #else
     if (nes == NULL || nes->nes_rom.sram_persist == 0u) {
         return NES_OK;
+    }
+    {
+        char path[NES_PATH_MAX];
+        if (nes->nes_mapper.mapper_battery != NULL && nes->nes_mapper.mapper_battery_size != 0u) {
+            long size;
+            if (nes_state_build_path(nes->nes_rom.rom_path, NES_STATE_SRAM_EXT, path, sizeof(path)) != NES_OK) {
+                return NES_STATE_ERR_ARG;
+            }
+            file = (FILE*)nes_fopen(path, "rb");
+            if (file == NULL) {
+                return NES_OK;      /* nothing saved yet */
+            }
+            size = nes_ftell(file);
+            if (size > 0) {
+                uint32_t want = (uint32_t)size < nes->nes_mapper.mapper_battery_size ? (uint32_t)size : nes->nes_mapper.mapper_battery_size;
+                if (nes_fread(nes->nes_mapper.mapper_battery, 1, want, file) != want) {
+                    nes_fclose(file);
+                    return NES_STATE_ERR_IO;
+                }
+            }
+            nes_fclose(file);
+            nes->nes_rom.sram_dirty = 0;
+            return NES_OK;
+        }
     }
     char path[NES_PATH_MAX];
     size_t got;

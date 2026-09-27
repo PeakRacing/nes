@@ -63,6 +63,9 @@ static void nes_mapper_init(nes_t* nes) {
         return;
     }
     nes_memset(r->chr_ram, 0, MAPPER168_CHR_RAM_SIZE);
+    /* The board battery is the CHR-RAM itself: expose it so <game>.sav keeps the tiles. */
+    nes->nes_mapper.mapper_battery = r->chr_ram;
+    nes->nes_mapper.mapper_battery_size = MAPPER168_CHR_RAM_SIZE;
     r->irq_counter = MAPPER168_IRQ_RELOAD;
 
     nes_load_prgrom_16k(nes, 0, 0);

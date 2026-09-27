@@ -231,7 +231,7 @@ error:
 
 int nes_unload_file(nes_t* nes){
     /* Flush the game's battery save before the mapper (and its SRAM) go away. */
-    if (nes->nes_rom.sram != NULL && nes->nes_rom.sram_dirty && nes->nes_rom.rom_path[0] != '\0') {
+    if (nes->nes_rom.sram_persist && nes->nes_rom.rom_path[0] != '\0' && (nes->nes_rom.sram_dirty || nes->nes_mapper.mapper_battery != NULL)) {
         (void)nes_sram_save(nes);
     }
     if (nes->nes_mapper.mapper_deinit) {

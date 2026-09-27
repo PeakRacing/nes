@@ -144,8 +144,8 @@ static inline void nes_apu_envelopes_and_linear_counter(nes_t *nes){
 static inline void nes_apu_play(nes_t* nes){
     nes_apu_t* apu = &nes->nes_apu;
     const uint16_t seg = (uint16_t)(apu->clock_count & 3);
-    const uint16_t sample_start = (uint16_t)(seg * NES_APU_SAMPLE_PER_SYNC / 4);
-    const uint16_t sample_end = (uint16_t)((seg + 1) * NES_APU_SAMPLE_PER_SYNC / 4);
+    const uint16_t sample_start = (uint16_t)(seg * nes->timing.samples_per_frame / 4);
+    const uint16_t sample_end = (uint16_t)((seg + 1) * nes->timing.samples_per_frame / 4);
 
     // Pulse 1 状态
     pulse_t* p1 = &apu->pulse1;
@@ -154,7 +154,7 @@ static inline void nes_apu_play(nes_t* nes){
     const uint8_t p1_vol = p1_active ? (p1->constant_volume ? p1->envelope_lowers : p1->envelope_volume) : 0;
     // fpulse = fCPU/(16*(t+1)), phase_inc = 65536 * fCPU / (sample_rate * 16 * (t+1))
     const uint32_t p1_inc = (p1->cur_period >= 8) ?
-        (uint32_t)((uint64_t)NES_CPU_CLOCK_FREQ * 65536 / ((uint64_t)NES_APU_SAMPLE_RATE * 16 * (p1->cur_period + 1))) : 0;
+        (uint32_t)((uint64_t)nes->timing.cpu_clock * 65536 / ((uint64_t)NES_APU_SAMPLE_RATE * 16 * (p1->cur_period + 1))) : 0;
     const uint8_t* p1_duty = apu_pulse_wave[p1->duty];
 
     // Pulse 2 状态
@@ -163,7 +163,7 @@ static inline void nes_apu_play(nes_t* nes){
                               p2->cur_period >= 8 && p2->cur_period < 0x800;
     const uint8_t p2_vol = p2_active ? (p2->constant_volume ? p2->envelope_lowers : p2->envelope_volume) : 0;
     const uint32_t p2_inc = (p2->cur_period >= 8) ?
-        (uint32_t)((uint64_t)NES_CPU_CLOCK_FREQ * 65536 / ((uint64_t)NES_APU_SAMPLE_RATE * 16 * (p2->cur_period + 1))) : 0;
+        (uint32_t)((uint64_t)nes->timing.cpu_clock * 65536 / ((uint64_t)NES_APU_SAMPLE_RATE * 16 * (p2->cur_period + 1))) : 0;
     const uint8_t* p2_duty = apu_pulse_wave[p2->duty];
 
     // Triangle 状态 - 三角波定时器每CPU周期计时(不除以2),32步序列: freq = fCPU/(32*(t+1))
@@ -171,7 +171,7 @@ static inline void nes_apu_play(nes_t* nes){
     const uint8_t tri_active = apu->status_triangle && tri->length_counter > 0 &&
                                tri->linear_counter > 0 && tri->cur_period >= 2;
     const uint32_t tri_inc = tri_active ?
-        (uint32_t)((uint64_t)NES_CPU_CLOCK_FREQ * 65536 / ((uint64_t)NES_APU_SAMPLE_RATE * 32 * (tri->cur_period + 1))) : 0;
+        (uint32_t)((uint64_t)nes->timing.cpu_clock * 65536 / ((uint64_t)NES_APU_SAMPLE_RATE * 32 * (tri->cur_period + 1))) : 0;
 
     // Noise 状态 - 使用NTSC周期查找表
     noise_t* noi = &apu->noise;
@@ -179,7 +179,7 @@ static inline void nes_apu_play(nes_t* nes){
     const uint8_t noi_vol = noi_active ? (noi->constant_volume ? noi->volume_envelope : noi->envelope_volume) : 0;
     const uint16_t noi_period = noise_period_table[noi->noise_period];
     const uint32_t noi_inc = noi_active ?
-        (uint32_t)((uint64_t)NES_CPU_CLOCK_FREQ * 65536 / ((uint64_t)NES_APU_SAMPLE_RATE * noi_period)) : 0;
+        (uint32_t)((uint64_t)nes->timing.cpu_clock * 65536 / ((uint64_t)NES_APU_SAMPLE_RATE * noi_period)) : 0;
     const uint8_t noi_mode = noi->loop_noise;
 
     // 缓存到局部变量加速热循环
@@ -236,7 +236,7 @@ static inline void nes_apu_play(nes_t* nes){
 
     // 每4段输出一次音频(每视频帧一次)
     if (seg == 3) {
-        nes_sound_output(apu->sample_buffer, NES_APU_SAMPLE_PER_SYNC);
+        nes_sound_output(apu->sample_buffer, nes->timing.samples_per_frame);
     }
 }
 
