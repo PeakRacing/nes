@@ -64,6 +64,47 @@ typedef struct {
     uint64_t sum_sample_sq;
     uint32_t checksum;
 } nes_test_audio_stats_t;
+
+/* --- profiling hooks -------------------------------------------------------
+ * The core times its own hot modules through these calls; every call site is
+ * compiled out unless NES_TEST_MODE is set, so production builds carry no
+ * branch, no counter and no extra RAM.  A benchmark front end calls
+ * nes_test_profile_begin(), runs frames, then reads nes_test_profile_get().
+ * The platform must provide nes_test_time_us(); the SDL/test ports implement it
+ * with a monotonic timer, an MCU port with a cycle counter. */
+typedef enum {
+    NES_PROF_FRAME = 0,     /* one whole emulated frame                        */
+    NES_PROF_CPU,           /* nes_opcode(): instruction execution per line    */
+    NES_PROF_BG,            /* background scanline render                      */
+    NES_PROF_SPRITE,        /* sprite evaluation + sprite scanline render      */
+    NES_PROF_APU,           /* APU frame step (length/envelope + 1/4 samples)  */
+    NES_PROF_DRAW,          /* nes_draw() frame flush to the platform          */
+    NES_PROF_COUNT
+} nes_test_profile_region_t;
+
+typedef struct {
+    uint64_t frames;                        /* frames measured                */
+    uint64_t frame_us;                      /* total frame time               */
+    uint64_t frame_max_us;                  /* slowest frame                  */
+    uint64_t region_us[NES_PROF_COUNT];     /* accumulated time per region    */
+    uint32_t region_calls[NES_PROF_COUNT];  /* region entries                 */
+    uint32_t stream_prg_hit;                /* streaming build: PRG cache     */
+    uint32_t stream_prg_miss;
+    uint32_t stream_chr_hit;
+    uint32_t stream_chr_miss;
+} nes_test_profile_t;
+
+void nes_test_profile_begin(nes_t* nes);
+const nes_test_profile_t* nes_test_profile_get(void);
+void nes_test_profile_regions(int enable);  /* 0 = frame clock only           */
+int nes_test_profile_regions_enabled(void);
+void nes_test_profile_region_begin(nes_t* nes, int region);
+void nes_test_profile_region_end(nes_t* nes, int region);
+void nes_test_profile_stream(nes_t* nes, int chr, int hit);
+
+/* Wall clock in microseconds from the platform (monotonic, never 0). */
+uint64_t nes_test_time_us(void);
+
 void nes_test_frame_tick(nes_t* nes);
 
 int nes_test_cpu_prepare(nes_t* nes, uint16_t pc);

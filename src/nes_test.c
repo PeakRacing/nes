@@ -123,6 +123,68 @@ int nes_test_reset_deterministic(nes_t* nes) {
 }
 
 static uint32_t test_frame_budget;
+
+/* ------------------------------------------------------------------ */
+/* Hot path profiling                                                  */
+/* ------------------------------------------------------------------ */
+
+static nes_test_profile_t test_profile;
+static uint64_t test_profile_region_start[NES_PROF_COUNT];
+static int test_profile_active;
+static int test_profile_regions = 1;
+
+void nes_test_profile_begin(nes_t* nes) {
+    (void)nes;
+    nes_memset(&test_profile, 0, sizeof(test_profile));
+    nes_memset(test_profile_region_start, 0, sizeof(test_profile_region_start));
+    test_profile_active = 1;
+}
+
+const nes_test_profile_t* nes_test_profile_get(void) {
+    return &test_profile;
+}
+
+void nes_test_profile_regions(int enable) {
+    test_profile_regions = enable ? 1 : 0;
+}
+
+int nes_test_profile_regions_enabled(void) {
+    return test_profile_regions;
+}
+
+void nes_test_profile_region_begin(nes_t* nes, int region) {
+    (void)nes;
+    if (!test_profile_active || !test_profile_regions) return;
+    if (region < 0 || region >= NES_PROF_COUNT) return;
+    test_profile_region_start[region] = nes_test_time_us();
+}
+
+void nes_test_profile_region_end(nes_t* nes, int region) {
+    uint64_t delta;
+    (void)nes;
+    if (!test_profile_active || !test_profile_regions) return;
+    if (region < 0 || region >= NES_PROF_COUNT) return;
+    delta = nes_test_time_us() - test_profile_region_start[region];
+    if (region == NES_PROF_FRAME) {
+        test_profile.frames++;
+        test_profile.frame_us += delta;
+        if (delta > test_profile.frame_max_us) test_profile.frame_max_us = delta;
+    } else {
+        test_profile.region_us[region] += delta;
+    }
+    test_profile.region_calls[region]++;
+}
+
+void nes_test_profile_stream(nes_t* nes, int chr, int hit) {
+    (void)nes;
+    if (!test_profile_active) return;
+    if (chr) {
+        if (hit) test_profile.stream_chr_hit++; else test_profile.stream_chr_miss++;
+    } else {
+        if (hit) test_profile.stream_prg_hit++; else test_profile.stream_prg_miss++;
+    }
+}
+
 void nes_test_frame_tick(nes_t* nes) {
     if (nes == NULL || test_frame_budget == 0u) return;
     if (--test_frame_budget == 0u) nes->nes_quit = 1u;

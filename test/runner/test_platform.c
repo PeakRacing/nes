@@ -24,6 +24,9 @@
 #include "test.h"
 #include <stdarg.h>
 #include <time.h>
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 typedef struct {
     const char* assert_file;
@@ -45,6 +48,23 @@ static uint64_t test_now_ms(void) {
     struct timespec ts;
     if (timespec_get(&ts, TIME_UTC) != TIME_UTC) return (uint64_t)clock() * 1000u / CLOCKS_PER_SEC;
     return (uint64_t)ts.tv_sec * 1000u + (uint64_t)(ts.tv_nsec / 1000000);
+}
+
+/* Monotonic microsecond clock for the NES_TEST_MODE hot path profiler.  A wall
+ * clock must not be used here: a clock adjustment in the middle of a run turns
+ * into a huge (or negative) delta and poisons every per module total. */
+uint64_t nes_test_time_us(void) {
+#if defined(_WIN32)
+    LARGE_INTEGER freq, count;
+    if (!QueryPerformanceFrequency(&freq) || freq.QuadPart == 0) return 0;
+    QueryPerformanceCounter(&count);
+    return (uint64_t)(count.QuadPart / freq.QuadPart) * 1000000u +
+           (uint64_t)((count.QuadPart % freq.QuadPart) * 1000000u / freq.QuadPart);
+#else
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return 0;
+    return (uint64_t)ts.tv_sec * 1000000u + (uint64_t)(ts.tv_nsec / 1000);
+#endif
 }
 
 void test_begin_case(unsigned timeout_ms) {
