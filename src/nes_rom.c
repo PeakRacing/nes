@@ -31,6 +31,14 @@ typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; } nes_romdb_ent
 static const nes_romdb_entry_t romdb[] = {
     /* Arkanoid II (J) [!] — header says mapper 70, actually Taito TC0190FMC (mapper 33) */
     { 0x0F141525u, 33u, 0u },
+    /* Blackjack by Nice Code V2 (Unl) [o1] — NES 2.0 header claims mapper 4 (MMC3), but the
+       code never touches the MMC3 bank registers ($8001 is never written), so it runs on a
+       plain NROM board: 32KB PRG fixed and the 8KB CHR mapped straight through.  Under
+       mapper 4 the all-zero CHR registers put bank 0 in every slot above $1000 and the
+       table/panel graphics collapse into garbage fragments. */
+    { 0xBA481DD8u, 0u, 0u },
+    /* Same Nice Code Blackjack, the 16KB PRG dump of it — identical board (NROM). */
+    { 0x4A9B9DC0u, 0u, 0u },
     /* Super Mario Bros.+Tetris+Nintendo World Cup (E) [!] — header says mapper 4, actually PAL-ZZ (mapper 37) */
     { 0x73298C87u, 37u, 0u },
     /* Death Race (U) [!] — header says mapper 11, actual hardware is AGCI PCB (mapper 144).
