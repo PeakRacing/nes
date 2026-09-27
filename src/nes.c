@@ -16,6 +16,16 @@
 
 #include "nes.h"
 
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+#include "nes_test.h"
+#define NES_PROF_BEGIN(nes_, region_) nes_test_profile_region_begin((nes_), (region_))
+#define NES_PROF_END(nes_, region_)   nes_test_profile_region_end((nes_), (region_))
+#else
+/* Production builds keep the hooks as no-ops: no call, no enum, no branch. */
+#define NES_PROF_BEGIN(nes_, region_) ((void)0)
+#define NES_PROF_END(nes_, region_)   ((void)0)
+#endif
+
 //https://www.nesdev.org/pal.txt
 
 static nes_color_t nes_palette[]={
@@ -200,6 +210,102 @@ static void nes_render_background_line(nes_t* nes,uint16_t scanline,nes_color_t*
         m = 7;
     }
 }
+
+#if (NES_FRAME_SKIP != 0)
+/* Opacity-only twin of nes_render_background_line().
+ *
+ * A skipped frame does not draw pixels, but sprite 0 hit is decided from the
+ * background/sprite overlap, so the per-pixel opacity map still has to describe
+ * the frame being emulated.  Carrying the previous frame's map over makes raster
+ * effects fire (or miss) one frame late, so the tile walk below repeats the same
+ * fetches as the renderer while leaving palette lookups and pixel stores out.
+ * Keep it in sync with nes_render_background_line().
+ * https://www.nesdev.org/wiki/PPU_OAM#Sprite_zero_hits */
+static void nes_render_background_opacity_line(nes_t* nes){
+    uint8_t p = 0;
+    int8_t m = 7 - nes->nes_ppu.x;
+    const uint8_t dx = (const uint8_t)nes->nes_ppu.v.coarse_x;
+    const uint8_t dy = (const uint8_t)nes->nes_ppu.v.fine_y;
+    const uint8_t tile_y = (const uint8_t)nes->nes_ppu.v.coarse_y;
+    uint8_t nametable_id = (uint8_t)nes->nes_ppu.v.nametable;
+    const uint8_t bg_base = nes->nes_ppu.CTRL_B ? 4 : 0;
+    const uint16_t tile_y_offset = (uint16_t)(tile_y << 5);
+    const uint16_t attr_y_offset = (uint16_t)(960 + ((tile_y >> 2) << 3));
+    const uint8_t attr_y_shift = (tile_y & 2) << 1;
+    uint8_t** pattern_table = nes->nes_ppu.pattern_table;
+    const uint8_t* name_table = nes->nes_ppu.name_table[nametable_id];
+    const uint8_t* exram = nes->nes_mapper.mapper_exram;
+    const uint16_t ex_4k_banks = (exram != NULL && nes->nes_rom.chr_rom != NULL && nes->nes_rom.chr_rom_size > 0u) ?
+        (uint16_t)(nes->nes_rom.chr_rom_size * 2u) : 0u;
+    for (uint8_t tile_x = dx; tile_x < 32; tile_x++){
+        const uint8_t pattern_id = name_table[tile_x + tile_y_offset];
+        const uint8_t* bit0_p;
+        uint8_t high_bit;
+        if (ex_4k_banks > 0u) {
+            const uint8_t ex_byte = exram[(uint16_t)tile_y * 32u + tile_x];
+            const uint16_t ex_bank = (uint16_t)((ex_byte & 0x3Fu) | ((uint16_t)nes->nes_mapper.mapper_chr_hi << 6u)) % ex_4k_banks;
+            bit0_p = nes->nes_rom.chr_rom + (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u);
+            high_bit = (uint8_t)(((ex_byte >> 6u) & 0x03u) << 2u);
+        } else {
+            const uint16_t pattern_address = (uint16_t)((uint16_t)bg_base * 0x400u + (uint16_t)pattern_id * 16u + dy);
+            const uint8_t* tile_p = pattern_table[bg_base + (pattern_id >> 6)] + ((pattern_id & 0x3F) << 4);
+            const uint8_t attribute = name_table[attr_y_offset + (tile_x >> 2)];
+            nes_mapper_ppu_tile_fetch(nes, pattern_id, (uint16_t)(pattern_address + 8u), &pattern_table);
+            if (nes->nes_mapper.mapper_ppu) {
+                name_table = nes->nes_ppu.name_table[nametable_id];
+            }
+            bit0_p = tile_p;
+            high_bit = ((attribute >> (attr_y_shift | (tile_x & 2))) & 3) << 2;
+        }
+        const uint8_t bit0 = bit0_p[dy];
+        const uint8_t bit1 = bit0_p[dy + 8];
+        for (; m >= 0; m--){
+            const uint8_t low_bit = ((bit0 >> m) & 0x01) | ((bit1 >> m)<<1 & 0x02);
+            nes->nes_ppu.bg_opaque[p] = (p < 8u && !nes->nes_ppu.MASK_m) ? 0u : (uint8_t)((high_bit | low_bit) & 0x03u);
+            p++;
+        }
+        m = 7;
+    }
+    nametable_id ^= 1;
+    name_table = nes->nes_ppu.name_table[nametable_id];
+    for (uint8_t tile_x = 0; tile_x <= dx; tile_x++){
+        const uint8_t pattern_id = name_table[tile_x + tile_y_offset];
+        const uint8_t* bit0_p;
+        uint8_t high_bit;
+        if (ex_4k_banks > 0u) {
+            const uint8_t ex_byte = exram[(uint16_t)tile_y * 32u + tile_x];
+            const uint16_t ex_bank = (uint16_t)((ex_byte & 0x3Fu) | ((uint16_t)nes->nes_mapper.mapper_chr_hi << 6u)) % ex_4k_banks;
+            bit0_p = nes->nes_rom.chr_rom + (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u);
+            high_bit = (uint8_t)(((ex_byte >> 6u) & 0x03u) << 2u);
+        } else {
+            const uint16_t pattern_address = (uint16_t)((uint16_t)bg_base * 0x400u + (uint16_t)pattern_id * 16u + dy);
+            const uint8_t* tile_p = pattern_table[bg_base + (pattern_id >> 6)] + ((pattern_id & 0x3F) << 4);
+            const uint8_t attribute = name_table[attr_y_offset + (tile_x >> 2)];
+            nes_mapper_ppu_tile_fetch(nes, pattern_id, (uint16_t)(pattern_address + 8u), &pattern_table);
+            if (nes->nes_mapper.mapper_ppu) {
+                name_table = nes->nes_ppu.name_table[nametable_id];
+            }
+            bit0_p = tile_p;
+            high_bit = ((attribute >> (attr_y_shift | (tile_x & 2))) & 3) << 2;
+        }
+        const uint8_t bit0 = bit0_p[dy];
+        const uint8_t bit1 = bit0_p[dy + 8];
+        uint8_t skew = 0;
+        if (tile_x == dx){
+            if (nes->nes_ppu.x){
+                skew = 8 - nes->nes_ppu.x;
+            }else
+                break;
+        }
+        for (; m >= skew; m--){
+            const uint8_t low_bit = ((bit0 >> m) & 0x01) | ((bit1 >> m)<<1 & 0x02);
+            nes->nes_ppu.bg_opaque[p] = (p < 8u && !nes->nes_ppu.MASK_m) ? 0u : (uint8_t)((high_bit | low_bit) & 0x03u);
+            p++;
+        }
+        m = 7;
+    }
+}
+#endif /* NES_FRAME_SKIP */
 
 typedef struct {
     uint8_t sprite_id;
@@ -402,11 +508,15 @@ void nes_run(nes_t* nes){
     // NES_LOG_DEBUG("save_ram:%d\n",nes->nes_rom.save_ram);
 
     nes_cpu_reset(nes);
-    // 341 PPU dots per scanline / 3 = 113 remainder 2.
-    // Accumulate fractional cycles: add 2 per scanline, emit +1 CPU cycle when >= 3.
+    /* One PPU scanline is 341 dots, which is not a whole number of CPU cycles:
+     * NTSC 341/3 = 113 + 2/3, PAL 341/3.2 = 106 + 9/16.  The fractional part is
+     * accumulated so every remainder_mod-th line emits one extra cycle.  All the
+     * numbers come from nes->timing, so PAL visible lines use the PAL period too
+     * (before this they were hard coded to the NTSC 113/114 pattern). */
     uint8_t dot_remainder = 0;
 
     while(!nes->nes_quit){
+        NES_PROF_BEGIN(nes, NES_PROF_FRAME);
 #if (NES_FRAME_SKIP != 0)
         if(nes->nes_frame_skip_count == 0)
 #endif
@@ -422,20 +532,25 @@ void nes_run(nes_t* nes){
             }
         }
 #if (NES_ENABLE_SOUND==1)
+        NES_PROF_BEGIN(nes, NES_PROF_APU);
         nes_apu_frame(nes);
+        NES_PROF_END(nes, NES_PROF_APU);
 #endif
         // https://www.nesdev.org/wiki/PPU_rendering#Visible_scanlines_(0-239)
         for(nes->scanline = 0; nes->scanline < NES_HEIGHT; nes->scanline++) { // 0-239 Visible frame
-            uint16_t scanline_ticks = 113;
+            uint16_t scanline_ticks = nes->timing.line_clocks;
             sprite_line_t sprite_line = {0};
-            dot_remainder += 2;
-            if (dot_remainder >= 3) { dot_remainder -= 3; scanline_ticks = 114; }
+            dot_remainder += nes->timing.remainder_add;
+            if (dot_remainder >= nes->timing.remainder_mod) { dot_remainder -= nes->timing.remainder_mod; scanline_ticks++; }
             if (nes->nes_ppu.MASK_s){
+                NES_PROF_BEGIN(nes, NES_PROF_SPRITE);
                 nes_prepare_sprite_line(nes, nes->scanline, &sprite_line);
+                NES_PROF_END(nes, NES_PROF_SPRITE);
             }
             if (nes->nes_ppu.MASK_b){
                 if (nes->nes_mapper.mapper_render_screen)
                     nes->nes_mapper.mapper_render_screen(nes, 1);
+                NES_PROF_BEGIN(nes, NES_PROF_BG);
 #if (NES_FRAME_SKIP != 0)
                 if (nes->nes_frame_skip_count == 0)
 #endif
@@ -446,6 +561,14 @@ void nes_run(nes_t* nes){
                 nes_render_background_line(nes, nes->scanline, nes->nes_draw_data + nes->scanline * NES_WIDTH);
 #endif
                 }
+#if (NES_FRAME_SKIP != 0)
+                else {
+                    /* Sprite 0 hit has to see this frame's background, so a skipped
+                     * frame still refreshes the opacity map (no pixels, no palettes). */
+                    nes_render_background_opacity_line(nes);
+                }
+#endif
+                NES_PROF_END(nes, NES_PROF_BG);
             } else {
 #if (NES_FRAME_SKIP != 0)
                 if (nes->nes_frame_skip_count == 0)
@@ -465,11 +588,13 @@ void nes_run(nes_t* nes){
             if (nes->nes_ppu.MASK_s){
                 if (nes->nes_mapper.mapper_render_screen)
                     nes->nes_mapper.mapper_render_screen(nes, 0);
+                NES_PROF_BEGIN(nes, NES_PROF_SPRITE);
 #if (NES_RAM_LACK == 1)
                 nes_render_sprite_line(nes, &sprite_line,nes->nes_draw_data + nes->scanline%(NES_HEIGHT/2) * NES_WIDTH);
 #else
                 nes_render_sprite_line(nes, &sprite_line,nes->nes_draw_data + nes->scanline * NES_WIDTH);
 #endif
+                NES_PROF_END(nes, NES_PROF_SPRITE);
             }
             nes_opcode(nes,nes->timing.line_split); // ppu cycles: 85*3=255 (NTSC)
             // https://www.nesdev.org/wiki/PPU_scrolling#Wrapping_around
@@ -502,7 +627,11 @@ void nes_run(nes_t* nes){
             }
             nes_opcode(nes,scanline_ticks-nes->timing.line_split);
 #if (NES_ENABLE_SOUND==1)
-            if ((uint16_t)nes->scanline % nes->timing.apu_frame_divisor == (uint16_t)(nes->timing.apu_frame_divisor - 1u)) nes_apu_frame(nes);
+            if ((uint16_t)nes->scanline % nes->timing.apu_frame_divisor == (uint16_t)(nes->timing.apu_frame_divisor - 1u)) {
+                NES_PROF_BEGIN(nes, NES_PROF_APU);
+                nes_apu_frame(nes);
+                NES_PROF_END(nes, NES_PROF_APU);
+            }
 #endif
 #if (NES_RAM_LACK == 1)
 #if (NES_FRAME_SKIP != 0)
@@ -510,9 +639,13 @@ void nes_run(nes_t* nes){
 #endif
             {
                 if (nes->scanline == NES_HEIGHT/2-1){
+                    NES_PROF_BEGIN(nes, NES_PROF_DRAW);
                     nes_draw(0, 0, NES_WIDTH-1, NES_HEIGHT/2-1, nes->nes_draw_data);
+                    NES_PROF_END(nes, NES_PROF_DRAW);
                 }else if(nes->scanline == NES_HEIGHT-1){
+                    NES_PROF_BEGIN(nes, NES_PROF_DRAW);
                     nes_draw(0, NES_HEIGHT/2, NES_WIDTH-1, NES_HEIGHT-1, nes->nes_draw_data);
+                    NES_PROF_END(nes, NES_PROF_DRAW);
                 }
             }
 #endif
@@ -522,7 +655,9 @@ void nes_run(nes_t* nes){
         if(nes->nes_frame_skip_count == 0)
 #endif
         {
+            NES_PROF_BEGIN(nes, NES_PROF_DRAW);
             nes_draw(0, 0, NES_WIDTH-1, NES_HEIGHT-1, nes->nes_draw_data);
+            NES_PROF_END(nes, NES_PROF_DRAW);
         }
 #endif
         {
@@ -566,6 +701,7 @@ void nes_run(nes_t* nes){
             nes->nes_frame_skip_count = 0;
         }
 #endif
+        NES_PROF_END(nes, NES_PROF_FRAME);
     }
 }
 
