@@ -123,7 +123,8 @@ static void sdl_event(nes_t *nes) {
                     case 65://F8 load state
                         sdl_load_state(nes);
                         break;
-#endif                    case 26://W
+#endif
+                    case 26://W
                         nes->nes_cpu.joypad.U1 = 1;
                         break;
                     case 22://S
@@ -317,8 +318,72 @@ int nes_draw(int x1, int y1, int x2, int y2, nes_color_t* color_data){
     return 0;
 }
 
+
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1) && (NES_USE_FS == 1)
+/*
+ * Macro isolated test hooks (only compiled into the "nes-test" target, see xmake.lua):
+ * drive the save-state path from the environment so automated runs can exercise the real
+ * frontend without synthetic keystrokes.
+ *   NES_TEST_SAVE_AT=<frame>   save a state (same code path as F5)
+ *   NES_TEST_LOAD_AT=<frame>   load the state written by a previous run (F8)
+ *   NES_TEST_EXIT_AT=<frame>   quit once that frame has been rendered
+ *   NES_TEST_HASHLOG=<file>    append "frame hash" per frame (framebuffer FNV-1a)
+ */
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct {
+    int      active;
+    uint32_t frame;
+    uint32_t save_at;
+    uint32_t load_at;
+    uint32_t exit_at;
+    FILE*    log;
+} sdl_test_driver_t;
+
+static sdl_test_driver_t sdl_test;
+
+static void sdl_test_init(void) {
+    const char* value;
+    if (sdl_test.active) {
+        return;
+    }
+    sdl_test.active = 1;
+    sdl_test.frame = 0;
+    if ((value = getenv("NES_TEST_SAVE_AT")) != NULL)  sdl_test.save_at = (uint32_t)atoi(value);
+    if ((value = getenv("NES_TEST_LOAD_AT")) != NULL)  sdl_test.load_at = (uint32_t)atoi(value);
+    if ((value = getenv("NES_TEST_EXIT_AT")) != NULL)  sdl_test.exit_at = (uint32_t)atoi(value);
+    if ((value = getenv("NES_TEST_HASHLOG")) != NULL)  sdl_test.log = fopen(value, "wb");
+}
+
+static void sdl_test_tick(nes_t* nes) {
+    sdl_test_init();
+    sdl_test.frame++;
+    if (sdl_test.save_at != 0u && sdl_test.frame == sdl_test.save_at) {
+        sdl_save_state(nes);
+    }
+    if (sdl_test.load_at != 0u && sdl_test.frame == sdl_test.load_at) {
+        sdl_load_state(nes);
+    }
+    if (sdl_test.log != NULL) {
+        const uint8_t* data = (const uint8_t*)nes->nes_draw_data;
+        uint32_t hash = 2166136261u;
+        for (size_t i = 0; i < sizeof(nes->nes_draw_data); i++) {
+            hash = (hash ^ data[i]) * 16777619u;
+        }
+        fprintf(sdl_test.log, "%u %u\n", (unsigned)sdl_test.frame, (unsigned)hash);
+        fflush(sdl_test.log);
+    }
+    if (sdl_test.exit_at != 0u && sdl_test.frame >= sdl_test.exit_at) {
+        nes->nes_quit = 1;
+    }
+}
+#endif
 void nes_frame(nes_t* nes){
     const uint64_t freq = SDL_GetPerformanceFrequency();
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1) && (NES_USE_FS == 1)
+    sdl_test_tick(nes);
+#endif
 #if (NES_USE_FS == 1)
     if (sdl_title_until != 0u && SDL_GetTicks() > sdl_title_until) {
         sdl_title_until = 0;
