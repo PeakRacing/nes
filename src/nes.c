@@ -16,7 +16,10 @@
 
 #include "nes.h"
 
-#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+#if defined(NES_TEST_PROFILE) && (NES_TEST_PROFILE == 1)
+/* Profiling is a separate switch on purpose: it needs a platform clock
+ * (nes_test_time_us) and must not be pulled in by the plain NES_TEST_MODE builds
+ * (the SDL nes-test target only defines NES_TEST_MODE). */
 #include "nes_test.h"
 #define NES_PROF_BEGIN(nes_, region_) nes_test_profile_region_begin((nes_), (region_))
 #define NES_PROF_END(nes_, region_)   nes_test_profile_region_end((nes_), (region_))
@@ -695,13 +698,13 @@ void nes_run(nes_t* nes){
             // https://www.nesdev.org/wiki/PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_(end_of_vblank)
             nes->nes_ppu.v_reg = nes->nes_ppu.t_reg;
         }
+        NES_PROF_END(nes, NES_PROF_FRAME);
         nes_frame(nes);
 #if (NES_FRAME_SKIP != 0)
         if ( ++nes->nes_frame_skip_count > NES_FRAME_SKIP){
             nes->nes_frame_skip_count = 0;
         }
 #endif
-        NES_PROF_END(nes, NES_PROF_FRAME);
     }
 }
 
