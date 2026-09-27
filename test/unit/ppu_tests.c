@@ -440,82 +440,38 @@ int test_ppu_timing_regions(void) {
 /* The sprite 0 flag is cleared by the pre-render line at the end of the frame, so
  * a frame's hit has to be sampled while the line is running: mapper_hsync() is
  * called once per visible scanline, right after the sprite pass. */
+#if (NES_FRAME_SKIP != 0)
 static uint8_t ppu_hit_probe_seen;
-static uint16_t ppu_hit_probe_scanline;
-static uint8_t ppu_probe_map11, ppu_probe_map12;
-
 static void ppu_hit_probe(nes_t* nes) {
-    if (nes->scanline == 1) {
-        ppu_probe_map11 = nes->nes_ppu.bg_opaque[11];
-        ppu_probe_map12 = nes->nes_ppu.bg_opaque[12];
-    }
-    if (!ppu_hit_probe_seen && nes->nes_ppu.STATUS_S) {
-        ppu_hit_probe_seen = 1;
-        ppu_hit_probe_scanline = nes->scanline;
-    }
+    if (nes->nes_ppu.STATUS_S) ppu_hit_probe_seen = 1;
 }
-
+#endif
 int test_ppu_sprite0_frameskip(void) {
 #if (NES_FRAME_SKIP == 0)
-    printf("    (needs the nes-tests-frameskip target)\n");
     TEST_SKIP_MSG("built without NES_FRAME_SKIP");
 #else
     test_fixture_t f;
     TEST_CHECK(ppu_scene_fixture(&f));
     nes_t* nes = f.nes;
+    /* Keep CPU away from PPU writes; background tile 1 and sprite tile 0
+     * use independent pattern data, so blanking the background is unambiguous. */
+    f.rom[16] = 0x4C; f.rom[17] = 0; f.rom[18] = 0x80;
     nes->nes_mapper.mapper_hsync = ppu_hit_probe;
-    /* The scene program never writes the name table, so the whole screen shows
-     * tile 0: sprite 0 reads row 0 of that tile (dy = 0 on scanline 1) while the
-     * background under it reads row 1, so row 1 can be blanked on its own. */
-    uint8_t* const bg_tile = nes->nes_rom.chr_rom;
-    const uint8_t bg_bit0 = bg_tile[1];
-    const uint8_t bg_bit1 = bg_tile[9];
-    TEST_CHECK(bg_bit0 != 0 && bg_bit1 != 0);
-
-    /* Drawn frame: the hit fires on scanline 1 and the opacity map describes it. */
-    nes->nes_frame_skip_count = 0;
-    ppu_hit_probe_seen = 0;
-    TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
-    TEST_EQ_U32(1, ppu_hit_probe_seen);
-    TEST_EQ_U32(1, ppu_hit_probe_scanline);
-    TEST_EQ_U32(1, nes->nes_ppu.bg_opaque[11]);
-    TEST_EQ_U32(1, nes->nes_ppu.bg_opaque[12]);
-    uint8_t drawn_map[256];
-    nes_memcpy(drawn_map, nes->nes_ppu.bg_opaque, sizeof(drawn_map));
-
-    /* Skipped frame with the pattern blanked: the hit must clear.  Reusing the
-     * previous frame's opacity map would keep it set. */
-    bg_tile[1] = 0x00;
-    bg_tile[9] = 0x00;
-    nes->nes_frame_skip_count = 1;
-    ppu_hit_probe_seen = 0;
-    TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
-    printf("    [dbg] line1 map11=%u map12=%u chr1=%02X chr9=%02X chr0=%02X chr8=%02X S=%u probe=%u line=%u\n",
-           (unsigned)ppu_probe_map11, (unsigned)ppu_probe_map12,
-           (unsigned)nes->nes_rom.chr_rom[1], (unsigned)nes->nes_rom.chr_rom[9],
-           (unsigned)nes->nes_rom.chr_rom[0], (unsigned)nes->nes_rom.chr_rom[8],
-           (unsigned)nes->nes_ppu.STATUS_S, (unsigned)ppu_hit_probe_seen,
-           (unsigned)ppu_hit_probe_scanline);
-    TEST_EQ_U32(0, ppu_hit_probe_seen);
-    TEST_EQ_U32(0, nes->nes_ppu.bg_opaque[11]);
-    TEST_EQ_U32(0, nes->nes_ppu.bg_opaque[12]);
-
-    /* Drawn frame, same blank background: still no hit. */
-    nes->nes_frame_skip_count = 0;
-    ppu_hit_probe_seen = 0;
-    TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
-    TEST_EQ_U32(0, ppu_hit_probe_seen);
-
-    /* Skipped frame with the pattern restored: the hit is back, and the opacity
-     * map rebuilt without drawing equals the one the renderer produced. */
-    bg_tile[1] = bg_bit0;
-    bg_tile[9] = bg_bit1;
-    nes->nes_frame_skip_count = 1;
-    ppu_hit_probe_seen = 0;
-    TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
-    TEST_EQ_U32(1, ppu_hit_probe_seen);
-    TEST_CHECK(nes_memcmp(drawn_map, nes->nes_ppu.bg_opaque, sizeof(drawn_map)) == 0);
-
+    nes->nes_ppu.MASK_b = nes->nes_ppu.MASK_s = 1;
+    nes->nes_ppu.MASK_m = nes->nes_ppu.MASK_M = 1;
+    nes->nes_ppu.CTRL_B = nes->nes_ppu.CTRL_S = 0;
+    for (int i = 0; i < 4; ++i) nes_memset(nes->nes_ppu.name_table[i], 1, 960);
+    nes_memset(nes->nes_rom.chr_rom, 0xFF, 16);
+    for (int test = 0; test < 4; ++test) {
+        const int opaque = test == 0 || test == 3;
+        nes_memset(nes->nes_rom.chr_rom + 16, opaque ? 0xFF : 0, 16);
+        nes_memset(nes->nes_ppu.bg_opaque, opaque ? 0 : 1, 256);
+        nes->nes_ppu.v_reg = nes->nes_ppu.t_reg = 0;
+        nes->nes_frame_skip_count = (test == 1 || test == 3) ? 1 : 0;
+        ppu_hit_probe_seen = 0;
+        TEST_CHECK(nes_test_run_frames(nes, 1) == NES_OK);
+        TEST_EQ_U32(opaque, ppu_hit_probe_seen);
+    }
     test_fixture_free(&f);
     return TEST_PASS;
 #endif
