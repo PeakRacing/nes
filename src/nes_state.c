@@ -1183,7 +1183,7 @@ int nes_sram_load(nes_t* nes) {
     {
         char path[NES_PATH_MAX];
         if (nes->nes_mapper.mapper_battery != NULL && nes->nes_mapper.mapper_battery_size != 0u) {
-            long size;
+            size_t got_battery;
             if (nes_state_build_path(nes->nes_rom.rom_path, NES_STATE_SRAM_EXT, path, sizeof(path)) != NES_OK) {
                 return NES_STATE_ERR_ARG;
             }
@@ -1191,14 +1191,11 @@ int nes_sram_load(nes_t* nes) {
             if (file == NULL) {
                 return NES_OK;      /* nothing saved yet */
             }
-            size = nes_ftell(file);
-            if (size > 0) {
-                uint32_t want = (uint32_t)size < nes->nes_mapper.mapper_battery_size ? (uint32_t)size : nes->nes_mapper.mapper_battery_size;
-                if (nes_fread(nes->nes_mapper.mapper_battery, 1, want, file) != want) {
-                    nes_fclose(file);
-                    return NES_STATE_ERR_IO;
-                }
-            }
+            /* ftell() is the current position (0 right after fopen), so read straight into the
+             * buffer like the 8KB sram branch does; a shorter file leaves the tail zeroed. */
+            nes_memset(nes->nes_mapper.mapper_battery, 0, nes->nes_mapper.mapper_battery_size);
+            got_battery = nes_fread(nes->nes_mapper.mapper_battery, 1, nes->nes_mapper.mapper_battery_size, file);
+            (void)got_battery;
             nes_fclose(file);
             nes->nes_rom.sram_dirty = 0;
             return NES_OK;

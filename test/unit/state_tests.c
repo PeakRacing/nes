@@ -177,6 +177,35 @@ int test_state_hot_save(void) {
     TEST_CHECK(fixture.nes->nes_cpu.PC != 0u);
     TEST_CHECK(nes_test_bank_check(fixture.nes) == NES_OK);
 
+    /* Boards whose battery is a mapper owned buffer (Racermate's 64KB CHR-RAM): the .sav file
+     * must carry that buffer instead of the core's 8KB sram, and load it back verbatim. */
+    {
+        static uint8_t battery[4096];
+        FILE* bfile;
+        fixture.nes->nes_mapper.mapper_battery = battery;
+        fixture.nes->nes_mapper.mapper_battery_size = (uint32_t)sizeof(battery);
+        for (uint32_t i = 0; i < sizeof(battery); i++) {
+            battery[i] = (uint8_t)(i * 7u + 3u);
+        }
+        TEST_EQ_I32(NES_OK, nes_sram_save(fixture.nes));
+        bfile = fopen(sav_path, "rb");
+        TEST_CHECK(bfile != NULL);
+        fseek(bfile, 0, SEEK_END);
+        TEST_EQ_I32((int)sizeof(battery), (int)ftell(bfile));
+        fclose(bfile);
+
+        memset(battery, 0, sizeof(battery));
+        TEST_EQ_I32(NES_OK, nes_sram_load(fixture.nes));
+        for (uint32_t i = 0; i < sizeof(battery); i++) {
+            if (battery[i] != (uint8_t)(i * 7u + 3u)) {
+                test_record_failure(__FILE__, __LINE__, "mapper battery round trip",
+                                    "identical bytes after nes_sram_load", "mismatch");
+                return TEST_FAIL;
+            }
+        }
+        fixture.nes->nes_mapper.mapper_battery = NULL;
+        fixture.nes->nes_mapper.mapper_battery_size = 0;
+    }
     (void)nes_remove(state_path);
     (void)nes_remove(sav_path);
     test_fixture_free(&fixture);
