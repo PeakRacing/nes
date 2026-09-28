@@ -519,7 +519,7 @@ void nes_frame(nes_t* nes){
         }
     }
 #endif
-    const uint64_t frame_ticks = freq / (nes->timing.vblank_lines == 70 ? 50u : 60u);
+    const uint64_t frame_ticks = freq / (uint64_t)nes->timing.frame_rate;
 
     if (nes_next_frame_tick == 0){
         nes_next_frame_tick = SDL_GetPerformanceCounter();

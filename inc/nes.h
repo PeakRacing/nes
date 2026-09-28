@@ -62,7 +62,8 @@ typedef struct {
     uint8_t  vblank_lines;      /* NTSC 20, PAL 70                                 */
     uint8_t  apu_frame_divisor; /* APU frame counter period in lines (NTSC 66, PAL 78) */
     uint32_t cpu_clock;         /* APU phase clock (NTSC 1789773, PAL 1662607)    */
-    uint16_t samples_per_frame; /* NES_APU_SAMPLE_RATE / frame rate (735 / 882)   */
+    uint16_t samples_per_frame; /* NES_APU_SAMPLE_RATE / frame rate (735 / 882)    */
+    uint8_t  frame_rate;        /* 60 (NTSC) / 50 (PAL): front ends pace to this  */
 } nes_timing_t;
 
 typedef struct nes{
