@@ -61,7 +61,7 @@ static inline uint8_t nes_read_cpu_inner(nes_t* nes, uint16_t address);
 static inline uint8_t nes_read_cpu(nes_t* nes,uint16_t address){
 #if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
     const uint8_t value = nes_read_cpu_inner(nes, address);
-    nes_test_rlog(address, value, nes->nes_cpu.PC);
+    nes_test_rlog(nes, address, value, nes->nes_cpu.PC);
     return value;
 #else
     return nes_read_cpu_inner(nes, address);

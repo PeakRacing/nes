@@ -26,10 +26,28 @@
  * so a runaway log cannot fill the disk.  Called from the CPU write path (test builds only). */
 /* NES_DBG_RLOG=<file>: "ADDR PC" for every CPU read.  Address+PC only (cheap, no value plumbing);
  * the frequency distribution is what identifies a polling loop. */
-void nes_test_rlog(uint16_t address, uint8_t value, uint16_t pc) {
+void nes_test_rlog(nes_t* nes, uint16_t address, uint8_t value, uint16_t pc) {
     static FILE* rlog;
     static long lines;
     static int tried;
+    /* PRG-PROBE: the AD&D boot crash executes bytes that exist nowhere in the PRG data,
+     * so dump the mapper state the first time the CPU fetches from $8000 in that window. */
+    {
+        static int probed;
+        if (!probed && address == 0x8000u && pc >= 0x8000u && pc <= 0x8030u) {
+            probed = 1;
+            fprintf(stderr, "[PRG-PROBE] pc=%04X value=%02X prg_rom=%p prg_rom_size=%u\n",
+                    (unsigned)pc, (unsigned)value, (void*)nes->nes_rom.prg_rom,
+                    (unsigned)nes->nes_rom.prg_rom_size);
+            fprintf(stderr, "[PRG-PROBE] prg_banks[0]=%p [1]=%p [2]=%p [3]=%p\n",
+                    (void*)nes->nes_cpu.prg_banks[0], (void*)nes->nes_cpu.prg_banks[1],
+                    (void*)nes->nes_cpu.prg_banks[2], (void*)nes->nes_cpu.prg_banks[3]);
+            if (nes->nes_rom.prg_rom) {
+                fprintf(stderr, "[PRG-PROBE] offset(banks[0]) = %ld  (bank 单位=16KB，应为 9*16384=147456)\n",
+                        (long)(nes->nes_cpu.prg_banks[0] - nes->nes_rom.prg_rom));
+            }
+        }
+    }
     if (!tried) {
         const char* path = getenv("NES_DBG_RLOG");
         if (path != NULL && *path != '\0') {
