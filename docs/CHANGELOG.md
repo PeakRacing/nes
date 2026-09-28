@@ -2,7 +2,37 @@
 
 # Changelog 
 
-## master (unreleased)
+## v0.2.0
+
+Release highlights:
+
+- **Save states** — `<game>.nessave`: complete machine snapshots (32-byte magic header, per-section
+  versioning, payload CRC). Loading is two-pass: a corrupt file or a state from another ROM is rejected
+  before the machine is touched. Spec: `docs/nessave-format.md`. F5 saves / F8 loads in the SDL front ends.
+- **Battery save interop** — the game's own `<game>.sav` is loaded after `mapper_init` and flushed on
+  unload / state save, so emulator snapshots and in-game saves never disagree. Boards whose battery is
+  the CHR-RAM (e.g. Racermate, 64 KB) are carried through a mapper-provided battery buffer.
+- **PAL support** — region driven timing for video *and* audio: 312 lines/frame at 50 Hz,
+  106 + 9/16 CPU cycles per line (3.2 dots per CPU cycle), PAL APU clock and sample count. Implemented as
+  data in `nes_timing_t` so the NTSC path is numerically unchanged and no branch was added to the
+  scanline loop.
+- **Mappers** — added 82 (Taito X1-017), 96 (Bandai Oeka Kids), 168 (Racermate); corrected TQROM (119)
+  CHR-RAM selection and RAMBO-1 (64) PRG/CHR layout and IRQ semantics against the Mesen reference.
+  `mapper_state_reapply` now covers 20 of the mapper-specific boards so save states restore their mapping.
+- **Streaming ROM builds** — the PRG/CHR LRU cache detects seek/read failures, invalidates the affected
+  slot and reports the first error through `nes_rom_stream_error()` instead of silently mapping a stale
+  bank; `nes_chrrom_tile()` keeps MMC5 extended background reads inside the cache (fixes both
+  `L'Empereur` dumps).
+- **PPU/CPU fixes** — OAM DMA goes through the CPU bus when a mapper overrides PRG reads; skipped frames
+  refresh the background opacity map so sprite-0 hit still sees the current frame; `$3F10-$3F1F` palette
+  mirroring and the stream-mode CHR-ROM bound are handled explicitly.
+- **Tests** — 37 unit/stress cases (CPU, PPU, APU, ROM, mapper, save state, stress), a 195-image corpus
+  baseline and a `-Strict` mode; the suite also runs in the Linux, Windows and macOS CI pipelines.
+- **Benchmark front end** — `bench/` reports frame time, per-module cost and streaming cache hit/miss
+  for a desktop and an MCU-like (RGB565, half-frame buffer, streaming ROM, frame skip) configuration;
+  numbers in `docs/performance-2026-09-27.md`.
+
+### FIX: MMC1 (Mapper 1) — Castlevania II and general correctness
 
 ### FIX: MMC1 (Mapper 1) — Castlevania II and general correctness
 
@@ -71,7 +101,26 @@ The first beta version, which already supports CUP, PPU, mapper0 2, is already p
 
 # 更新日志 
 
-## master (开发中)
+## v0.2.0
+
+本次发布要点：
+
+- **即时存档**：`<游戏名>.nessave`（32 字节魔术头、分段版本号、payload CRC）；两遍读取，坏档或异 ROM 的档
+  在改动机器之前就被拒绝。规范见 `docs/nessave-format.md`；SDL 前端 F5 存 / F8 读。
+- **电池存档互通**：`<游戏名>.sav` 在 `mapper_init` 之后自动载入，卸载/存档时回写，两边永远一致；
+  电池就是 CHR-RAM 的板子（如 Racermate 的 64KB）通过 mapper 提供的电池缓冲带走。
+- **PAL 支持**：视频与音频时序都由区域驱动（312 行/帧、50Hz、每行 106+9/16 CPU 周期、PAL 的 APU 时钟与采样数）；
+  实现为 `nes_timing_t` 里的数据，NTSC 数值不变、扫描线循环里没有新增分支。
+- **mapper**：新增 82（Taito X1-017）、96（Bandai Oeka Kids）、168（Racermate）；按 Mesen 参考修正 TQROM(119)
+  的 CHR-RAM 选择、RAMBO-1(64) 的 PRG/CHR 布局与 IRQ 语义；`mapper_state_reapply` 已覆盖 20 个特殊板子。
+- **流式 ROM 构建**：PRG/CHR LRU 缓存会检测 seek/read 失败、作废该槽并通过 `nes_rom_stream_error()` 上报首个错误，
+  不再静默映射旧 bank；`nes_chrrom_tile()` 让 MMC5 扩展背景取数不越界（修复两份《L'Empereur》）。
+- **PPU/CPU 修正**：mapper 覆盖 PRG 读取时 OAM DMA 走 CPU 总线；跳帧仍刷新背景不透明度图以保证 sprite-0 hit；
+  `$3F10-$3F1F` 调色板镜像与流式 CHR-ROM 上界显式处理。
+- **测试**：37 个单测/压力用例 + 195 张 ROM 语料基线与 `-Strict` 模式，并在 Linux/Windows/macOS 流水线中运行。
+- **性能基准**：`bench/` 报告桌面与"类 MCU（RGB565、半帧、流式、跳帧）"两种配置的帧耗时、模块占比与缓存命中缺失。
+
+### 修复：MMC1（Mapper 1）——《恶魔城 II》与通用正确性
 
 ### 修复：MMC1 (Mapper 1) — 恶魔城II 及通用正确性修复
 

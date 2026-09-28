@@ -61,7 +61,22 @@ gitee: [nes: c语言实现的nes模拟器 (gitee.com)](https://gitee.com/PeakRac
 
 
 
+## v0.2.0 更新要点
+
+- **即时存档**：`<游戏名>.nessave`，带魔术头与 CRC 校验；读取分两遍，坏档或别的游戏的档不会把机器改成半成品。
+  格式见 [docs/nessave-format.md](docs/nessave-format.md)。SDL 前端 F5 存 / F8 读。
+- **电池存档互通**：游戏自身的 `<游戏名>.sav` 自动读写，并与存档文件保持一致；电池就是 CHR-RAM 的板子也已支持。
+- **PAL 支持**：视频与音频时序随区域切换（312 行 / 50Hz / 3.2 dots per CPU cycle，PAL 的 APU 时钟），
+  NTSC 数值未变。
+- **新增 mapper**：82（Taito X1-017）、96（Bandai Oeka Kids）、168（Racermate），并修正 TQROM(119)、
+  RAMBO-1(64) 的寄存器布局。255 个 mapper 已全部接入分发表。
+- **流式 ROM 构建**：PRG/CHR LRU 缓存现在会上报 I/O 失败，而不是静默沿用旧 bank；MMC5 扩展背景取数不再越界。
+- **测试与 CI**：内置 37 个单测/压力用例 + 195 张 ROM 回归基线；Linux/Windows/macOS 流水线既构建前端也跑测试。
+- **性能基准**：`bench/` 提供"桌面"与"类 MCU（RGB565、半帧缓冲、流式 ROM）"两种配置的帧耗时与模块占比，
+  数据见 [docs/performance-2026-09-27.md](docs/performance-2026-09-27.md)。
+
 ## 软件架构
+
 ​	示例基于SDL进行图像声音输出，没有特殊依赖，您可自行移植至任意硬件
 
 
