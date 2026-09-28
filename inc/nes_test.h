@@ -105,6 +105,9 @@ void nes_test_profile_stream(nes_t* nes, int chr, int hit);
 /* Wall clock in microseconds from the platform (monotonic, never 0). */
 uint64_t nes_test_time_us(void);
 
+/* NES_DBG_WLOG=<file>: log mapper writes as "PC ADDR DATA" (test builds only). */
+void nes_test_wlog(uint16_t address, uint8_t data, uint16_t pc);
+
 void nes_test_frame_tick(nes_t* nes);
 
 int nes_test_cpu_prepare(nes_t* nes, uint16_t pc);

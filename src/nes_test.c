@@ -19,6 +19,29 @@
 
 #include "nes_test.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
+/* NES_DBG_WLOG=<file>: append "PC ADDR DATA" for every mapper write.  Opened lazily, hard capped
+ * so a runaway log cannot fill the disk.  Called from the CPU write path (test builds only). */
+void nes_test_wlog(uint16_t address, uint8_t data, uint16_t pc) {
+    static FILE* wlog;
+    static long lines;
+    static int tried;
+    if (!tried) {
+        const char* path = getenv("NES_DBG_WLOG");
+        if (path != NULL && *path != '\0') {
+            wlog = fopen(path, "w");
+        }
+        tried = 1;
+    }
+    if (wlog == NULL || lines >= 200000) {
+        return;
+    }
+    fprintf(wlog, "%04X %02X %04X\n", (unsigned)address, (unsigned)data, (unsigned)pc);
+    lines++;
+}
+
 static uint32_t test_crc32(const uint8_t* data, size_t size) {
     uint32_t crc = 0xFFFFFFFFu;
     for (size_t i = 0; i < size; ++i) {

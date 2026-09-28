@@ -155,6 +155,9 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
                 nes_write_apu_register(nes, address,data);
 #endif
             }else if (address >= 0x4020){
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+                nes_test_wlog(address, data, nes->nes_cpu.PC);
+#endif
                 if (nes->nes_mapper.mapper_apu)
                     nes->nes_mapper.mapper_apu(nes, address, data);
             }else{
@@ -171,6 +174,9 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
             }
             return;
         case 0x8000: case 0xA000: case 0xC000: case 0xE000: // $8000-$FFFF PRG-ROM
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+            nes_test_wlog(address, data, nes->nes_cpu.PC);
+#endif
             nes->nes_mapper.mapper_write(nes, address, data);
             return;
         default :
