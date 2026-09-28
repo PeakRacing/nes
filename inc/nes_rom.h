@@ -151,7 +151,7 @@ typedef struct nes_rom_info{
     uint8_t  four_screen;               /*  0: No 1: Yes */
     uint8_t  save_ram;                  /*  0: Not present 1: Present */
     uint32_t rom_crc;                   /*  PRG+CHR CRC32 computed at load time */
-    uint8_t  vrc4d;                     /*  1: VRC4d wiring (romdb): mirroring bit polarity inverted vs VRC2c/VRC4b */
+    uint8_t  vrc4d;                     /*  1: VRC4d wiring (romdb): mirroring bit polarity inverted vs VRC2c/VRC4b */
     uint8_t  mirror_override;           /* romdb: 0=none 1=vertical 2=horizontal 3=one-screen0 4=one-screen1 */
     uint8_t  sram_dirty;
     uint8_t  sram_persist;               /*  1: frontend opted into <game>.sav persistence */                /*  1: battery RAM changed since the last flush to disk */
