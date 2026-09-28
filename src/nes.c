@@ -60,6 +60,7 @@ void nes_timing_set_pal(nes_t* nes) {
     nes->timing.remainder_add     = 9u;
     nes->timing.remainder_mod     = 16u;
     nes->timing.vblank_lines      = 70u;
+    nes->timing.frame_rate        = 50u;
     nes->timing.apu_frame_divisor = 78u;
     nes->timing.cpu_clock         = 1662607u;   /* PAL PPU 5.320342MHz / 3.2 */
     nes->timing.samples_per_frame = (uint16_t)(NES_APU_SAMPLE_RATE / 50u);
@@ -75,6 +76,7 @@ nes_t* nes_init(void){
     nes->timing.remainder_add     = 2u;
     nes->timing.remainder_mod     = 3u;
     nes->timing.vblank_lines      = 20u;
+    nes->timing.frame_rate        = 60u;
     nes->timing.apu_frame_divisor = 66u;
     nes->timing.cpu_clock         = 1789773u;   /* NTSC 21.47727MHz / 12 */
     nes->timing.samples_per_frame = (uint16_t)(NES_APU_SAMPLE_RATE / 60u);
@@ -124,6 +126,16 @@ static inline void nes_draw_background_pixel(nes_t* nes, nes_color_t* draw_data,
     }
 }
 
+/* MMC5 extended background may address CHR beyond the resident cache.  Both the renderer
+ * and its opacity-only twin go through here so the two can never disagree. */
+static inline const uint8_t* nes_extended_bg_tile(nes_t* nes, uint16_t ex_bank, uint8_t pattern_id) {
+    const uint32_t address = (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u);
+#if (NES_ROM_STREAM == 1)
+    return nes_chrrom_tile(nes, address);
+#else
+    return nes->nes_rom.chr_rom + address;
+#endif
+}
 /* Full tiles use constant shifts and one clipping decision for eight pixels. */
 static inline void nes_draw_background_tile(nes_t* nes, nes_color_t* out,
                                             uint8_t x, uint8_t lo, uint8_t hi,
@@ -175,11 +187,7 @@ static void nes_render_background_line(nes_t* nes,uint16_t scanline,nes_color_t*
             const uint8_t ex_byte = exram[(uint16_t)tile_y * 32u + tile_x];
             /* NESdev MMC5: bits[5:0] = 4KB CHR bank, bits[7:6] = palette */
             const uint16_t ex_bank = (uint16_t)((ex_byte & 0x3Fu) | ((uint16_t)nes->nes_mapper.mapper_chr_hi << 6u)) % ex_4k_banks;
-#if (NES_ROM_STREAM == 1)
-            bit0_p = nes_chrrom_tile(nes, (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u));
-#else
-            bit0_p = nes->nes_rom.chr_rom + (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u);
-#endif
+bit0_p = nes_extended_bg_tile(nes, ex_bank, pattern_id);
             high_bit = (uint8_t)(((ex_byte >> 6u) & 0x03u) << 2u);
         } else {
             const uint16_t pattern_address = (uint16_t)((uint16_t)bg_base * 0x400u + (uint16_t)pattern_id * 16u + dy);
@@ -214,11 +222,7 @@ static void nes_render_background_line(nes_t* nes,uint16_t scanline,nes_color_t*
             const uint8_t ex_byte = exram[(uint16_t)tile_y * 32u + tile_x];
             /* NESdev MMC5: bits[5:0] = 4KB CHR bank, bits[7:6] = palette */
             const uint16_t ex_bank = (uint16_t)((ex_byte & 0x3Fu) | ((uint16_t)nes->nes_mapper.mapper_chr_hi << 6u)) % ex_4k_banks;
-#if (NES_ROM_STREAM == 1)
-            bit0_p = nes_chrrom_tile(nes, (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u));
-#else
-            bit0_p = nes->nes_rom.chr_rom + (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u);
-#endif
+bit0_p = nes_extended_bg_tile(nes, ex_bank, pattern_id);
             high_bit = (uint8_t)(((ex_byte >> 6u) & 0x03u) << 2u);
         } else {
             const uint16_t pattern_address = (uint16_t)((uint16_t)bg_base * 0x400u + (uint16_t)pattern_id * 16u + dy);
@@ -285,11 +289,7 @@ static void nes_render_background_opacity_line(nes_t* nes){
         if (ex_4k_banks > 0u) {
             const uint8_t ex_byte = exram[(uint16_t)tile_y * 32u + tile_x];
             const uint16_t ex_bank = (uint16_t)((ex_byte & 0x3Fu) | ((uint16_t)nes->nes_mapper.mapper_chr_hi << 6u)) % ex_4k_banks;
-#if (NES_ROM_STREAM == 1)
-            bit0_p = nes_chrrom_tile(nes, (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u));
-#else
-            bit0_p = nes->nes_rom.chr_rom + (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u);
-#endif
+bit0_p = nes_extended_bg_tile(nes, ex_bank, pattern_id);
             high_bit = (uint8_t)(((ex_byte >> 6u) & 0x03u) << 2u);
         } else {
             const uint16_t pattern_address = (uint16_t)((uint16_t)bg_base * 0x400u + (uint16_t)pattern_id * 16u + dy);
@@ -320,11 +320,7 @@ static void nes_render_background_opacity_line(nes_t* nes){
         if (ex_4k_banks > 0u) {
             const uint8_t ex_byte = exram[(uint16_t)tile_y * 32u + tile_x];
             const uint16_t ex_bank = (uint16_t)((ex_byte & 0x3Fu) | ((uint16_t)nes->nes_mapper.mapper_chr_hi << 6u)) % ex_4k_banks;
-#if (NES_ROM_STREAM == 1)
-            bit0_p = nes_chrrom_tile(nes, (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u));
-#else
-            bit0_p = nes->nes_rom.chr_rom + (uint32_t)ex_bank * 4096u + ((uint16_t)pattern_id << 4u);
-#endif
+bit0_p = nes_extended_bg_tile(nes, ex_bank, pattern_id);
             high_bit = (uint8_t)(((ex_byte >> 6u) & 0x03u) << 2u);
         } else {
             const uint16_t pattern_address = (uint16_t)((uint16_t)bg_base * 0x400u + (uint16_t)pattern_id * 16u + dy);
