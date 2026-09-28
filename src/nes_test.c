@@ -103,6 +103,21 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
             }
             for (i = 0; i < 2048u; i++) { if (nes->nes_ppu.name_table[i]) nz_nt++; }
             fprintf(stderr, "[CHR-DUMP] nametable[0] 非零字节 = %ld / 2048\n", nz_nt);
+            {
+                unsigned p;
+                int distinct = 0;
+                unsigned seen[64] = {0};
+                fprintf(stderr, "[PALETTE-DUMP]");
+                for (p = 0; p < 32u; p++) {
+                    fprintf(stderr, " %02X", (unsigned)nes->nes_ppu.palette_indexes[p]);
+                }
+                fprintf(stderr, "\n");
+                for (p = 0; p < 32u; p++) {
+                    unsigned v = (unsigned)nes->nes_ppu.palette_indexes[p] & 0x3Fu;
+                    if (!seen[v]) { seen[v] = 1u; distinct++; }
+                }
+                fprintf(stderr, "[PALETTE-DUMP] 不同颜色数 = %d / 32\n", distinct);
+            }
         }
     }
     if (wlog == NULL || lines >= 200000) {

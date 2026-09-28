@@ -47,7 +47,10 @@ static inline uint8_t nes_read_ppu_memory(nes_t* nes){
         nes->nes_ppu.buffer = nes->nes_ppu.chr_banks[index][offset];
         return data;
     } else {// 调色板
-        nes->nes_ppu.buffer = nes->nes_ppu.chr_banks[index][offset];
+        /* The read buffer is filled from the mirrored nametable byte ( mirrors ),
+         * not from the palette entry itself - documented on the NESDev PPU registers page. */
+        const uint16_t mirror = (uint16_t)(address - 0x1000u);
+        nes->nes_ppu.buffer = nes->nes_ppu.chr_banks[mirror >> 10][mirror & (uint16_t)0x3FF];
         uint8_t raw = (uint8_t)address & 0x1f;
         if ((raw & 0x03u) == 0u) raw &= 0x0fu;
         return nes->nes_ppu.palette_indexes[raw];
