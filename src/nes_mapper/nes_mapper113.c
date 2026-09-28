@@ -40,7 +40,7 @@ static void nes_mapper_init(nes_t* nes) {
 */
 static void nes_mapper_apu_write(nes_t* nes, uint16_t address, uint8_t data) {
     if (address >= 0x4020 && address <= 0x5FFF) {
-        uint8_t prg = (data >> 6) & 0x01;
+        uint8_t prg = (data >> 2) & 0x03;   /* PRG 32KB bank: bits[3:2] (A/B/C 对照实验得出，A/C 均 boot 失败) */
         // CHR = (bit7 << 6) | bits[5:3] | bits[2:0]
         uint8_t chr = ((data & 0x80) >> 1) | (data & 0x3F);
         nes_load_prgrom_32k(nes, 0, prg);
