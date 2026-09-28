@@ -122,28 +122,6 @@ int nes_test_reset_deterministic(nes_t* nes) {
             banks_before == nes_test_bank_hash(nes, 3, 7)) ? NES_OK : NES_ERROR;
 }
 
-#include <stdio.h>
-#include <stdlib.h>
-
-/* NES_DBG_WLOG=<file>: append "pc addr data" for every mapper/IO write seen by the CPU.
- * Opened lazily, capped so a runaway log cannot fill the disk. */
-void nes_test_wlog(uint16_t address, uint8_t data, uint16_t pc) {
-    static FILE* log;
-    static long lines;
-    static int tried;
-    if (!tried) {
-        const char* path = getenv("NES_DBG_WLOG");
-        if (path != NULL && *path != '\0') {
-            log = fopen(path, "w");
-        }
-        tried = 1;
-    }
-    if (log == NULL || lines > 400000) {
-        return;
-    }
-    fprintf(log, "%04X %04X %02X\n", (unsigned)pc, (unsigned)address, (unsigned)data);
-    lines++;
-}
 static uint32_t test_frame_budget;
 
 /* ------------------------------------------------------------------ */
