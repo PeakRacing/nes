@@ -108,6 +108,9 @@ uint64_t nes_test_time_us(void);
 /* NES_DBG_WLOG=<file>: log mapper writes as "PC ADDR DATA" (test builds only). */
 void nes_test_wlog(uint16_t address, uint8_t data, uint16_t pc);
 
+/* NES_DBG_RLOG=<file>: log CPU reads (address + source PC) for polling/board-probe triage. */
+void nes_test_rlog(uint16_t address, uint16_t pc);
+
 void nes_test_frame_tick(nes_t* nes);
 
 int nes_test_cpu_prepare(nes_t* nes, uint16_t pc);

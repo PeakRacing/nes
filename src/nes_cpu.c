@@ -57,6 +57,9 @@ static inline void nes_mapper_cpu_tick(nes_t* nes, uint16_t cycles) {
 }
 
 static inline uint8_t nes_read_cpu(nes_t* nes,uint16_t address){
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+    nes_test_rlog(address, nes->nes_cpu.PC);
+#endif
     /* Most instruction and operand reads come from PRG. */
     if (address >= 0x8000u) {
         if (nes->nes_mapper.mapper_read_prg)
@@ -115,6 +118,9 @@ static inline int nes_dma_needs_bus_read(const nes_t* nes, uint8_t data) {
 }
 
 static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+    nes_test_wlog(address, data, nes->nes_cpu.PC);
+#endif
     switch (address & 0xE000){
         case 0x0000://$0000-$1FFF 2KB internal RAM + Mirrors of $0000-$07FF
             nes->nes_cpu.cpu_ram[address & (uint16_t)0x07ff] = data;
@@ -155,9 +161,6 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
                 nes_write_apu_register(nes, address,data);
 #endif
             }else if (address >= 0x4020){
-#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
-                nes_test_wlog(address, data, nes->nes_cpu.PC);
-#endif
                 if (nes->nes_mapper.mapper_apu)
                     nes->nes_mapper.mapper_apu(nes, address, data);
             }else{
@@ -174,9 +177,6 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
             }
             return;
         case 0x8000: case 0xA000: case 0xC000: case 0xE000: // $8000-$FFFF PRG-ROM
-#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
-            nes_test_wlog(address, data, nes->nes_cpu.PC);
-#endif
             nes->nes_mapper.mapper_write(nes, address, data);
             return;
         default :

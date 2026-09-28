@@ -24,6 +24,26 @@
 
 /* NES_DBG_WLOG=<file>: append "PC ADDR DATA" for every mapper write.  Opened lazily, hard capped
  * so a runaway log cannot fill the disk.  Called from the CPU write path (test builds only). */
+/* NES_DBG_RLOG=<file>: "ADDR PC" for every CPU read.  Address+PC only (cheap, no value plumbing);
+ * the frequency distribution is what identifies a polling loop. */
+void nes_test_rlog(uint16_t address, uint16_t pc) {
+    static FILE* rlog;
+    static long lines;
+    static int tried;
+    if (!tried) {
+        const char* path = getenv("NES_DBG_RLOG");
+        if (path != NULL && *path != '\0') {
+            rlog = fopen(path, "w");
+        }
+        tried = 1;
+    }
+    if (rlog == NULL || lines >= 200000) {
+        return;
+    }
+    fprintf(rlog, "%04X %04X\n", (unsigned)address, (unsigned)pc);
+    lines++;
+}
+
 void nes_test_wlog(uint16_t address, uint8_t data, uint16_t pc) {
     static FILE* wlog;
     static long lines;
@@ -34,6 +54,10 @@ void nes_test_wlog(uint16_t address, uint8_t data, uint16_t pc) {
             wlog = fopen(path, "w");
         }
         tried = 1;
+    }
+    /* Default focus: PPU registers only (NES_DBG_WLOG_ALL=1 widens it to mapper/SRAM too). */
+    if (!getenv("NES_DBG_WLOG_ALL") && (address < 0x2000u || address >= 0x4000u)) {
+        return;
     }
     if (wlog == NULL || lines >= 200000) {
         return;
