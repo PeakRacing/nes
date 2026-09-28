@@ -109,7 +109,7 @@ uint64_t nes_test_time_us(void);
 void nes_test_wlog(uint16_t address, uint8_t data, uint16_t pc);
 
 /* NES_DBG_RLOG=<file>: log CPU reads (address + source PC) for polling/board-probe triage. */
-void nes_test_rlog(uint16_t address, uint16_t pc);
+void nes_test_rlog(uint16_t address, uint8_t value, uint16_t pc);
 
 void nes_test_frame_tick(nes_t* nes);
 

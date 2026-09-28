@@ -26,7 +26,7 @@
  * so a runaway log cannot fill the disk.  Called from the CPU write path (test builds only). */
 /* NES_DBG_RLOG=<file>: "ADDR PC" for every CPU read.  Address+PC only (cheap, no value plumbing);
  * the frequency distribution is what identifies a polling loop. */
-void nes_test_rlog(uint16_t address, uint16_t pc) {
+void nes_test_rlog(uint16_t address, uint8_t value, uint16_t pc) {
     static FILE* rlog;
     static long lines;
     static int tried;
@@ -37,10 +37,17 @@ void nes_test_rlog(uint16_t address, uint16_t pc) {
         }
         tried = 1;
     }
+    if (address < 0x2000u || (address >= 0x4000u && address < 0x6000u)) {
+        return;
+    }
+    /* $2002 is polled thousands of times per frame by every game; it drowns the log. */
+    if (address == 0x2002u) {
+        return;
+    }
     if (rlog == NULL || lines >= 200000) {
         return;
     }
-    fprintf(rlog, "%04X %04X\n", (unsigned)address, (unsigned)pc);
+    fprintf(rlog, "%04X %02X %04X\n", (unsigned)address, (unsigned)value, (unsigned)pc);
     lines++;
 }
 

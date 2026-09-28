@@ -56,10 +56,18 @@ static inline void nes_mapper_cpu_tick(nes_t* nes, uint16_t cycles) {
     }
 }
 
+static inline uint8_t nes_read_cpu_inner(nes_t* nes, uint16_t address);
+
 static inline uint8_t nes_read_cpu(nes_t* nes,uint16_t address){
 #if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
-    nes_test_rlog(address, nes->nes_cpu.PC);
+    const uint8_t value = nes_read_cpu_inner(nes, address);
+    nes_test_rlog(address, value, nes->nes_cpu.PC);
+    return value;
+#else
+    return nes_read_cpu_inner(nes, address);
 #endif
+}
+static inline uint8_t nes_read_cpu_inner(nes_t* nes,uint16_t address){
     /* Most instruction and operand reads come from PRG. */
     if (address >= 0x8000u) {
         if (nes->nes_mapper.mapper_read_prg)
