@@ -34,7 +34,19 @@ static uint32_t nes_crc32_update(uint32_t crc, const uint8_t* data, size_t len) 
     return crc;
 }
 
-typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; } nes_romdb_entry_t;
+typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; uint8_t mirror; } nes_romdb_entry_t;
+
+/* Boards whose mirroring cannot be derived from the iNES header (pirate multicarts, wrong
+ * header bits).  0 = leave the header's AUTO resolution alone. */
+static void nes_rom_apply_mirror_override(nes_t* nes) {
+    switch (nes->nes_rom.mirror_override) {
+    case 1: nes_ppu_screen_mirrors(nes, NES_MIRROR_VERTICAL); break;
+    case 2: nes_ppu_screen_mirrors(nes, NES_MIRROR_HORIZONTAL); break;
+    case 3: nes_ppu_screen_mirrors(nes, NES_MIRROR_ONE_SCREEN0); break;
+    case 4: nes_ppu_screen_mirrors(nes, NES_MIRROR_ONE_SCREEN1); break;
+    default: break;
+    }
+}
 
 /* PRG+CHR CRC32 table — corrects ROMs with wrong mapper in iNES header */
 static const nes_romdb_entry_t romdb[] = {
@@ -74,6 +86,7 @@ static const nes_romdb_entry_t romdb[] = {
        $2000-$23BF and scans it out of $2400, so vertical mirroring leaves the top six tile
        rows blank and hides the HUD (verified against Mesen, which shows the bar). */
     { 0x9247C38Du, 119u, 0u, 1u }, /* Pin Bot (E) - PAL cartridge, header carries no region bit */
+    { 0x91B4B1D7u, 66u, 0u, 0u, 1u }, /* 2合1 (pirate GxROM multicart): header says horizontal, board is vertical */
     { 0x0DBDD55Du, 25u, 1u },
 };
 
@@ -94,6 +107,7 @@ static void nes_romdb_lookup(nes_t* nes) {
                          crc, nes->nes_rom.mapper_number, romdb[i].mapper);
             nes->nes_rom.mapper_number = romdb[i].mapper;
             nes->nes_rom.vrc4d = romdb[i].vrc4d;
+            nes->nes_rom.mirror_override = romdb[i].mirror;
             return;
         }
     }
@@ -223,6 +237,7 @@ int nes_load_file(nes_t* nes, const char* file_path ){
         goto error;
     }
     nes->nes_mapper.mapper_init(nes);
+    nes_rom_apply_mirror_override(nes);
     /* Battery RAM is loaded after mapper_init(): mappers may allocate the SRAM themselves
      * (NES_USE_SRAM == 0 builds), and the game's own save must be in place before it runs. */
     (void)nes_sram_load(nes);
@@ -341,6 +356,7 @@ int nes_load_rom(nes_t* nes, const uint8_t* nes_rom){
         return NES_ERROR;
     }
     nes->nes_mapper.mapper_init(nes);
+    nes_rom_apply_mirror_override(nes);
     return NES_OK;
 error:
     if (nes){
