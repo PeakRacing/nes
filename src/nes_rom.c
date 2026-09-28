@@ -34,7 +34,7 @@ static uint32_t nes_crc32_update(uint32_t crc, const uint8_t* data, size_t len) 
     return crc;
 }
 
-typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; uint8_t mirror; } nes_romdb_entry_t;
+typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; uint8_t mirror; uint8_t mmc1_strict; } nes_romdb_entry_t;
 
 /* Boards whose mirroring cannot be derived from the iNES header (pirate multicarts, wrong
  * header bits).  0 = leave the header's AUTO resolution alone. */
@@ -87,6 +87,7 @@ static const nes_romdb_entry_t romdb[] = {
        rows blank and hides the HUD (verified against Mesen, which shows the bar). */
     { 0x9247C38Du, 119u, 0u, 1u }, /* Pin Bot (E) - PAL cartridge, header carries no region bit */
     { 0x91B4B1D7u, 66u, 0u, 0u, 1u }, /* 2合1 (pirate GxROM multicart): header says horizontal, board is vertical */
+    { 0x2C33161Du, 1u, 0u, 0u, 0u, 1u }, /* AD&D英雄冒险: MMC1 with 5-write counter semantics */
     { 0x0DBDD55Du, 25u, 1u },
 };
 
@@ -108,6 +109,7 @@ static void nes_romdb_lookup(nes_t* nes) {
             nes->nes_rom.mapper_number = romdb[i].mapper;
             nes->nes_rom.vrc4d = romdb[i].vrc4d;
             nes->nes_rom.mirror_override = romdb[i].mirror;
+            nes->nes_rom.mmc1_strict = romdb[i].mmc1_strict;
             return;
         }
     }

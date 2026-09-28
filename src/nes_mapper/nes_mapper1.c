@@ -22,6 +22,8 @@
 
 typedef struct  {
     uint8_t shift;
+    uint8_t shift_count;   /* MMC1 needs exactly 5 writes per register; a sentinel-bit trick
+                              mis-aligns when a stray write precedes the first sequence. */
     uint8_t prg_bank;   /* last PRG bank register value, for re-applying when P mode changes */
     union {
         struct {
@@ -85,7 +87,7 @@ static void nes_mapper_init(nes_t* nes){
     nes_load_chrrom_8k(nes, 0, 0);
 
     nes_memset(r, 0x00, sizeof(mapper1_register_t));
-    r->shift = 0x10;
+    r->shift = nes->nes_rom.mmc1_strict ? 0x00u : 0x10u;   /* counter model needs a cleared shifter */
     /* Power-on: Control=$0C (P=3: fix last PRG bank at $C000; C=0: 8K CHR; M=0: one-screen) */
     r->control_byte = 0x0C;
 }
@@ -199,7 +201,7 @@ Load register ($8000-$FFFF)
 static void nes_mapper_write(nes_t* nes, uint16_t write_addr, uint8_t data){
     mapper1_register_t* r = (mapper1_register_t*)nes->nes_mapper.mapper_register;
     if (data & (uint8_t)0x80){
-        r->shift = 0x10; // reset shift register
+        r->shift = nes->nes_rom.mmc1_strict ? 0x00u : 0x10u;   /* counter model needs a cleared shifter */ // reset shift register
         // Control = Control OR $0C, locking PRG-ROM at $C000-$FFFF to the last bank
         r->control_byte |= 0x0C;
         nes_ppu_screen_mirrors(nes, nes_mapper1_mirror_table[r->control.M]);
@@ -211,7 +213,7 @@ static void nes_mapper_write(nes_t* nes, uint16_t write_addr, uint8_t data){
         r->shift |= (data & 1) << 4;
         if (finished) {
             nes_mapper_write_register(nes, write_addr);
-            r->shift = 0x10;
+            r->shift = nes->nes_rom.mmc1_strict ? 0x00u : 0x10u;   /* counter model needs a cleared shifter */
         }
     }
 }
