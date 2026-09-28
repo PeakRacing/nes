@@ -127,7 +127,7 @@ static inline int nes_dma_needs_bus_read(const nes_t* nes, uint8_t data) {
 
 static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
 #if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
-    nes_test_wlog(address, data, nes->nes_cpu.PC);
+    nes_test_wlog(nes, address, data, nes->nes_cpu.PC);
 #endif
     switch (address & 0xE000){
         case 0x0000://$0000-$1FFF 2KB internal RAM + Mirrors of $0000-$07FF

@@ -69,7 +69,7 @@ void nes_test_rlog(nes_t* nes, uint16_t address, uint8_t value, uint16_t pc) {
     lines++;
 }
 
-void nes_test_wlog(uint16_t address, uint8_t data, uint16_t pc) {
+void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
     static FILE* wlog;
     static long lines;
     static int tried;
@@ -83,6 +83,27 @@ void nes_test_wlog(uint16_t address, uint8_t data, uint16_t pc) {
     /* Default focus: PPU registers only (NES_DBG_WLOG_ALL=1 widens it to mapper/SRAM too). */
     if (!getenv("NES_DBG_WLOG_ALL") && (address < 0x2000u || address >= 0x4000u)) {
         return;
+    }
+    /* CHR-DUMP: the first non-zero $2007 upload is when real tile data arrives. */
+    if (address == 0x2007u && data != 0x00u) {
+        static int dumped;
+        if (!dumped) {
+            const uint8_t* chr = nes->nes_rom.chr_rom;
+            long nz_chr = 0, nz_nt = 0;
+            unsigned i;
+            dumped = 1;
+            fprintf(stderr, "[CHR-DUMP] pc=%04X data=%02X chr_rom=%p chr_rom_size=%u\n",
+                    (unsigned)pc, (unsigned)data, (const void*)chr,
+                    (unsigned)nes->nes_rom.chr_rom_size);
+            for (i = 0; chr && i < 8192u; i++) { if (chr[i]) nz_chr++; }
+            fprintf(stderr, "[CHR-DUMP] CHR 非零字节 = %ld / 8192\n", nz_chr);
+            for (i = 0; i < 8u; i++) {
+                fprintf(stderr, "[CHR-DUMP] pattern_table[%u] offset = %ld\n", i,
+                        chr ? (long)(nes->nes_ppu.pattern_table[i] - chr) : -1L);
+            }
+            for (i = 0; i < 2048u; i++) { if (nes->nes_ppu.name_table[i]) nz_nt++; }
+            fprintf(stderr, "[CHR-DUMP] nametable[0] 非零字节 = %ld / 2048\n", nz_nt);
+        }
     }
     if (wlog == NULL || lines >= 200000) {
         return;
