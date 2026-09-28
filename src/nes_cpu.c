@@ -15,6 +15,12 @@
  */
 
 #include "nes.h"
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+#include "nes_test.h"
+#define NES_WLOG(a_, d_, p_) nes_test_wlog((a_), (d_), (p_))
+#else
+#define NES_WLOG(a_, d_, p_) ((void)0)
+#endif
 #if defined(NES_TEST_PROFILE) && (NES_TEST_PROFILE == 1)
 #include "nes_test.h"
 #endif
@@ -156,7 +162,8 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
 #endif
             }else if (address >= 0x4020){
                 if (nes->nes_mapper.mapper_apu)
-                    nes->nes_mapper.mapper_apu(nes, address, data);
+                    NES_WLOG(address, data, nes->nes_cpu.PC);
+            nes->nes_mapper.mapper_apu(nes, address, data);
             }else{
                 NES_LOG_DEBUG("nes_write address %04X not support\n",address);
             }
@@ -171,6 +178,7 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
             }
             return;
         case 0x8000: case 0xA000: case 0xC000: case 0xE000: // $8000-$FFFF PRG-ROM
+            NES_WLOG(address, data, nes->nes_cpu.PC);
             nes->nes_mapper.mapper_write(nes, address, data);
             return;
         default :
