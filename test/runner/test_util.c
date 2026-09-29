@@ -50,6 +50,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "245 chr-ram board", test_mapper245_chr_ram_board},
         {"mapper", "69 5b audio write", test_mapper69_5b_audio_write},
         {"mapper", "17 power-on slots", test_mapper17_power_on_slots},
+        {"mapper", "11 chr bank select", test_mapper11_chr_bank_select},
         {"mapper", "waixing chr-ram window", test_mapper4_waixing_window},
         {"mapper", "mmc3 prg-ram", test_mapper4_wram},
         {"mapper", "synthetic smoke", test_mapper_synthetic_smoke},

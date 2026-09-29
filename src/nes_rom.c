@@ -98,6 +98,16 @@ static const nes_romdb_entry_t romdb[] = {
        in the SDL/port builds (NES_USE_SRAM=0) nothing allocates that window. */
     { 0x69759626u, 0u, 0u, 0u, 0u, 0u, 1u },
     { 0x0DBDD55Du, 25u, 1u },
+    /* Raid 2020 (Color Dreams, Unl) — the header claims mapper 7 (AxROM) and leaves bytes 8-15
+       dirty, but the dump carries 64KB of CHR-ROM, which an AxROM board cannot have: AxROM has
+       no CHR banking at all.  The game's own bank table (executed at $FFD4, data at $FFE0)
+       holds "0C 0D 1C 1D 2C 2D 3C 3D 4C 4D 5C 5D" and it indexes it per screen: the low nibble
+       picks PRG bank 0/1 and the HIGH nibble picks CHR bank 0-5 — exactly the Color Dreams
+       register (mapper 11, CCCC PPPP).  Under mapper 7 those high bits are discarded, so the
+       title screen (CHR bank 0) is mostly fine while the play field, which switches to CHR
+       banks 1-5, renders with the wrong tiles ("画面乱").  Verified: with mapper 11 the
+       in-game graphics become coherent (characters complete, no torn left column). */
+    { 0xB1D03104u, 11u, 0u },
 };
 
 /*

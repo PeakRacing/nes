@@ -485,6 +485,47 @@ int test_mapper245_chr_ram_board(void) {
 }
 
 /*
+ * Color Dreams (mapper 11): a write to $8000-$FFFF is [CCCC PPPP] — the high nibble selects the
+ * 8KB CHR bank, the low nibble the 32KB PRG bank.
+ *
+ * Raid 2020's header claims mapper 7 (AxROM), which has no CHR banking at all; a romdb entry
+ * reroutes the ROM here.  Its own bank table (written through $FFD8,X) is
+ * "0C 0D 1C 1D 2C 2D 3C 3D 4C 4D 5C 5D", i.e. PRG banks 0/1 crossed with CHR banks 0-5: the title
+ * screen runs on CHR bank 0, and the play field switches to 1-5.  Drop the CHR half and the game
+ * still boots but every in-game screen is drawn with the title's tiles ("画面乱").
+ */
+int test_mapper11_chr_bank_select(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 11, 4, 8);           /* 64KB PRG + 64KB CHR, like Raid 2020 */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks: the slots are compared byte-wise */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    static const struct { uint8_t value, prg_bank, chr_bank; } cases[] = {
+        { 0x0Cu, 0u, 0u }, { 0x0Du, 1u, 0u }, { 0x1Cu, 0u, 1u }, { 0x1Du, 1u, 1u },
+        { 0x2Cu, 0u, 2u }, { 0x3Du, 1u, 3u }, { 0x4Cu, 0u, 4u }, { 0x5Du, 1u, 5u },
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        nes_test_cpu_write(nes, 0x8000, cases[i].value);
+        if (nes->nes_ppu.pattern_table[0] != chr + (size_t)cases[i].chr_bank * 8192) {
+            test_fixture_free(&f);
+            return mapper_report("mapper 11 CHR bank from the high nibble", 11,
+                                 "8KB CHR bank selected by the write", "CHR bank ignored");
+        }
+        if (nes_test_cpu_read(nes, 0x8000) != prg[(size_t)cases[i].prg_bank * 32768]) {
+            test_fixture_free(&f);
+            return mapper_report("mapper 11 PRG bank from the low nibble", 11,
+                                 "32KB PRG bank selected by the write", "wrong PRG bank");
+        }
+    }
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * Sunsoft FME-7 (mapper 69): $C000-$FFFF belongs to the 5B audio chip (register select at $C000,
  * data at $E000) and the mapper must not decode those writes.  Mr Gimmick writes $E000 while
  * register 9 is selected, so treating it as a parameter write paged bank $38 into $8000-$9FFF;
