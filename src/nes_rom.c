@@ -149,6 +149,10 @@ static const nes_romdb_entry_t romdb[] = {
        SuperXeviousProtection answers every other $4020-$5FFF read from its own table).
        Database: 12012CD9,VsSystem,...,206,...,2 */
     { 0x12012CD9u, 206u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(2, 1, 3) },
+    /* Aladdin 3 (pirate hack): the header claims mapper 41 (Caltron 6-in-1), the board is plain
+       CNROM (mapper 3) - Mesen's database has C9EE15A7,Famicom,,,,3,32,32,0,0,0,0,v.  With the
+       multicart mapper the CHR banks came from the wrong place and every tile was garbled. */
+    { 0xC9EE15A7u, 3u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*

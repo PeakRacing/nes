@@ -62,6 +62,7 @@ int test_mapper69_5b_audio_write(void);
 int test_mapper17_power_on_slots(void);
 int test_mapper11_chr_bank_select(void);
 int test_mapper121_protection(void);
+int test_mapper3_cnrom_chr_bank(void);
 int test_mapper226_bank_formula(void);
 int test_mapper78_jf16_mirroring(void);
 int test_mapper99_vs_latch(void);

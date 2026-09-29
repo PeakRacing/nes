@@ -857,6 +857,58 @@ int test_mapper226_bank_formula(void) {
  * PRG slots.  Under a plain MMC3 (mapper 187, what the header claims) the protection read
  * returns garbage, the game never gets past its check and stays gray.
  */
+/*
+ * CNROM (mapper 3) takes the 8KB CHR bank straight from the value written to $8000-$FFFF, modulo
+ * the board's CHR size.  That is the board the pirate hack "Aladdin 3" really uses: its iNES header
+ * claims mapper 41 (Caltron 6-in-1), which banks PRG/CHR somewhere else entirely, so the game drew
+ * every tile from the wrong CHR bank ("游戏中乱码").  A romdb entry reroutes the ROM here.
+ * Mesen's database: C9EE15A7,Famicorn,,,,3,32,32,0,0,0,0,v  (mapper 3, 32KB PRG, 32KB CHR).
+ */
+int test_mapper3_cnrom_chr_bank(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 3, 2, 4);            /* 32KB PRG + 32KB CHR = four 8KB banks */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the slots can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on selects CHR bank 0. */
+    if (nes->nes_ppu.pattern_table[0] != chr) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 3 powers up on CHR bank 0", 3,
+                             "pattern table points at CHR bank 0", "wrong CHR bank at power-on");
+    }
+
+    /* CNROM only implements the bits the board's CHR can hold, so the value wraps at four banks. */
+    static const struct { uint8_t value, bank; } cases[] = {
+        { 0x00u, 0u }, { 0x01u, 1u }, { 0x02u, 2u }, { 0x03u, 3u }, { 0xFFu, 3u },
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        nes_test_cpu_write(nes, 0x8000, cases[i].value);
+        if (nes->nes_ppu.pattern_table[0] != chr + (size_t)cases[i].bank * 8192u) {
+            test_fixture_free(&f);
+            return mapper_report("mapper 3 CHR bank from the written value", 3,
+                                 "8KB CHR bank selected by the write (wrapping)", "CHR bank ignored");
+        }
+    }
+    test_fixture_free(&f);
+
+    /* A CHR-RAM board (no CHR ROM at all) must ignore the register instead of banking nothing. */
+    mapper_fill_spec(&spec, 3, 2, 0);
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes = f.nes;
+    nes_test_cpu_write(nes, 0x8000, 0x03u);
+    if (nes->nes_ppu.pattern_table[0] == NULL) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 3 keeps CHR-RAM mapped", 3,
+                             "pattern table still mapped", "CHR window lost");
+    }
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper121_protection(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 121, 16, 64);        /* 256KB PRG + 512KB CHR, like sf97.nes */
