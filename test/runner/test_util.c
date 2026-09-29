@@ -53,6 +53,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "11 chr bank select", test_mapper11_chr_bank_select},
         {"mapper", "121 protection", test_mapper121_protection},
         {"mapper", "226 bank formula", test_mapper226_bank_formula},
+        {"mapper", "78 jf16 mirroring", test_mapper78_jf16_mirroring},
         {"mapper", "waixing chr-ram window", test_mapper4_waixing_window},
         {"mapper", "mmc3 prg-ram", test_mapper4_wram},
         {"mapper", "synthetic smoke", test_mapper_synthetic_smoke},

@@ -526,6 +526,57 @@ int test_mapper11_chr_bank_select(void) {
 }
 
 /*
+ * Mapper 78 (Jaleco JF-16) has two wirings and iNES 1.0 cannot tell them apart: Holy Diver
+ * (submapper 3) drives the register's bit 3 as H/V mirroring, while every other board of the
+ * family - Cosmo Carrier is submapper 1 - uses one-screen A/B.  Both games are 128KB PRG +
+ * 128KB CHR with flags6 bit3 set, so the old shape heuristic classified Cosmo Carrier as Holy
+ * Diver and displayed the nametable the game had not filled (blank blue title screen).
+ */
+int test_mapper78_jf16_mirroring(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 78, 8, 16);          /* 128KB PRG + 128KB CHR, like Cosmo Carrier */
+    spec.four_screen = 1;                        /* flags6 bit3: both JF-16 games set it */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+
+    /* Not a Holy Diver CRC (the fixture's CRC is synthetic) -> one-screen A/B. */
+    nes_test_cpu_write(nes, 0xD548, 0x00);       /* bit3 clear -> screen A */
+    uint8_t* const screen_a = nes->nes_ppu.name_table[0];
+    if (screen_a != nes->nes_ppu.name_table[1] ||
+        screen_a != nes->nes_ppu.name_table[2] ||
+        screen_a != nes->nes_ppu.name_table[3]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 78 JF-16 uses one-screen mirroring", 78,
+                             "all four nametables on one screen", "H/V wiring");
+    }
+
+    nes_test_cpu_write(nes, 0xD550, 0x08);       /* bit3 set -> screen B */
+    if (nes->nes_ppu.name_table[0] == screen_a ||
+        nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[3]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 78 JF-16 selects screen B on bit 3", 78,
+                             "the other single screen", "screen A");
+    }
+
+    /* Bank bits 0-2 (PRG) and 4-7 (CHR) still decode; the board has bus conflicts, so the value
+       the register sees is the written byte ANDed with the ROM byte it lands on. */
+    const uint8_t rom_at_register = nes->nes_cpu.prg_banks[2][0x1553u];   /* $D553 -> slot 2 */
+    const uint8_t latched = (uint8_t)(0x53u & rom_at_register);
+    nes_test_cpu_write(nes, 0xD553, 0x53);
+    if (nes->nes_cpu.prg_banks[0] != nes->nes_rom.prg_rom + (size_t)(latched & 0x07u) * 16384 ||
+        nes->nes_ppu.pattern_table[0] != nes->nes_rom.chr_rom + (size_t)((latched >> 4) & 0x0Fu) * 8192) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 78 JF-16 bank bits see the bus conflict", 78,
+                             "banks from (written AND ROM)", "raw written value");
+    }
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * Mapper 226 (BMC 42-in-1, Super_42-in-1.nes): two write-only registers decoded by A0, and the
  * 16KB bank number is assembled from both of them:
  *

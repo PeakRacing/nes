@@ -25,9 +25,20 @@
  *               uses one-screen A/B. iNES 1.0 needs a CRC/submapper override.
  */
 
+/*
+ * Jaleco JF-16 (mapper 78).  Mesen2's JalecoJf16 has exactly two wirings, selected by the NES 2.0
+ * submapper: submapper 3 is Holy Diver, which drives the mirroring bit as H/V, while every other
+ * board of the family - Cosmo Carrier is submapper 1 - uses one-screen A/B.
+ *
+ * iNES 1.0 headers carry no submapper and both games have the same shape (128KB PRG + 128KB CHR
+ * with flags6 bit3 set), so the variant cannot be guessed from the sizes.  The previous shape
+ * heuristic therefore classified Cosmo Carrier as Holy Diver, which put its title screen on the
+ * wrong nametable and left the visible screen blank blue.  Identify the variant by ROM CRC.
+ */
 static uint8_t mapper78_is_holy_diver(nes_t* nes) {
-    return nes->nes_rom.rom_crc == 0xE2AB58BAu ||
-           (nes->nes_rom.four_screen && nes->nes_rom.prg_rom_size == 8u && nes->nes_rom.chr_rom_size == 16u);
+    return nes->nes_rom.rom_crc == 0xBA51AC6Fu ||   /* Holy Diver (J) [!]    (submapper 3) */
+           nes->nes_rom.rom_crc == 0x564F7161u ||   /* Holy Diver, other dump (submapper 3) */
+           nes->nes_rom.rom_crc == 0xE2AB58BAu;     /* kept from the previous heuristic */
 }
 
 static void nes_mapper_init(nes_t* nes) {
