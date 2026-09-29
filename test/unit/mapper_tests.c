@@ -612,9 +612,9 @@ int test_vs_system_switches(void) {
 
     /* VS board: coin = $4016 bit 4, credit/start = $4016 bit 3, service = $4017 bit 2. */
     nes->nes_rom.vs_system = 1;
-    if ((nes_test_cpu_read(nes, 0x4016) & 0x10u) != 0x10u) {
+    if ((nes_test_cpu_read(nes, 0x4016) & 0x24u) != 0x24u) {
         test_fixture_free(&f);
-        return mapper_report("VS coin is $4016 bit 4", 0, "bit set", "bit clear");
+        return mapper_report("VS coin drives $4016 bits 5 and 2", 0, "bits set", "bits clear");
     }
     nes->nes_cpu.joypad.vs_start = 1;
     if ((nes_test_cpu_read(nes, 0x4016) & 0x08u) != 0x08u) {
@@ -632,8 +632,8 @@ int test_vs_system_switches(void) {
     nes->nes_cpu.joypad.A1 = 1;
     nes_test_cpu_write(nes, 0x4016, 0x01);       /* strobe */
     nes_test_cpu_write(nes, 0x4016, 0x00);
-    TEST_EQ_U32(0x11u, nes_test_cpu_read(nes, 0x4016));   /* bit 0 = A, bit 4 = coin */
-    TEST_EQ_U32(0x10u, nes_test_cpu_read(nes, 0x4016));   /* A released, coin still held */
+    TEST_EQ_U32(0x25u, nes_test_cpu_read(nes, 0x4016));   /* bit 0 = A, bits 5/2 = coin */
+    TEST_EQ_U32(0x24u, nes_test_cpu_read(nes, 0x4016));   /* A released, coin still held */
     test_fixture_free(&f);
     return TEST_PASS;
 }
