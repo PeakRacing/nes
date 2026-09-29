@@ -36,6 +36,14 @@ static inline uint8_t nes_read_joypad(nes_t* nes,uint16_t address){
         state = (nes->nes_cpu.joypad.joypad & (0x8000 >> (nes->nes_cpu.joypad.offset1 & nes->nes_cpu.joypad.mask))) ? 1 : 0;
         nes->nes_cpu.joypad.offset1++;
     }else if(address == 0x4017){
+        if (nes->nes_cpu.joypad.exp_keyboard) {
+            /* Family BASIC's expansion keyboard (HVC-007) answers on $4017 instead of controller 2:
+               its four key bits sit in bits 1-4, active low.  No key is ever pressed here (there is
+               no host key mapping yet), so a connected keyboard reads back 0x1E — which is exactly
+               the pattern Family BASIC checks before booting; without it the game prints
+               "キーボード ヲ セツゾク シテクダサイ" (connect the keyboard) and stops. */
+            return 0x1E;
+        }
         state = (nes->nes_cpu.joypad.joypad & (0x80 >> (nes->nes_cpu.joypad.offset2 & nes->nes_cpu.joypad.mask))) ? 1 : 0;
         nes->nes_cpu.joypad.offset2++;
     }
@@ -47,6 +55,9 @@ static inline void nes_write_joypad(nes_t* nes,uint8_t data){
     nes->nes_cpu.joypad.mask = (data & 1)?0x00:0x07;
     if (data & 1)
         nes->nes_cpu.joypad.offset1 = nes->nes_cpu.joypad.offset2 = 0;
+    /* $4016 bit 2 is the expansion port's OUT2: Family BASIC uses it to enable its keyboard, and
+       while it is set $4017 is read as that keyboard (see nes_read_joypad). */
+    nes->nes_cpu.joypad.exp_keyboard = (data & 0x04) ? 1u : 0u;
     // NES_LOG_DEBUG("nes_write joypad %04X %02X %d\n",address,data,nes->nes_cpu.joypad.mask);
 }
 

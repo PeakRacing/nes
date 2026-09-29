@@ -825,3 +825,43 @@ int test_cpu_oam_dma_mapper_read(void) {
     test_fixture_free(&f);
     return TEST_PASS;
 }
+
+/*
+ * $4016 bit 2 selects the expansion-port keyboard (Family BASIC, HVC-007): while it is set, $4017
+ * answers with the keyboard's four key bits (bits 1-4, active low) instead of controller 2's shift
+ * register.  With no key pressed that reads 0x1E — the pattern Family BASIC checks before booting.
+ * Reading controller 2 there instead gives 0, and the game stops at "キーボード ヲ セツゾク
+ * シテクダサイ" (connect the keyboard).  Clearing bit 2 hands $4017 back to controller 2.
+ */
+int test_cpu_exp_keyboard(void) {
+    test_fixture_t f;
+    TEST_CHECK(cpu_fixture(&f));
+    nes_t* nes = f.nes;
+
+    /* Idle controller 2, bit 2 clear: $4017 shifts out zeros. */
+    nes_test_cpu_write(nes, 0x4016, 0x01);          /* strobe */
+    nes_test_cpu_write(nes, 0x4016, 0x00);
+    TEST_EQ_U32(0, nes_test_cpu_read(nes, 0x4017));
+
+    /* Family BASIC's scan writes $05 then $04/$06; the keyboard answers with all keys released. */
+    nes_test_cpu_write(nes, 0x4016, 0x05);
+    TEST_EQ_U32(0x1E, nes_test_cpu_read(nes, 0x4017));
+    nes_test_cpu_write(nes, 0x4016, 0x04);
+    TEST_EQ_U32(0x1E, nes_test_cpu_read(nes, 0x4017));
+    nes_test_cpu_write(nes, 0x4016, 0x06);
+    TEST_EQ_U32(0x1E, nes_test_cpu_read(nes, 0x4017));
+
+    /* $4016 keeps serving controller 1 while the keyboard owns $4017. */
+    nes->nes_cpu.joypad.A1 = 1;
+    nes_test_cpu_write(nes, 0x4016, 0x01);
+    TEST_EQ_U32(1, nes_test_cpu_read(nes, 0x4016));
+    nes->nes_cpu.joypad.A1 = 0;
+
+    /* Clearing bit 2 restores the normal controller 2 read. */
+    nes_test_cpu_write(nes, 0x4016, 0x01);
+    nes_test_cpu_write(nes, 0x4016, 0x00);
+    TEST_EQ_U32(0, nes_test_cpu_read(nes, 0x4017));
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}

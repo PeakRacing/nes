@@ -42,6 +42,8 @@ typedef struct nes_joypad{
     uint8_t offset1;
     uint8_t offset2;
     uint8_t mask;
+    uint8_t exp_keyboard;               /*  $4016 bit 2: expansion-port keyboard (Family BASIC) selected,
+                                                so $4017 belongs to it instead of controller 2 */
     union {
         struct {
             uint8_t R2:1;   

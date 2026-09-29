@@ -25,6 +25,7 @@ int test_cpu_undocumented(void);
 int test_cpu_interrupts(void);
 int test_cpu_oam_dma(void);
 int test_cpu_oam_dma_mapper_read(void);
+int test_cpu_exp_keyboard(void);
 int test_cpu_stress(void);
 
 /* ppu */
@@ -55,6 +56,7 @@ int test_mapper_dispatch(void);
 int test_mapper_bank_helpers(void);
 int test_mapper1_serial_counter(void);
 int test_mapper1_rmw_reset_write(void);
+int test_mapper0_prg_ram(void);
 int test_mapper4_waixing_window(void);
 int test_mapper4_wram(void);
 int test_mapper_synthetic_smoke(void);

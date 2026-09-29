@@ -404,6 +404,44 @@ int test_mapper1_rmw_reset_write(void) {
     return TEST_PASS;
 }
 
+/*
+ * Family BASIC's NROM board carries work RAM at $6000-$7FFF, and its interpreter stops with
+ * "バックアップ スイッチ ヲ OFF ニ シテクダサイ" when the RAM write test fails.  Port builds run
+ * with NES_USE_SRAM=0, so nothing provides that window unless the romdb flag lets mapper 0 do it —
+ * while every other NROM game must keep running without the extra 8KB.
+ */
+int test_mapper0_prg_ram(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 0, 2, 1);
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+
+    /* Re-run mapper_init() the way a NES_USE_SRAM=0 build would: no PRG RAM to start with. */
+    if (nes->nes_rom.sram != NULL) {
+        nes_free(nes->nes_rom.sram);
+        nes->nes_rom.sram = NULL;
+    }
+    nes->nes_rom.prg_ram = 0;
+    nes->nes_mapper.mapper_init(nes);
+    if (nes->nes_rom.sram != NULL) {
+        test_fixture_free(&f);
+        return mapper_report("NROM without the romdb flag", 0, "no PRG RAM", "allocated");
+    }
+
+    nes->nes_rom.prg_ram = 1;
+    nes->nes_mapper.mapper_init(nes);
+    if (nes->nes_rom.sram == NULL) {
+        test_fixture_free(&f);
+        return mapper_report("NROM with the romdb flag", 0, "PRG RAM", "none");
+    }
+    nes_test_cpu_write(nes, 0x6005, 0x5A);          /* the interpreter's write test */
+    TEST_EQ_U32(0x5A, nes_test_cpu_read(nes, 0x6005));
+    TEST_EQ_U32(0x00, nes_test_cpu_read(nes, 0x6006));   /* zero-initialised */
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper_write_storm(void) {
     int failures = 0;
     for (int mapper = 0; mapper < 256; ++mapper) {

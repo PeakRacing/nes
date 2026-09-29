@@ -154,6 +154,8 @@ typedef struct nes_rom_info{
     uint8_t  vrc4d;                     /*  1: VRC4d wiring (romdb): mirroring bit polarity inverted vs VRC2c/VRC4b */
     uint8_t  mirror_override;           /* romdb: 0=none 1=vertical 2=horizontal 3=one-screen0 4=one-screen1 */
     uint8_t  mmc1_strict;               /* romdb: 1 = MMC1 uses a real 5-write counter */
+    uint8_t  prg_ram;                   /* romdb: 1 = board has PRG RAM at $6000-$7FFF that must
+                                            exist even when NES_USE_SRAM=0 (e.g. Family BASIC) */
     uint8_t  sram_dirty;
     uint8_t  sram_persist;               /*  1: frontend opted into <game>.sav persistence */                /*  1: battery RAM changed since the last flush to disk */
 #if (NES_USE_FS == 1)

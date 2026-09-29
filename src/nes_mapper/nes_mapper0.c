@@ -21,6 +21,16 @@
 
 static void nes_mapper_init(nes_t* nes){
     // $6000-$7FFF: Family Basic only: PRG RAM, mirrored as necessary to fill entire 8 KiB window, write protectable with an external switch.
+    /* NROM itself has no RAM, but a few boards (Family BASIC) carry work RAM there and its RAM
+       write test decides whether the interpreter starts at all.  The romdb flag keeps the 8KB
+       allocation off every other NROM game - including the MCU builds that run with
+       NES_USE_SRAM=0 and would otherwise not provide the window at all. */
+    if (nes->nes_rom.prg_ram && nes->nes_rom.sram == NULL) {
+        nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
+        if (nes->nes_rom.sram) {
+            nes_memset(nes->nes_rom.sram, 0x00, SRAM_SIZE);
+        }
+    }
 
     // CPU $8000-$BFFF: First 16 KB of ROM.
     nes_load_prgrom_16k(nes, 0, 0);

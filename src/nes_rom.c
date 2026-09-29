@@ -34,7 +34,7 @@ static uint32_t nes_crc32_update(uint32_t crc, const uint8_t* data, size_t len) 
     return crc;
 }
 
-typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; uint8_t mirror; uint8_t mmc1_strict; } nes_romdb_entry_t;
+typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; uint8_t mirror; uint8_t mmc1_strict; uint8_t prg_ram; } nes_romdb_entry_t;
 
 /* Boards whose mirroring cannot be derived from the iNES header (pirate multicarts, wrong
  * header bits).  0 = leave the header's AUTO resolution alone. */
@@ -91,6 +91,11 @@ static const nes_romdb_entry_t romdb[] = {
        selects the counter serial model.  The ROM writes exactly five bits per MMC1 register
        (verified from its raw $8000-$FFFF write stream); both models agree on such a stream. */
     { 0x2C33161Du, 1u, 0u, 0u, 0u, 1u },
+    /* FC的Basic语言文件 (Family BASIC, HVC-FB): an NROM board that carries 2KB of work RAM at
+       $6000-$7FFF (with a write-protect switch).  Without it the interpreter prints
+       "バックアップ スイッチ ヲ OFF ニ シテクダサイ" and stops, because its RAM write test fails;
+       in the SDL/port builds (NES_USE_SRAM=0) nothing allocates that window. */
+    { 0x69759626u, 0u, 0u, 0u, 0u, 0u, 1u },
     { 0x0DBDD55Du, 25u, 1u },
 };
 
@@ -113,6 +118,7 @@ static void nes_romdb_lookup(nes_t* nes) {
             nes->nes_rom.vrc4d = romdb[i].vrc4d;
             nes->nes_rom.mirror_override = romdb[i].mirror;
             nes->nes_rom.mmc1_strict = romdb[i].mmc1_strict;
+            nes->nes_rom.prg_ram = romdb[i].prg_ram;
             return;
         }
     }
