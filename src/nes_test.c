@@ -527,7 +527,7 @@ nes_test_rom_result_t nes_test_load_rom_checked(nes_t* nes, const uint8_t* data,
     return NES_TEST_ROM_OK;
 }
 
-#endif
+
 
 static uint16_t trace_at = 0xC110u;
 static long trace_n = 2000L;
@@ -574,3 +574,5 @@ void nes_test_trace(nes_t* nes, uint16_t pc) {
         }
     }
 }
+
+#endif
