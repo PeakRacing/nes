@@ -156,6 +156,11 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
             nes_write_ppu_register(nes,address, data);
             return;
         case 0x4000://$4000-$5FFF NES APU and I/O registers
+            /* Boards that latch CPU I/O writes get them first (mapper 99's $4016 bank register);
+             * the normal port decoding below still runs, so the controller strobe is unaffected. */
+            if (address < 0x4018u && nes->nes_mapper.mapper_io_write) {
+                nes->nes_mapper.mapper_io_write(nes, address, data);
+            }
             if (address == 0x4016)
                 nes_write_joypad(nes,data);
             else if (address == 0x4014){

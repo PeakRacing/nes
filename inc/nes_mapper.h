@@ -36,6 +36,10 @@ typedef struct {
     uint8_t (*mapper_read_sram)(nes_t* nes, uint16_t read_addr);
     void (*mapper_apu)(nes_t* nes, uint16_t write_addr, uint8_t data);
     uint8_t (*mapper_read_apu)(nes_t* nes, uint16_t write_addr);
+    /* Optional: boards that also latch CPU I/O writes ($4000-$4017).  Mapper 99 (VS UniSystem)
+     * keeps its bank latch on $4016, which is otherwise the controller strobe, so the core calls
+     * this *in addition to* the normal port handling. */
+    void (*mapper_io_write)(nes_t* nes, uint16_t write_addr, uint8_t data);
     /* Callback after CPU instructions consume cycles */
     void (*mapper_cpu_clock)(nes_t* nes, uint16_t cycles);
     /* Callback at VSync */

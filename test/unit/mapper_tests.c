@@ -526,6 +526,51 @@ int test_mapper11_chr_bank_select(void) {
 }
 
 /*
+ * Mapper 99 (Nintendo VS. UniSystem, VS Battle City): the board's bank latch is not in cartridge
+ * space at all - it is written through $4016, the same port the CPU uses to strobe the
+ * controllers, so that write has to reach both the board and the joypad.  The latch picks the 8KB
+ * CHR bank (bit 2) and, on VS Gumshoe, also drives the first 8KB PRG page.
+ */
+int test_mapper99_vs_latch(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 99, 4, 2);           /* 64KB PRG + 16KB CHR so bank 4 is visible */
+    spec.four_screen = 1;                        /* the VS board has four-screen VRAM */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* The VS board always carries 8KB of work RAM at $6000-$7FFF. */
+    TEST_CHECK(nes->nes_rom.sram != NULL);
+
+    /* Power-on: 32KB PRG fixed at $8000, CHR bank 0. */
+    TEST_EQ_U32(prg[0], nes->nes_cpu.prg_banks[0][0]);
+    TEST_EQ_U32(prg[2 * 8192], nes->nes_cpu.prg_banks[2][0]);
+    TEST_EQ_U32(chr[0], nes->nes_ppu.pattern_table[0][0]);
+
+    /* A write to $4016 latches the board register - and still strobes the controller (mask 0). */
+    nes_test_cpu_write(nes, 0x4016, 0x05);
+    if (nes->nes_cpu.joypad.mask != 0x00) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 99 $4016 write also strobes the joypad", 99,
+                             "controller strobe still runs", "board latch swallowed the write");
+    }
+    TEST_EQ_U32(chr[8192], nes->nes_ppu.pattern_table[0][0]);          /* CHR 8KB bank 1 */
+
+    /* bit 2 also drives the first 8KB PRG page (VS Gumshoe): 8KB bank 4 of this 64KB image. */
+    TEST_EQ_U32(prg[4 * 8192], nes->nes_cpu.prg_banks[0][0]);
+
+    /* Clearing bit 2 goes back to the 32KB-fixed layout and CHR bank 0. */
+    nes_test_cpu_write(nes, 0x4016, 0x00);
+    TEST_EQ_U32(prg[0], nes->nes_cpu.prg_banks[0][0]);
+    TEST_EQ_U32(chr[0], nes->nes_ppu.pattern_table[0][0]);
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * Mapper 78 (Jaleco JF-16) has two wirings and iNES 1.0 cannot tell them apart: Holy Diver
  * (submapper 3) drives the register's bit 3 as H/V mirroring, while every other board of the
  * family - Cosmo Carrier is submapper 1 - uses one-screen A/B.  Both games are 128KB PRG +
