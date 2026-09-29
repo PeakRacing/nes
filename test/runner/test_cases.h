@@ -62,6 +62,7 @@ int test_mapper69_5b_audio_write(void);
 int test_mapper17_power_on_slots(void);
 int test_mapper11_chr_bank_select(void);
 int test_mapper121_protection(void);
+int test_mapper226_bank_formula(void);
 int test_mapper4_waixing_window(void);
 int test_mapper4_wram(void);
 int test_mapper_synthetic_smoke(void);

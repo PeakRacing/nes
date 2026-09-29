@@ -526,6 +526,72 @@ int test_mapper11_chr_bank_select(void) {
 }
 
 /*
+ * Mapper 226 (BMC 42-in-1, Super_42-in-1.nes): two write-only registers decoded by A0, and the
+ * 16KB bank number is assembled from both of them:
+ *
+ *   bank = (reg0 & 0x1F) | ((reg0 & 0x80) >> 2) | ((reg1 & 0x01) << 6)
+ *
+ * reg0 bit 5 selects 32KB mode (both slots take the bank), otherwise the slots take the aligned
+ * pair (bank & 0xFE, +1), and reg0 bit 6 is the mirroring bit (set = vertical).
+ *
+ * The old code shifted reg0 left instead, used reg1 bit 0 as the low bit, read the mode from
+ * bit 6 / mirroring from bit 7, and mapped a single bank into both slots at power-on — which
+ * hides the reset vector (Super_42-in-1's bank 0 vector is $04FE, i.e. RAM), so the game spun
+ * forever at $8307 writing the mapper and never enabled rendering (gray screen).
+ */
+int test_mapper226_bank_formula(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 226, 64, 0);         /* 1MB PRG + CHR-RAM, like Super_42-in-1 */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on: 16KB pages 0 and 1, so the last page's reset vector is reachable. */
+    TEST_EQ_U32(prg[0 * 16384], nes_test_cpu_read(nes, 0x8000));
+    TEST_EQ_U32(prg[1 * 16384], nes_test_cpu_read(nes, 0xC000));
+
+    /* 16KB mode: $8000 <- $12 leaves bank bits 0-4 = 0x12 -> page 18 -> the aligned pair 18/19. */
+    nes_test_cpu_write(nes, 0x8000, 0x12);
+    nes_test_cpu_write(nes, 0x8001, 0x00);
+    TEST_EQ_U32(prg[18 * 16384], nes_test_cpu_read(nes, 0x8000));
+    TEST_EQ_U32(prg[19 * 16384], nes_test_cpu_read(nes, 0xC000));
+
+    /* reg0 bit 5 = 32KB mode: $8000 <- $35 -> bank bits 0-4 = 0x15 -> page 21 in both slots. */
+    nes_test_cpu_write(nes, 0x8000, 0x35);
+    TEST_EQ_U32(prg[21 * 16384], nes_test_cpu_read(nes, 0x8000));
+    TEST_EQ_U32(prg[21 * 16384], nes_test_cpu_read(nes, 0xC000));
+
+    /* reg0 bit 7 is bank bit 5 (not the mirroring bit): page 0x20 -> slots 32 and 33. */
+    nes_test_cpu_write(nes, 0x8000, 0x80);
+    TEST_EQ_U32(prg[32 * 16384], nes_test_cpu_read(nes, 0x8000));
+    TEST_EQ_U32(prg[33 * 16384], nes_test_cpu_read(nes, 0xC000));
+
+    /* reg1 bit 0 is bank bit 6: with reg0 = 0 that is page 64 -> wraps to slots 0 and 1. */
+    nes_test_cpu_write(nes, 0x8000, 0x00);
+    nes_test_cpu_write(nes, 0x8001, 0x01);
+    TEST_EQ_U32(prg[0 * 16384], nes_test_cpu_read(nes, 0x8000));
+    TEST_EQ_U32(prg[1 * 16384], nes_test_cpu_read(nes, 0xC000));
+
+    /* Mirroring: reg0 bit 6 set = vertical, clear = horizontal (header says vertical here). */
+    nes_test_cpu_write(nes, 0x8000, 0x40);
+    if (nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[1]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 226 mirroring bit is reg0 bit 6", 226,
+                             "vertical nametable arrangement", "horizontal");
+    }
+    nes_test_cpu_write(nes, 0x8000, 0x00);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 226 mirroring bit is reg0 bit 6", 226,
+                             "horizontal nametable arrangement", "vertical");
+    }
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * Mapper 121 (Panda Prince / MK4 / A9713 pirate board, sf97.nes): an MMC3 with a protection
  * latch.  The program seeds the latch by writing $8003 and reads its answer back from
  * $5000-$5FFF; while the latch holds an accepted value the board also owns the three upper 8KB
