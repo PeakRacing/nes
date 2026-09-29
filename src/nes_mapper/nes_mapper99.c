@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
+/* Mapper 99 = Nintendo VS. UniSystem.  The board logic itself (the $4016 register latch, CHR/PRG
+ * banking, the 8KB work RAM and four-screen VRAM) is plain mapper work and is always compiled -
+ * Mesen's database lists 58 VsSystem ROMs and one plain NesNtsc ROM on mapper 99.  Only the
+ * cabinet-specific extras (the RP2C04 RGB palettes and the coin/service switches) sit behind
+ * NES_VS_SYSTEM. */
 #include "nes.h"
-
-#if (NES_VS_SYSTEM == 1)
 
 /*
  * Mapper 99 — Nintendo VS. UniSystem (VS Battle City, VS Gumshoe, ...).
@@ -105,4 +108,3 @@ int nes_mapper99_init(nes_t* nes) {
     return NES_OK;
 }
 
-#endif /* NES_VS_SYSTEM */

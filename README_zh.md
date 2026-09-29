@@ -126,8 +126,11 @@ gitee: https://gitee.com/PeakRacing/nes/releases
 
 ### VS. System 街机游戏（`vs xxx.nes`）
 
-**默认不编译**：街机支持（mapper 99 + 街机 RP2C04 调色板 + 投币/服务开关）整体由宏 `NES_VS_SYSTEM` 隔离，
-默认值是 `0`；需要时在 `nes_conf.h` 里改成 `1`，或构建时加 `-DNES_VS_SYSTEM=1`。
+**mapper 99 本体始终编译**：它就是一个普通 mapper（板级寄存器写在 `$4016`、CHR/PRG 分页、8KB 工作 RAM、四屏 VRAM），
+语料里 `rom/mapper99/` 的 11 张 VS 游戏在默认构建下都能正常加载运行。
+
+**街机专属的部分**（RP2C04 系列 RGB 调色板 + 投币/服务开关）由宏 `NES_VS_SYSTEM` 隔离，**默认值为 `0`**；
+需要街机配色与投币键时，在 `nes_conf.h` 里改成 `1`，或构建时加 `-DNES_VS_SYSTEM=1`。
 
 启用后：街机板没有第二个手柄，投币 / 开始信用 / 服务开关接在手柄口的高位上，
 而且游戏是在 8 位移位序列**之外**单独读它们：
@@ -138,9 +141,8 @@ gitee: https://gitee.com/PeakRacing/nes/releases
 | 开始 CREDIT  | `1`（P2 选择键） | `$4016` bit3                                                     |
 | 服务 SERVICE |   `6`（P2 B 键） | `$4017` bit2                                                     |
 
-> **已知限制**：目前只有画面侧完成（mapper 99、四屏、街机配色都与 Mesen 一致），
-> **还不能真正开局** —— 游戏仍停在演示循环里等它的开始条件（排查记录见 AGENTS.md），
-> 所以这个宏默认不开启。
+> **已知限制**：开启后画面侧与 Mesen 一致（街机配色），但**还不能真正开局** ——
+> 游戏仍停在演示循环里等它的开始条件（排查记录见 AGENTS.md），所以这个宏默认不开启。
 
 ## 移植说明
 

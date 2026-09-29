@@ -64,9 +64,7 @@ int test_mapper11_chr_bank_select(void);
 int test_mapper121_protection(void);
 int test_mapper226_bank_formula(void);
 int test_mapper78_jf16_mirroring(void);
-#if (NES_VS_SYSTEM == 1)
 int test_mapper99_vs_latch(void);
-#endif
 #if (NES_VS_SYSTEM == 1)
 int test_vs_ppu_palette(void);
 int test_vs_system_switches(void);

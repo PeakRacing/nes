@@ -127,9 +127,13 @@ gitee: https://gitee.com/PeakRacing/nes/releases
 
 ### VS. System arcade games (`vs xxx.nes`)
 
-**Not compiled by default**: the arcade support (mapper 99, the RP2C04 arcade palettes and the
-coin/service switches) is isolated behind `NES_VS_SYSTEM`, which defaults to `0`.  Set it to `1` in
-`nes_conf.h`, or build with `-DNES_VS_SYSTEM=1`.
+**Mapper 99 itself is always compiled**: it is an ordinary mapper (the board register is written
+through `$4016`, plus CHR/PRG banking, 8KB of work RAM and four-screen VRAM), and all 11 VS games in
+`rom/mapper99/` load and run in the default build.
+
+**The arcade-only extras** (the RP2C04 RGB palettes and the coin/service switches) are isolated
+behind `NES_VS_SYSTEM`, which defaults to `0`.  Set it to `1` in `nes_conf.h`, or build with
+`-DNES_VS_SYSTEM=1`, to get the arcade colours and coin keys.
 
 Once enabled: the arcade board has no second gamepad, and the coin / credit / service switches sit in
 the upper bits of the controller ports, read outside the 8-bit shift sequence:
@@ -140,10 +144,9 @@ the upper bits of the controller ports, read outside the 8-bit shift sequence:
 |     CREDIT      |  `1` (P2 select)   | `$4016` bit3                                                                |
 |     SERVICE     |  `6` (P2 B)        | `$4017` bit2                                                                |
 
-> **Known limitation**: only the video side is complete (mapper 99, four-screen and the arcade
-> colours all match Mesen); the game does **not** start yet - it stays in its attract loop waiting
-> for a start condition that is still being tracked down (see AGENTS.md), which is why the macro is
-> off by default.
+> **Known limitation**: with the macro enabled the video side matches Mesen (arcade colours), but the
+> game does **not** start yet - it stays in its attract loop waiting for a start condition that is
+> still being tracked down (see AGENTS.md), which is why the macro is off by default.
 
 ## Transplant instructions
 
