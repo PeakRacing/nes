@@ -172,6 +172,14 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
     if (wlog == NULL || lines >= 200000) {
         return;
     }
+    /* $2007 writes carry their destination in the PPU address register; logging it shows which
+     * part of pattern/name space a game uploads to (e.g. whether it needs the full 8KB CHR-RAM). */
+    if (address == 0x2007u) {
+        fprintf(wlog, "%04X %02X %04X V=%04X\n", (unsigned)address, (unsigned)data,
+                (unsigned)pc, (unsigned)nes->nes_ppu.v_reg);
+        lines++;
+        return;
+    }
     fprintf(wlog, "%04X %02X %04X\n", (unsigned)address, (unsigned)data, (unsigned)pc);
     lines++;
 }

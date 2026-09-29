@@ -442,6 +442,48 @@ int test_mapper0_prg_ram(void) {
     return TEST_PASS;
 }
 
+/*
+ * Mapper 245 on a board without CHR-ROM (FC塞尔达传说汉化版).
+ *
+ * The 2KB CHR-RAM window that CHR bank values 0/1 point at only makes sense when the cartridge
+ * also carries CHR-ROM to page in beside it.  Without CHR-ROM there are no banks to page: the game
+ * fills the 8KB CHR-RAM itself through $2007 — this hack writes all 8192 pattern bytes — so each
+ * 1KB slot has to show its own page.  Folding them onto the two-page window garbles every tile
+ * (the title frame and logo came out as noise).  The game never writes R0-R5, so the CHR registers
+ * stay 0 and the override used to catch every slot.
+ */
+int test_mapper245_chr_ram_board(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 245, 8, 0);          /* 128KB PRG, CHR-RAM board */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Only the PRG registers are ever written; R0-R5 keep their power-on value 0. */
+    nes_test_cpu_write(nes, 0x8000, 0x06);       /* select R6 */
+    nes_test_cpu_write(nes, 0x8001, 0x0E);
+    nes_test_cpu_write(nes, 0x8000, 0x00);       /* back to R0 */
+
+    for (int i = 0; i < 8; ++i) {
+        if (nes->nes_ppu.pattern_table[i] != chr + (size_t)i * 1024) {
+            test_fixture_free(&f);
+            return mapper_report("mapper 245 CHR-RAM board: slot identity", 245,
+                                 "CHR-RAM page i", "private 2KB window");
+        }
+    }
+
+    /* An upload through $2007 must land in the CHR-RAM the PPU reads back. */
+    mapper4_ppu_write(nes, 0x1C00, 0xAB);
+    if (chr[7 * 1024] != 0xAB) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 245 CHR-RAM board: $2007 upload", 245,
+                             "byte stored in CHR-RAM", "not visible to the PPU");
+    }
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper_write_storm(void) {
     int failures = 0;
     for (int mapper = 0; mapper < 256; ++mapper) {

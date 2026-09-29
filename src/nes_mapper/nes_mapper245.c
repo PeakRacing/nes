@@ -77,6 +77,16 @@ static void mapper245_update_banks(nes_t* nes) {
     }
 
     /* CHR banking with CHR-RAM override for banks 0/1 */
+    if (m->chr_bank_count == 0u) {
+        /* A board with no CHR-ROM has no banks to page in: the game fills the 8KB CHR-RAM itself
+         * through $2007 and needs all of it visible.  The 汉字化 Zelda hack writes every one of
+         * the 8192 pattern bytes (all eight 1KB regions), so leaving the bank-0/1 override in
+         * place would fold those uploads onto the same two pages and every tile comes out wrong. */
+        for (uint8_t slot = 0; slot < 8u; slot++) {
+            nes_load_chrrom_1k(nes, slot, slot);   /* CHR-RAM board: identity map */
+        }
+        return;
+    }
     if (chr_mode == 0u) {
         mapper245_load_chr1k(nes, m, 0, m->bank_values[0] & 0xFEu);
         mapper245_load_chr1k(nes, m, 1, m->bank_values[0] | 0x01u);
