@@ -209,8 +209,17 @@ static void nes_mapper_write(nes_t* nes, uint16_t write_addr, uint8_t data){
     const uint8_t trace_reg = (uint8_t)((write_addr & 0x7FFFu) >> 13);
     uint8_t trace_loaded = 0u;
     uint8_t trace_value = 0u;
+    uint8_t trace_dropped = 0u;
 #endif
-    if (data & (uint8_t)0x80){
+    /* MMC1 drops a bit write that lands in the cycle right after another one; a $80 reset write is
+       never dropped (nesdev: MMC1 "Consecutive-cycle writes").  A 6502 read-modify-write emits
+       exactly such a pair (see nes_rmw_read), so `INC $FFD7` with $FF in ROM becomes one reset
+       write plus one dropped $00 — AD&D/Hillsfar's reset stub relies on that. */
+    if (((data & (uint8_t)0x80) == 0u) && (nes->nes_cpu.write_burst > 1u)) {
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+        trace_dropped = 1u;
+#endif
+    } else if (data & (uint8_t)0x80){
         r->shift = strict ? 0x00u : 0x10u;                     /* reset shift register */
         r->shift_count = 0u;                                   // ...and its write counter
         // Control = Control OR $0C, locking PRG-ROM at $C000-$FFFF to the last bank
@@ -242,7 +251,7 @@ static void nes_mapper_write(nes_t* nes, uint16_t write_addr, uint8_t data){
     }
 #if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
     nes_test_mmc1_log(nes, write_addr, data, trace_reg, (data & 0x80u) ? 1u : 0u,
-                      trace_loaded, r->shift, r->shift_count, trace_value);
+                      trace_loaded, r->shift, r->shift_count, trace_value, trace_dropped);
 #endif
 }
 

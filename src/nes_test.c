@@ -81,7 +81,7 @@ void nes_test_rlog(nes_t* nes, uint16_t address, uint8_t value, uint16_t pc) {
  * directly: count the "shift" lines between two LOADs, or look for a LOAD on the wrong write. */
 void nes_test_mmc1_log(nes_t* nes, uint16_t address, uint8_t data, uint8_t reg,
                        uint8_t reset, uint8_t loaded, uint8_t shift, uint8_t count,
-                       uint8_t value) {
+                       uint8_t value, uint8_t dropped) {
     static FILE* log;
     static long lines;
     static int tried;
@@ -103,15 +103,17 @@ void nes_test_mmc1_log(nes_t* nes, uint16_t address, uint8_t data, uint8_t reg,
         return;
     }
     if (loaded) {
-        fprintf(log, "%6ld pc=%04X addr=%04X data=%02X bit=%u %-5s %-4s shift=%02X cnt=%u  LOAD %s=%02X\n",
+        fprintf(log, "%6ld pc=%04X addr=%04X data=%02X bit=%u %-5s %-4s shift=%02X cnt=%u  LOAD %s=%02X%s\n",
                 lines + 1, (unsigned)nes->nes_cpu.PC, (unsigned)address, (unsigned)data,
                 (unsigned)(data & 1u), reset ? "RESET" : "shift", name,
-                (unsigned)shift, (unsigned)count, name, (unsigned)value);
+                (unsigned)shift, (unsigned)count, name, (unsigned)value,
+                dropped ? "  DROPPED (RMW follow-up)" : "");
     } else {
-        fprintf(log, "%6ld pc=%04X addr=%04X data=%02X bit=%u %-5s %-4s shift=%02X cnt=%u\n",
+        fprintf(log, "%6ld pc=%04X addr=%04X data=%02X bit=%u %-5s %-4s shift=%02X cnt=%u%s\n",
                 lines + 1, (unsigned)nes->nes_cpu.PC, (unsigned)address, (unsigned)data,
                 (unsigned)(data & 1u), reset ? "RESET" : "shift", name,
-                (unsigned)shift, (unsigned)count);
+                (unsigned)shift, (unsigned)count,
+                dropped ? "  DROPPED (RMW follow-up)" : "");
     }
     lines++;
 }

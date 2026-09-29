@@ -129,6 +129,9 @@ static inline void nes_write_cpu(nes_t* nes,uint16_t address, uint8_t data){
 #if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
     nes_test_wlog(nes, address, data, nes->nes_cpu.PC);
 #endif
+    /* Counts the writes of the instruction being executed: a 6502 read-modify-write performs two
+       (original value, then the modified one) and MMC1 drops the second of such a pair. */
+    nes->nes_cpu.write_burst++;
     switch (address & 0xE000){
         case 0x0000://$0000-$1FFF 2KB internal RAM + Mirrors of $0000-$07FF
             nes->nes_cpu.cpu_ram[address & (uint16_t)0x07ff] = data;
@@ -199,6 +202,10 @@ uint8_t nes_test_cpu_read(nes_t* nes, uint16_t address) {
 }
 
 void nes_test_cpu_write(nes_t* nes, uint16_t address, uint8_t data) {
+    /* The test API models one instruction per call, so the per-instruction write counter starts
+       over: two writes from a single call would otherwise look like a 6502 RMW pair and MMC1
+       would drop the second one.  Use nes_test_cpu_step() to exercise a real RMW. */
+    nes->nes_cpu.write_burst = 0;
     nes_write_cpu(nes, address, data);
 }
 #endif
@@ -506,13 +513,29 @@ static inline void nes_cpy(nes_t* nes, const uint16_t address){
 }
 
 /*
+    6502 read-modify-write (INC/DEC/ASL/LSR/ROL/ROR and the illegal SLO/RLA/SRE/RRA/DCP/ISC):
+    the value is read, the *original* value is written back, and only then the modified value is
+    written.  Both writes reach the cartridge and mappers act on the first one if the second lands
+    too soon after it — MMC1 drops a bit write that follows another one in the next cycle (nesdev:
+    "Consecutive-cycle writes"; a $80 reset write is never dropped).  AD&D/Hillsfar's reset stub is
+    `SEI / INC $FFD7 / JMP $C000` with $FF stored at $FFD7: the dummy write carries $FF and resets
+    the MMC1 shift register, while the $00 it computes is dropped as too fast.  Emitting only the
+    modified write shifts one bit too many and mis-aligns every five-bit sequence that follows.
+*/
+static inline uint8_t nes_rmw_read(nes_t* nes, const uint16_t address){
+    const uint8_t value = nes_read_cpu(nes, address);
+    nes_write_cpu(nes, address, value);
+    return value;
+}
+
+/*
     https://www.nesdev.org/wiki/Instruction_reference#DEC
     {adr}:={adr}-1
     N  V  U  B  D  I  Z  C
     *                 *  
 */
 static inline void nes_dec(nes_t* nes, const uint16_t address){
-    uint8_t data = nes_read_cpu(nes, address)-1;
+    uint8_t data = nes_rmw_read(nes, address)-1;
     nes_write_cpu(nes, address, data);
     NES_CHECK_NZ(data);
 }
@@ -548,7 +571,7 @@ static inline void nes_dey(nes_t* nes, const uint16_t address){
     *                 *  
 */
 static inline void nes_inc(nes_t* nes, const uint16_t address){
-    uint8_t data = nes_read_cpu(nes, address)+1;
+    uint8_t data = nes_rmw_read(nes, address)+1;
     nes_write_cpu(nes, address, data);
     NES_CHECK_NZ(data);
 }
@@ -584,7 +607,7 @@ static inline void nes_iny(nes_t* nes, const uint16_t address){
     *                 *  *
 */
 static inline void nes_asl(nes_t* nes, const uint16_t address){
-        uint8_t data = nes_read_cpu(nes, address);
+        uint8_t data = nes_rmw_read(nes, address);
         nes->nes_cpu.C = data >> 7;
         data <<= 1;
         nes_write_cpu(nes, address, data);
@@ -605,7 +628,7 @@ static inline void nes_asla(nes_t* nes, const uint16_t address){
     *                 *  *
 */
 static inline void nes_rol(nes_t* nes, const uint16_t address){
-    uint16_t data = nes_read_cpu(nes, address);
+    uint16_t data = nes_rmw_read(nes, address);
     data <<= 1;
     data |= nes->nes_cpu.C;
     nes->nes_cpu.C = (uint8_t)(data>>8);
@@ -630,7 +653,7 @@ static inline void nes_rola(nes_t* nes, const uint16_t address){
     *                 *  *
 */
 static inline void nes_lsr(nes_t* nes, const uint16_t address){
-    uint8_t value = nes_read_cpu(nes, address);
+    uint8_t value = nes_rmw_read(nes, address);
     nes->nes_cpu.C = value & 0x01;
     value >>= 1;
     NES_CHECK_NZ(value);
@@ -651,7 +674,7 @@ static inline void nes_lsra(nes_t* nes, const uint16_t address){
     *                 *  *
 */
 static inline void nes_ror(nes_t* nes, const uint16_t address){
-    uint16_t data = nes_read_cpu(nes, address);
+    uint16_t data = nes_rmw_read(nes, address);
     data |= (uint16_t)nes->nes_cpu.C << 8;
     nes->nes_cpu.C = data & 0x01;
     data >>= 1;
@@ -1139,7 +1162,7 @@ static inline void nes_nop(nes_t* nes, const uint16_t address){
     *                 *  *
 */
 static inline void nes_slo(nes_t* nes, const uint16_t address){
-    uint8_t data = nes_read_cpu(nes, address);
+    uint8_t data = nes_rmw_read(nes, address);
     // asl
     nes->nes_cpu.C = data >> 7;
     data <<= 1;
@@ -1155,7 +1178,7 @@ static inline void nes_slo(nes_t* nes, const uint16_t address){
     *                 *  *
 */
 static inline void nes_rla(nes_t* nes, const uint16_t address){
-    uint16_t data = nes_read_cpu(nes, address);
+    uint16_t data = nes_rmw_read(nes, address);
     // rol
     data <<= 1;
     data |= nes->nes_cpu.C;
@@ -1172,7 +1195,7 @@ static inline void nes_rla(nes_t* nes, const uint16_t address){
     *                 *  *
 */
 static inline void nes_sre(nes_t* nes, const uint16_t address){
-    uint8_t data = nes_read_cpu(nes, address);
+    uint8_t data = nes_rmw_read(nes, address);
     // lsr
     nes->nes_cpu.C = data & 0x01;
     data >>= 1;
@@ -1188,7 +1211,7 @@ static inline void nes_sre(nes_t* nes, const uint16_t address){
     *  *              *  *
 */
 static inline void nes_rra(nes_t* nes, const uint16_t address){
-    uint16_t data = nes_read_cpu(nes, address);
+    uint16_t data = nes_rmw_read(nes, address);
     // ror
     const uint8_t old_c = NES_CPU_P & NES_FLAG_C;
     data |= ((uint16_t)old_c << 8);
@@ -1234,7 +1257,7 @@ static inline void nes_lax(nes_t* nes, const uint16_t address){
     *                 *  *
 */
 static inline void nes_dcp(nes_t* nes, const uint16_t address){
-    uint8_t data = nes_read_cpu(nes, address);
+    uint8_t data = nes_rmw_read(nes, address);
     // dec
     data--;
     nes_write_cpu(nes, address, data);
@@ -1254,7 +1277,7 @@ static inline void nes_dcp(nes_t* nes, const uint16_t address){
     *  *              *  *
 */
 static inline void nes_isc(nes_t* nes, const uint16_t address){
-    uint8_t data = nes_read_cpu(nes, address);
+    uint8_t data = nes_rmw_read(nes, address);
     // inc
     nes_write_cpu(nes, address, ++data);
     // sbc
@@ -1471,6 +1494,7 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
         uint16_t cpu_cycles_before = nes->nes_cpu.cycles;
         uint8_t prev_I = nes->nes_cpu.I;
         nes->nes_cpu.opcode = nes_read_cpu(nes,nes->nes_cpu.PC++);
+        nes->nes_cpu.write_burst = 0;   /* per-instruction write counter (see nes_write_cpu) */
 
         // https://www.nesdev.org/wiki/CPU_unofficial_opcodes
         // https://www.oxyron.de/html/opcodes02.html

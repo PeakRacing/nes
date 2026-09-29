@@ -91,6 +91,10 @@ typedef struct nes_cpu{
     uint8_t irq_nmi_delay;              /* delayed NMI from $2000 write during VBlank (fires 1 instruction later) */
     uint8_t irq_pending;                   /*  IRQ line asserted (level-triggered, polled per instruction) */
     uint8_t opcode;
+    uint8_t write_burst;                /*  bus writes made by the instruction being executed (0 at fetch).
+                                             A 6502 read-modify-write writes twice (old value, then the
+                                             modified one), and mappers can latch the first: MMC1 ignores
+                                             a bit write that arrives right after another one. */
     uint16_t cycles;
     uint8_t cpu_ram[NES_CPU_RAM_SIZE];
     uint8_t* prg_banks[4];              /*  4 bank ( 8Kb * 4 ) = 32KB  */

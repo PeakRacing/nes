@@ -351,6 +351,59 @@ int test_mapper1_serial_counter(void) {
     return TEST_PASS;
 }
 
+/*
+ * 6502 read-modify-write on an MMC1 register.
+ *
+ * INC/DEC/ASL/... write the original value back before the modified one, and MMC1 drops a bit
+ * write that arrives in the cycle right after another one ($80 reset writes are never dropped).
+ * AD&D (Hillsfar)'s reset stub is `SEI / INC $FFD7 / JMP $C000` with $FF stored at $FFD7: the
+ * dummy write carries the $FF and resets the shift register, and the $00 the instruction computes
+ * is dropped.  A core that emits only the modified value writes a stray 0 bit instead, which
+ * shifts every following five-bit sequence by one — that game then loops forever re-writing the
+ * same nonsense to the mapper (control never loads, PRG stays on the wrong bank).
+ */
+int test_mapper1_rmw_reset_write(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 1, 4, 0);       /* 4 x 16KB PRG banks, CHR-RAM board */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    nes->nes_rom.mmc1_strict = 1;
+
+    /* The byte the stub reads must have bit 7 set, as the real ROM has ($FF at $FFD7). */
+    prg[(size_t)(nes->nes_rom.prg_rom_size - 1) * 16384 + (0xFFD7 - 0xC000)] = 0xFF;
+
+    /* Three bits into the PRG register first: both halves of the fix matter, because a stray bit
+       either way completes this sequence early and lands on the wrong bank below. */
+    nes_test_cpu_write(nes, 0xE000, 0x01);
+    nes_test_cpu_write(nes, 0xE000, 0x01);
+    nes_test_cpu_write(nes, 0xE000, 0x01);
+
+    /* Execute `INC $FFD7` for real (the test API writes data, it does not run RMW instructions). */
+    nes_test_cpu_write(nes, 0x0010, 0xEE);   /* INC abs */
+    nes_test_cpu_write(nes, 0x0011, 0xD7);
+    nes_test_cpu_write(nes, 0x0012, 0xFF);
+    nes_test_cpu_prepare(nes, 0x0010);
+    uint16_t cycles = 0;
+    if (nes_test_cpu_step(nes, &cycles) != NES_OK) {
+        test_fixture_free(&f);
+        return mapper_report("RMW on $FFD7", 1, "instruction runs", "error");
+    }
+
+    /* The reset cleared the shifter, so these five bits select bank 2 on their own. */
+    for (int i = 0; i < 5; ++i) {
+        nes_test_cpu_write(nes, 0xE000, (uint8_t)((0x02u >> i) & 1u));
+    }
+    if (nes->nes_cpu.prg_banks[0] != prg + 2 * 16384) {
+        test_fixture_free(&f);
+        return mapper_report("RMW reset write: five bits after INC", 1, "bank 2",
+                             "stray bit shifted the sequence");
+    }
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper_write_storm(void) {
     int failures = 0;
     for (int mapper = 0; mapper < 256; ++mapper) {

@@ -113,10 +113,11 @@ void nes_test_rlog(nes_t* nes, uint16_t address, uint8_t value, uint16_t pc);
 
 /* NES_DBG_MMC1=<file>: raw MMC1 serial write stream — one line per CPU write into $8000-$FFFF
  * (source PC, address, data, the register the address selects, reset/shift class) plus the
- * shifter state after the write and LOAD when the five accumulated bits reach a register. */
+ * shifter state after the write and LOAD when the five accumulated bits reach a register.
+ * dropped marks the second write of a 6502 read-modify-write pair, which MMC1 ignores. */
 void nes_test_mmc1_log(nes_t* nes, uint16_t address, uint8_t data, uint8_t reg,
                        uint8_t reset, uint8_t loaded, uint8_t shift, uint8_t count,
-                       uint8_t value);
+                       uint8_t value, uint8_t dropped);
 
 void nes_test_frame_tick(nes_t* nes);
 
