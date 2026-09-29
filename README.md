@@ -15,9 +15,18 @@ github: [PeakRacing/nes: A NES emulator in C (github.com)](https://github.com/Pe
 gitee: [nes: c语言实现的nes模拟器 (gitee.com)](https://gitee.com/PeakRacing/nes) (updates may not be timely due to synchronization issues)
 
 ## Introduction
-​	The nes simulator implemented in C , requires `C11` or above
+​	A NES emulator written in pure C. It trades accuracy for speed and a smaller memory footprint,
+so it can run reliably on resource-constrained hardware such as MCUs.
 
-​	**attention：This repository is only for the nes simulator and does not provide the game ！！！**
+**Requirements:**
+
+- Language standard: **C11** or above
+
+**Note:**
+
+- **This repository only contains the NES emulator, it does not provide any game !!!**
+- Accuracy is traded for speed: rendering is scanline (line-pixel) level instead of pixel level, so a few
+  games inevitably show artefacts (individual pixel offsets, or a game misbehaving). Most games run fine.
 
 
 
@@ -29,45 +38,30 @@ gitee: [nes: c语言实现的nes模拟器 (gitee.com)](https://gitee.com/PeakRac
 
 - [x] MacOS
 
-**Simulator support：**
+**Simulator support:**
 
 - [x] CPU (All instructions)
 
-- [x] PPU (scanline-level precision, see the note below)
+- [x] PPU (scanline-level precision)
 
 - [x] APU (Fixed-point calculation)
 
-**mapper  support：**
+**mapper support:**
 
-​	0, 1, 2, 3, 4, 7, 94, 177, 180
+- [x] iNES 1.0 mapper Plane 0 table 0~255
 
-## What's new in v0.2.0
+- [ ] NES 2.0 mappers Plane 1 table 256~511
 
-- **Save states**: `<game>.nessave` — complete machine snapshots with a magic header and CRC
-  validation. Loading is two-pass, so a corrupt or foreign file never leaves a half-restored machine.
-  Format: [docs/nessave-format.md](docs/nessave-format.md). F5 saves / F8 loads in the SDL front ends.
-- **Battery save interop**: the game's own `<game>.sav` is read and written automatically and stays in
-  sync with the state file; boards whose battery *is* the CHR-RAM are supported as well.
-- **PAL support**: video and audio timing are region driven (312 lines / 50 Hz / 3.2 dots per CPU
-  cycle, PAL APU clock); NTSC behaviour is numerically unchanged.
-- **New mappers**: 82 (Taito X1-017), 96 (Bandai Oeka Kids), 168 (Racermate), plus TQROM (119) and
-  RAMBO-1 (64) register-layout fixes. All 255 mappers are wired into the dispatch table.
-- **Streaming ROM builds**: the PRG/CHR LRU cache now reports I/O failures instead of silently reusing a
-  stale bank, and MMC5 extended background reads can no longer walk outside the cache.
-- **Tests and CI**: 37 in-tree unit/stress cases, a 195-image regression baseline, and Linux / Windows /
-  macOS pipelines that build the front ends *and* run the suite.
-- **Benchmark front end**: `bench/` measures frame time and per-module cost in both a desktop and an
-  MCU-like (RGB565, half-frame buffer, streaming ROM) configuration —
-  results in [docs/performance-2026-09-27.md](docs/performance-2026-09-27.md).
-- **Note on accuracy**: rendering is scanline based rather than dot based, which keeps the emulator
-  small enough for MCUs; a few games still show minor pixel offsets or timing artefacts.
+- [ ] NES 2.0 mappers Plane 2 table 512~767
 
-### Tested mappers
+Verified playable (at least one image in the regression corpus reaches rendering):
 
-0, 1, 2, 3, 4, 5, 7, 9, 10, 11, 13, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25, 26, 31, 33, 34, 37, 38,
-45, 47, 64, 65, 66, 67, 68, 69, 70, 71, 72 (audio), 74, 75, 76, 77, 78, 79, 80, 82, 83, 85, 87, 88,
-89, 90, 91, 92, 93, 94, 95, 96, 105, 119, 140, 141, 144, 146, 159, 163, 168, 177, 180, 184, 185,
-189, 193, 206, 228, 232, 246, 253
+	0, 1, 2, 3, 4, 5, 7, 10, 11, 13, 15, 16, 17, 18, 19, 21,
+	22, 23, 24, 25, 26, 31, 32, 33, 34, 37, 38, 44, 45, 47, 64, 65,
+	66, 67, 68, 69, 70, 71, 72 (audio), 73, 75, 76, 77, 78, 79, 80, 82, 83,
+	85, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 105, 113, 118, 119,
+	140, 141, 144, 146, 159, 163, 168, 180, 184, 185, 189, 193, 199, 206, 210, 228,
+	232, 234, 246, 253
 
 ## Software Architecture
 
@@ -75,8 +69,6 @@ gitee: [nes: c语言实现的nes模拟器 (gitee.com)](https://gitee.com/PeakRac
 
 
 ## Compile Tutorial
-
-​	clone repository，install [xmake](https://github.com/xmake-io/xmake)，execute `xmake` directly to compile
 
 ### Compile Preparation
 
