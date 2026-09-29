@@ -16,14 +16,17 @@
 
 #include "nes.h"
 #include "nes_mapper.h"
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+#include "nes_test.h"
+#endif
 
 /* https://www.nesdev.org/wiki/MMC1 */
 
 
 typedef struct  {
     uint8_t shift;
-    uint8_t shift_count;   /* MMC1 needs exactly 5 writes per register; a sentinel-bit trick
-                              mis-aligns when a stray write precedes the first sequence. */
+    uint8_t shift_count;   /* strict model: non-reset writes since the last load; the fifth one
+                              copies the shift register into the addressed register */
     uint8_t prg_bank;   /* last PRG bank register value, for re-applying when P mode changes */
     union {
         struct {
@@ -200,22 +203,47 @@ Load register ($8000-$FFFF)
 */
 static void nes_mapper_write(nes_t* nes, uint16_t write_addr, uint8_t data){
     mapper1_register_t* r = (mapper1_register_t*)nes->nes_mapper.mapper_register;
+    const uint8_t strict = nes->nes_rom.mmc1_strict;   /* counter model, else sentinel-bit model */
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+    /* NES_DBG_MMC1 raw-write trace: the register the address selects and what the write loads. */
+    const uint8_t trace_reg = (uint8_t)((write_addr & 0x7FFFu) >> 13);
+    uint8_t trace_loaded = 0u;
+    uint8_t trace_value = 0u;
+#endif
     if (data & (uint8_t)0x80){
-        r->shift = nes->nes_rom.mmc1_strict ? 0x00u : 0x10u;   /* counter model needs a cleared shifter */ // reset shift register
+        r->shift = strict ? 0x00u : 0x10u;                     /* reset shift register */
+        r->shift_count = 0u;                                   // ...and its write counter
         // Control = Control OR $0C, locking PRG-ROM at $C000-$FFFF to the last bank
         r->control_byte |= 0x0C;
         nes_ppu_screen_mirrors(nes, nes_mapper1_mirror_table[r->control.M]);
         /* P is now forced to 3; re-apply PRG bank in the new mode. */
         nes_mapper_apply_prgbank(nes);
     }else {
-        const uint8_t finished = r->shift & 1;
+        /* Two equivalent ways to detect the fifth write of a sequence.
+           Counter model (strict): the ROM is known to send exactly five bits per register, so
+           count them.  A cleared shifter cannot carry the sentinel bit, and testing for it there
+           would load one write late — into the next register, with four stale bits.
+           Sentinel model (default): a marker bit shifted in at bit 4 reaches bit 0 on the fifth
+           write, which also tolerates ROMs that send a different number of bits. */
+        const uint8_t finished = strict
+            ? (uint8_t)(++r->shift_count == 5u)
+            : (uint8_t)(r->shift & 1u);
         r->shift >>= 1;
         r->shift |= (data & 1) << 4;
         if (finished) {
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+            trace_loaded = 1u;
+            trace_value = r->shift;
+#endif
             nes_mapper_write_register(nes, write_addr);
-            r->shift = nes->nes_rom.mmc1_strict ? 0x00u : 0x10u;   /* counter model needs a cleared shifter */
+            r->shift = strict ? 0x00u : 0x10u;
+            r->shift_count = 0u;
         }
     }
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+    nes_test_mmc1_log(nes, write_addr, data, trace_reg, (data & 0x80u) ? 1u : 0u,
+                      trace_loaded, r->shift, r->shift_count, trace_value);
+#endif
 }
 
 int nes_mapper1_init(nes_t* nes){

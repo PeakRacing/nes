@@ -43,6 +43,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"rom", "header variants", test_rom_header_variants},
         {"mapper", "dispatch and banks", test_mapper_dispatch},
         {"mapper", "bank helpers", test_mapper_bank_helpers},
+        {"mapper", "mmc1 serial counter", test_mapper1_serial_counter},
         {"mapper", "waixing chr-ram window", test_mapper4_waixing_window},
         {"mapper", "mmc3 prg-ram", test_mapper4_wram},
         {"mapper", "synthetic smoke", test_mapper_synthetic_smoke},

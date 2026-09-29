@@ -87,7 +87,10 @@ static const nes_romdb_entry_t romdb[] = {
        rows blank and hides the HUD (verified against Mesen, which shows the bar). */
     { 0x9247C38Du, 119u, 0u, 1u }, /* Pin Bot (E) - PAL cartridge, header carries no region bit */
     { 0x91B4B1D7u, 66u, 0u, 0u, 1u }, /* 2合1 (pirate GxROM multicart): header says horizontal, board is vertical */
-    { 0x2C33161Du, 1u, 0u, 0u, 0u, 1u }, /* AD&D英雄冒险: MMC1 with 5-write counter semantics */
+    /* AD&D英雄冒险 (Hillsfar): the header's mapper 1 is already correct, so this entry only
+       selects the counter serial model.  The ROM writes exactly five bits per MMC1 register
+       (verified from its raw $8000-$FFFF write stream); both models agree on such a stream. */
+    { 0x2C33161Du, 1u, 0u, 0u, 0u, 1u },
     { 0x0DBDD55Du, 25u, 1u },
 };
 

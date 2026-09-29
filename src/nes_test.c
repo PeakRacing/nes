@@ -30,8 +30,10 @@ void nes_test_rlog(nes_t* nes, uint16_t address, uint8_t value, uint16_t pc) {
     static FILE* rlog;
     static long lines;
     static int tried;
-    /* PRG-PROBE: the AD&D boot crash executes bytes that exist nowhere in the PRG data,
-     * so dump the mapper state the first time the CPU fetches from $8000 in that window. */
+    /* PRG-PROBE: on the first fetch from the start of the $8000 window, dump the bank wiring
+     * (PRG buffer, the four CPU slots, slot 0's offset) — enough to tell "wrong bank mapped"
+     * from "wrong bytes read".  AD&D (Hillsfar) tripped this probe while its MMC1 write counter
+     * was mis-loading registers; see the 2026-09-29 note in AGENTS.md. */
     {
         static int probed;
         if (!probed && address == 0x8000u && pc >= 0x8000u && pc <= 0x8030u) {
@@ -55,7 +57,11 @@ void nes_test_rlog(nes_t* nes, uint16_t address, uint8_t value, uint16_t pc) {
         }
         tried = 1;
     }
-    if (address < 0x2000u || (address >= 0x4000u && address < 0x6000u)) {
+    /* Keep $4016/$4017 (controller reads) - they reveal "waiting for input" loops. */
+    if (address < 0x2000u) {
+        return;
+    }
+    if (address >= 0x4000u && address < 0x6000u && address != 0x4016u && address != 0x4017u) {
         return;
     }
     /* $2002 is polled thousands of times per frame by every game; it drowns the log. */
@@ -66,6 +72,47 @@ void nes_test_rlog(nes_t* nes, uint16_t address, uint8_t value, uint16_t pc) {
         return;
     }
     fprintf(rlog, "%04X %02X %04X\n", (unsigned)address, (unsigned)value, (unsigned)pc);
+    lines++;
+}
+
+/* NES_DBG_MMC1=<file>: the MMC1 serial port in the raw — every CPU write into $8000-$FFFF with
+ * the register its address selects, whether it resets the shifter ($80 set) or shifts one bit
+ * in, and the shifter/counter state the mapper is left in.  A mis-aligned sequence is visible
+ * directly: count the "shift" lines between two LOADs, or look for a LOAD on the wrong write. */
+void nes_test_mmc1_log(nes_t* nes, uint16_t address, uint8_t data, uint8_t reg,
+                       uint8_t reset, uint8_t loaded, uint8_t shift, uint8_t count,
+                       uint8_t value) {
+    static FILE* log;
+    static long lines;
+    static int tried;
+    static const char* const reg_name[4] = { "CTL", "CHR0", "CHR1", "PRG" };
+    const char* name = reg_name[reg & 0x03u];
+    if (!tried) {
+        const char* path = getenv("NES_DBG_MMC1");
+        if (path != NULL && *path != '\0') {
+            log = fopen(path, "w");
+        }
+        tried = 1;
+        if (log != NULL) {
+            fprintf(log, "# MMC1 raw serial writes: pc addr data bit class register shift count\n");
+            fprintf(log, "# model=%s  $8000-$9FFF=CTL  $A000-$BFFF=CHR0  $C000-$DFFF=CHR1  $E000-$FFFF=PRG\n",
+                    nes->nes_rom.mmc1_strict ? "5-write-counter" : "sentinel-bit");
+        }
+    }
+    if (log == NULL || lines >= 200000) {
+        return;
+    }
+    if (loaded) {
+        fprintf(log, "%6ld pc=%04X addr=%04X data=%02X bit=%u %-5s %-4s shift=%02X cnt=%u  LOAD %s=%02X\n",
+                lines + 1, (unsigned)nes->nes_cpu.PC, (unsigned)address, (unsigned)data,
+                (unsigned)(data & 1u), reset ? "RESET" : "shift", name,
+                (unsigned)shift, (unsigned)count, name, (unsigned)value);
+    } else {
+        fprintf(log, "%6ld pc=%04X addr=%04X data=%02X bit=%u %-5s %-4s shift=%02X cnt=%u\n",
+                lines + 1, (unsigned)nes->nes_cpu.PC, (unsigned)address, (unsigned)data,
+                (unsigned)(data & 1u), reset ? "RESET" : "shift", name,
+                (unsigned)shift, (unsigned)count);
+    }
     lines++;
 }
 

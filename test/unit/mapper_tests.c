@@ -288,6 +288,69 @@ int test_mapper_synthetic_smoke(void) {
     return failures == 0 ? TEST_PASS : TEST_FAIL;
 }
 
+/*
+ * Mapper 1 serial port: a register is loaded on the fifth write.
+ *
+ * romdb can select a real write counter for MMC1 (nes_rom.mmc1_strict) for ROMs verified to send
+ * exactly five bits per register.  The counter must load on that fifth write: the sentinel-bit test
+ * is useless once the shifter starts cleared, and then the load fires one write late — into the
+ * next register, carrying four stale bits.  AD&D (Hillsfar, romdb 0x2C33161D) is exactly that case:
+ * with the delayed load its control register never loaded at all and every PRG select landed one
+ * write late, so the boot code looped forever re-writing the same nonsense to the mapper.
+ */
+int test_mapper1_serial_counter(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 1, 4, 0);       /* 4 x 16KB PRG banks, CHR-RAM board */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on control is $0C (P=3): $8000 is switchable, $C000 holds the last bank. */
+    TEST_EQ_PTR(prg, nes->nes_cpu.prg_banks[0]);
+    TEST_EQ_PTR(prg + 3 * 16384, nes->nes_cpu.prg_banks[2]);
+
+    for (int model = 0; model < 2; ++model) {
+        nes->nes_rom.mmc1_strict = (uint8_t)model;   /* 0 = sentinel bit, 1 = write counter */
+        /* Start from a known bank: five zero bits select bank 0. */
+        for (int i = 0; i < 5; ++i) {
+            nes_test_cpu_write(nes, 0xE000, 0x00);
+        }
+        /* Five writes of "0 1 0 0 0" select bank 2, and only the fifth one may load it. */
+        const uint8_t bits[5] = { 0, 1, 0, 0, 0 };
+        for (int i = 0; i < 4; ++i) {
+            nes_test_cpu_write(nes, 0xE000, bits[i]);
+        }
+        if (nes->nes_cpu.prg_banks[0] != prg) {
+            test_fixture_free(&f);
+            return mapper_report("serial port: four bits must not load", 1, "bank 0",
+                                 "loaded early");
+        }
+        nes_test_cpu_write(nes, 0xE000, bits[4]);
+        if (nes->nes_cpu.prg_banks[0] != prg + 2 * 16384) {
+            test_fixture_free(&f);
+            return mapper_report("serial port: fifth write loads", 1, "bank 2", "not bank 2");
+        }
+
+        /* A write with bit 7 set resets the shifter and its counter: what follows is a fresh
+           five-bit sequence, not the tail of the previous one. */
+        nes_test_cpu_write(nes, 0xE000, 0x00);
+        nes_test_cpu_write(nes, 0xE000, 0x00);
+        nes_test_cpu_write(nes, 0xE000, 0x80);
+        nes_test_cpu_write(nes, 0xE000, 0x01);
+        for (int i = 0; i < 4; ++i) {
+            nes_test_cpu_write(nes, 0xE000, 0x00);
+        }
+        if (nes->nes_cpu.prg_banks[0] != prg + 1 * 16384) {
+            test_fixture_free(&f);
+            return mapper_report("serial port: $80 restarts the sequence", 1, "bank 1",
+                                 "stale bits leaked across the reset");
+        }
+    }
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper_write_storm(void) {
     int failures = 0;
     for (int mapper = 0; mapper < 256; ++mapper) {
