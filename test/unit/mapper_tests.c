@@ -484,6 +484,39 @@ int test_mapper245_chr_ram_board(void) {
     return TEST_PASS;
 }
 
+/*
+ * Sunsoft FME-7 (mapper 69): $C000-$FFFF belongs to the 5B audio chip (register select at $C000,
+ * data at $E000) and the mapper must not decode those writes.  Mr Gimmick writes $E000 while
+ * register 9 is selected, so treating it as a parameter write paged bank $38 into $8000-$9FFF;
+ * the game then ran into garbage (gray screen, PC stuck at $64ED, rendering never enabled).
+ * $A000-$BFFF stays the parameter register, mirrors included ($A917 is used by the game).
+ */
+int test_mapper69_5b_audio_write(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 69, 16, 16);         /* 256KB PRG + 128KB CHR, like Mr Gimmick */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    nes_test_cpu_write(nes, 0x8000, 0x09);       /* select register 9: PRG bank at $8000 */
+    nes_test_cpu_write(nes, 0xA000, 0x03);       /* bank 3 */
+    TEST_EQ_U32(prg[3 * 8192], nes_test_cpu_read(nes, 0x8000));
+
+    /* 5B audio writes must leave the mapper alone. */
+    nes_test_cpu_write(nes, 0xE000, 0x38);
+    TEST_EQ_U32(prg[3 * 8192], nes_test_cpu_read(nes, 0x8000));
+    nes_test_cpu_write(nes, 0xC000, 0x07);
+    TEST_EQ_U32(prg[3 * 8192], nes_test_cpu_read(nes, 0x8000));
+
+    /* The parameter register itself still answers, mirrors included. */
+    nes_test_cpu_write(nes, 0xA917, 0x05);
+    TEST_EQ_U32(prg[5 * 8192], nes_test_cpu_read(nes, 0x8000));
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper_write_storm(void) {
     int failures = 0;
     for (int mapper = 0; mapper < 256; ++mapper) {

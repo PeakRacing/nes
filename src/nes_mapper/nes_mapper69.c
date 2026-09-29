@@ -87,6 +87,10 @@ static void nes_mapper_deinit(nes_t* nes) {
 /*
  * $8000-$9FFF: command register (bits[3:0] = register index)
  * $A000-$BFFF: parameter register (data written to selected register)
+ * $C000-$FFFF: Sunsoft 5B audio (register select at $C000, data at $E000) - the FME-7 does NOT
+ * decode these.  Treating them as parameter writes corrupts whichever register is selected: the
+ * 5B data write Mr Gimmick performs at $E000 landed in the PRG bank register and paged a bogus
+ * bank into $8000-$9FFF, so the game ran off into garbage (gray screen, PC stuck at $64ED).
  */
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     nes_mapper69_t* m = (nes_mapper69_t*)nes->nes_mapper.mapper_register;
@@ -94,6 +98,10 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     if (address < 0xA000) {
         /* $8000-$9FFF: select register */
         m->reg_select = data & 0x0F;
+        return;
+    }
+    if (address >= 0xC000) {
+        /* $C000-$FFFF: Sunsoft 5B audio - not ours */
         return;
     }
 
