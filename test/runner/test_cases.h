@@ -68,6 +68,7 @@ int test_mapper99_vs_latch(void);
 #if (NES_VS_SYSTEM == 1)
 int test_vs_ppu_palette(void);
 int test_vs_system_switches(void);
+int test_vs_system_protection(void);
 #endif
 int test_mapper4_waixing_window(void);
 int test_mapper4_wram(void);

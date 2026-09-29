@@ -528,3 +528,49 @@ nes_test_rom_result_t nes_test_load_rom_checked(nes_t* nes, const uint8_t* data,
 }
 
 #endif
+
+static uint16_t trace_at = 0xC110u;
+static long trace_n = 2000L;
+
+/* Per-instruction trace: armed when the PC hits NES_DBG_TRACE_AT, then logs N instructions. */
+void nes_test_trace(nes_t* nes, uint16_t pc) {
+    static FILE* trace;
+    static int tried;
+    static int armed;
+    static long left;
+    static long total;
+    if (!tried) {
+        const char* path = getenv("NES_DBG_TRACE");
+        tried = 1;
+        if (path != NULL && *path != '\0') {
+            trace = fopen(path, "w");
+            if (trace != NULL) {
+                const char* at;
+                armed = 0;
+                at = getenv("NES_DBG_TRACE_AT");
+                trace_at = (uint16_t)((at != NULL && *at != '\0') ? strtoul(at, NULL, 16) : 0xC110u);
+                at = getenv("NES_DBG_TRACE_N");
+                trace_n = (at != NULL && *at != '\0') ? strtol(at, NULL, 10) : 2000L;
+            }
+        }
+    }
+    if (trace == NULL) return;
+    if (!armed) {
+        if (pc != trace_at) return;
+        armed = 1;
+        left = trace_n;
+        fprintf(trace, "--- armed at pc=%04X ---\n", (unsigned)pc);
+    }
+    if (left > 0) {
+        fprintf(trace, "%04X A=%02X X=%02X Y=%02X SP=%02X P=%02X CYC=%llu\n",
+                (unsigned)pc, (unsigned)nes->nes_cpu.A, (unsigned)nes->nes_cpu.X, (unsigned)nes->nes_cpu.Y,
+                (unsigned)nes->nes_cpu.SP, (unsigned)(nes->nes_cpu.P & 0xFFu),
+                (unsigned long long)total++);
+        left--;
+        if (left == 0) {
+            fprintf(trace, "--- end ---\n");
+            fclose(trace);
+            trace = NULL;
+        }
+    }
+}

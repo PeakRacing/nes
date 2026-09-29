@@ -164,6 +164,12 @@ typedef struct nes_rom_info{
                                             has no second gamepad: the coin/credit/service switches
                                             share $4016 bit 5 / bit 2 / bit 3 and $4017 bit 2, which
                                             the games read outside the controller shift sequence */
+    uint8_t  vs_protection;             /* romdb: VS. System cabinet protection hardware.  The arcade
+                                            board answers reads in $4020-$5FFF with a rotating byte from
+                                            a fixed table; TKO Boxing compares it against a copy in its
+                                            own ROM and restarts the boot ($C0E7) when it does not match.
+                                            0 = none, 1 = TKO Boxing, 2 = RBI Baseball, 3 = Super Xevious
+                                            (same numbering as Mesen's VsSystemType protection kinds) */
 #endif
     uint8_t  sram_dirty;
     uint8_t  sram_persist;               /*  1: frontend opted into <game>.sav persistence */                /*  1: battery RAM changed since the last flush to disk */

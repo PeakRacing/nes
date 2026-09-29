@@ -35,14 +35,14 @@ static uint32_t nes_crc32_update(uint32_t crc, const uint8_t* data, size_t len) 
 }
 
 #if (NES_VS_SYSTEM == 1)
-#define ROMDB_VS(ppu, sys)      , ppu##u, sys##u      /* the arcade PPU model + VS board flag */
+#define ROMDB_VS(ppu, sys, prot) , ppu##u, sys##u, prot##u /* arcade PPU + VS flag + protection kind */
 #else
-#define ROMDB_VS(ppu, sys)
+#define ROMDB_VS(ppu, sys, prot)
 #endif
 
 typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; uint8_t mirror; uint8_t mmc1_strict; uint8_t prg_ram;
 #if (NES_VS_SYSTEM == 1)
-                 uint8_t vs_ppu; uint8_t vs_system;
+                 uint8_t vs_ppu; uint8_t vs_system; uint8_t vs_protection;
 #endif
 } nes_romdb_entry_t;
 
@@ -131,16 +131,24 @@ static const nes_romdb_entry_t romdb[] = {
        consumer 2C02 (the game's green backdrop becomes black, the white logo orange), so the
        palette model has to come from the CRC.  Index matches Mesen's PpuModel enum and the
        database entry 01357944,...,2 -- as does the rest of this table's content. */
-    { 0x01357944u, 99u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(2, 1) },   /* VS Battle City (RP2C04-0001) */
+    { 0x01357944u, 99u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(2, 1, 0) },   /* VS Battle City (RP2C04-0001) */
     /* VS Platoon: the header claims mapper 68 (Sunsoft-4), but the game writes the Sunsoft-3
        (mapper 67) register map every frame - $8800/$9800/$A800/$B800 for the four 2KB CHR banks,
        $E800 for mirroring and $F800 for the 16KB PRG bank - and Mesen's database agrees
        (2019FE65,VsSystem,...,67,128,128,...,4,...,2).  NOTE: the title screen still freezes after
        its logo in this core; the mapper is not the remaining problem (see AGENTS.md). */
-    { 0x2019FE65u, 67u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(2, 1) },
+    { 0x2019FE65u, 67u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(2, 1, 0) },
     /* VS Slalom: the header claims mapper 0 (NROM), but Mesen's database has it as a VS. UniSystem
        board - 9AE2BAA0,VsSystem,...,99,32,8,...,3 - i.e. mapper 99 with the RP2C04-0002 PPU. */
-    { 0x9AE2BAA0u, 99u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(3, 1) },
+    { 0x9AE2BAA0u, 99u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(3, 1, 0) },
+    /* VS. TKO Boxing: the header says mapper 151, the board is DxROM (206) and the cabinet has the
+       TKO Boxing protection hardware ($5E00 resets / $5E01 returns a rotating byte; Mesen
+       VsSystemType::TkoBoxingProtection).  Database: 52C501D0,VsSystem,...,206,...,4,...,4 */
+    { 0x52C501D0u, 206u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(4, 1, 1) },
+    /* VS. Super Xevious: same DxROM board, header says mapper 2, protection kind 3 (Mesen's
+       SuperXeviousProtection answers every other $4020-$5FFF read from its own table).
+       Database: 12012CD9,VsSystem,...,206,...,2 */
+    { 0x12012CD9u, 206u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(2, 1, 3) },
 };
 
 /*
@@ -185,6 +193,7 @@ static void nes_romdb_lookup(nes_t* nes) {
                cabinet's coin/credit/service switches on the controller ports. */
             nes->nes_rom.vs_ppu = romdb[i].vs_ppu;
             nes->nes_rom.vs_system = romdb[i].vs_system;
+            nes->nes_rom.vs_protection = romdb[i].vs_protection;
 #endif
             return;
         }

@@ -74,6 +74,7 @@ typedef struct nes_joypad{
     uint8_t vs_coin;
     uint8_t vs_start;
     uint8_t vs_service;
+    uint8_t vs_protection_counter;   /* VS. System protection counter: $5E00 resets, $5E01 advances */
 #endif
 } nes_joypad_t;
 

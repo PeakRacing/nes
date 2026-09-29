@@ -111,6 +111,12 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc);
 /* NES_DBG_RLOG=<file>: log CPU reads (address + source PC) for polling/board-probe triage. */
 void nes_test_rlog(nes_t* nes, uint16_t address, uint8_t value, uint16_t pc);
 
+/* Per-instruction trace (test builds only).  NES_DBG_TRACE=<file> writes one line per CPU
+ * instruction once the PC reaches NES_DBG_TRACE_AT (hex, default C110) for the next
+ * NES_DBG_TRACE_N instructions (default 2000) - enough to follow one whole call/return
+ * chain without dumping millions of lines. */
+void nes_test_trace(nes_t* nes, uint16_t pc);
+
 /* NES_DBG_MMC1=<file>: raw MMC1 serial write stream — one line per CPU write into $8000-$FFFF
  * (source PC, address, data, the register the address selects, reset/shift class) plus the
  * shifter state after the write and LOAD when the five accumulated bits reach a register.

@@ -640,6 +640,52 @@ int test_vs_system_switches(void) {
     test_fixture_free(&f);
     return TEST_PASS;
 }
+
+/*
+ * VS. System cabinet protection hardware ($4020-$5FFF).  Mesen implements it in its VS control
+ * manager, not in the mapper: reading $5E00 resets a counter and each $5E01 read returns the next
+ * byte of a fixed 32-entry table.  VS TKO Boxing keeps its own copy of that sequence at $DD11 and
+ * jumps back to the reset entry ($C0E7) on the first mismatch, so without this hardware the game
+ * restarted its boot every two frames and never reached the title screen (VS Super Xevious uses the
+ * third kind, which answers every other $4020-$5FFF read).
+ */
+int test_vs_system_protection(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 206, 4, 4);
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+
+    /* A board without the protection hardware must not answer for it. */
+    nes->nes_rom.vs_protection = 0;
+    TEST_EQ_U32(0u, nes_test_cpu_read(nes, 0x5E01));
+
+    /* TKO Boxing: $5E00 resets the counter, $5E01 rotates the table (Mesen's first kind). */
+    nes->nes_rom.vs_protection = 1;
+    TEST_EQ_U32(0u, nes_test_cpu_read(nes, 0x5E00));
+    TEST_EQ_U32(0xFFu, nes_test_cpu_read(nes, 0x5E01));
+    TEST_EQ_U32(0xBFu, nes_test_cpu_read(nes, 0x5E01));
+    TEST_EQ_U32(0xB7u, nes_test_cpu_read(nes, 0x5E01));
+    /* Every other $4020-$5FFF address still belongs to the mapper. */
+    TEST_EQ_U32(0u, nes_test_cpu_read(nes, 0x4800));
+    /* Reading $5E00 restarts the sequence... */
+    TEST_EQ_U32(0u, nes_test_cpu_read(nes, 0x5E00));
+    TEST_EQ_U32(0xFFu, nes_test_cpu_read(nes, 0x5E01));
+    /* ...and it wraps after 32 entries. */
+    for (int i = 0; i < 31; i++) { (void)nes_test_cpu_read(nes, 0x5E01); }
+    TEST_EQ_U32(0xFFu, nes_test_cpu_read(nes, 0x5E01));
+
+    /* Super Xevious (third kind) answers every other $4020-$5FFF read from its own table. */
+    nes->nes_rom.vs_protection = 3;
+    TEST_EQ_U32(0u, nes_test_cpu_read(nes, 0x5E00));
+    TEST_EQ_U32(0x05u, nes_test_cpu_read(nes, 0x4800));
+    TEST_EQ_U32(0x01u, nes_test_cpu_read(nes, 0x4801));
+    TEST_EQ_U32(0x89u, nes_test_cpu_read(nes, 0x4802));
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
 #endif /* NES_VS_SYSTEM */
 
 /*

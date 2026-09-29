@@ -35,6 +35,63 @@
  * (A1 = bit15 … R1 = bit8) and controller 2 the low byte.  Every port assigns
  * those named fields, hence $4016 must shift out 0x8000 >> n.
  */
+#if (NES_VS_SYSTEM == 1)
+/* VS. System cabinet protection hardware.  Mesen implements this in its VS control manager
+ * (VsControlManager::ReadRam) rather than in the mapper: reading $5E00 resets a counter and every
+ * $5E01 read returns the next byte of a fixed table, wrapping at 32 entries.  VS TKO Boxing keeps
+ * its own copy of that sequence at $DD11 and jumps back to the reset entry ($C0E7) whenever the
+ * board answers something else - which is exactly what a board without this hardware does, so the
+ * game never reached its title screen.  Tables copied from Mesen2 VsControlManager.h. */
+static const uint8_t nes_vs_protection_data[3][32] = {
+    {   /* 1 = TKO Boxing (VsSystemType::TkoBoxingProtection) */
+        0xFF, 0xBF, 0xB7, 0x97, 0x97, 0x17, 0x57, 0x4F,
+        0x6F, 0x6B, 0xEB, 0xA9, 0xB1, 0x90, 0x94, 0x14,
+        0x56, 0x4E, 0x6F, 0x6B, 0xEB, 0xA9, 0xB1, 0x90,
+        0xD4, 0x5C, 0x3E, 0x26, 0x87, 0x83, 0x13, 0x00
+    },
+    {   /* 2 = RBI Baseball (VsSystemType::RbiBaseballProtection) */
+        0x00, 0x00, 0x00, 0x00, 0xB4, 0x00, 0x00, 0x00,
+        0x00, 0x6F, 0x00, 0x00, 0x00, 0x00, 0x94, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    },
+    {   /* 3 = Super Xevious (VsSystemType::SuperXeviousProtection) */
+        0x05, 0x01, 0x89, 0x37, 0x05, 0x00, 0xD1, 0x3E,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    }
+};
+
+/* Returns 1 when the VS protection hardware owns this read.  Mirrors Mesen's ReadRam(): $5E00
+ * resets the counter and reads back 0, $5E01 rotates the table for the TKO/RBI kinds, and the
+ * Super Xevious kind answers *every other* address in $4020-$5FFF. */
+static inline int nes_vs_protection_read(nes_t* nes, uint16_t address, uint8_t* value) {
+    uint8_t kind = nes->nes_rom.vs_protection;
+    if (kind == 0u) {
+        return 0;
+    }
+    if (address == 0x5E00u) {
+        nes->nes_cpu.joypad.vs_protection_counter = 0u;
+        *value = 0;
+        return 1;
+    }
+    if (address == 0x5E01u) {
+        if (kind == 1u || kind == 2u) {
+            *value = nes_vs_protection_data[kind - 1u][nes->nes_cpu.joypad.vs_protection_counter++ & 0x1Fu];
+            return 1;
+        }
+        *value = 0;
+        return 1;
+    }
+    if (kind == 3u) {
+        *value = nes_vs_protection_data[2][nes->nes_cpu.joypad.vs_protection_counter++ & 0x1Fu];
+        return 1;
+    }
+    return 0;
+}
+#endif
+
 static inline uint8_t nes_read_joypad(nes_t* nes,uint16_t address){
     uint8_t state = 0;
     if (address == 0x4016){
@@ -120,6 +177,12 @@ static inline uint8_t nes_read_cpu_inner(nes_t* nes,uint16_t address){
                 return nes_read_apu_register(nes, address);
 #endif
             }else if (address >= 0x4020){
+#if (NES_VS_SYSTEM == 1)
+                {   /* VS cabinet protection hardware sits in $4020-$5FFF (see the table above). */
+                    uint8_t prot = 0;
+                    if (nes_vs_protection_read(nes, address, &prot)) return prot;
+                }
+#endif
                 if (nes->nes_mapper.mapper_read_apu)
                     return nes->nes_mapper.mapper_read_apu(nes, address);
             }else{
@@ -1517,6 +1580,9 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
     nes_test_profile_region_begin(nes, NES_PROF_CPU);
 #endif
     while (ticks > nes->nes_cpu.cycles){
+#if (NES_TEST_MODE == 1)
+        nes_test_trace(nes, nes->nes_cpu.PC);
+#endif
 #ifdef __DEBUG__
         // fprintf(debug_fp,"A:0x%02X X:0x%02X Y:0x%02X SP:0x%02X \nP:0x%02X \nC:0x%02X Z:0x%02X I:0x%02X D:0x%02X B:0x%02X V:0x%02X N:0x%02X \n",
         //         nes->nes_cpu.A,nes->nes_cpu.X,nes->nes_cpu.Y,nes->nes_cpu.SP,

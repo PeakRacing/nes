@@ -58,6 +58,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         #if (NES_VS_SYSTEM == 1)
         {"ppu", "vs system palette", test_vs_ppu_palette},
         {"cpu", "vs system switches", test_vs_system_switches},
+        {"cpu", "vs system protection", test_vs_system_protection},
 #endif
         {"mapper", "waixing chr-ram window", test_mapper4_waixing_window},
         {"mapper", "mmc3 prg-ram", test_mapper4_wram},
