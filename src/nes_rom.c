@@ -98,6 +98,13 @@ static const nes_romdb_entry_t romdb[] = {
        in the SDL/port builds (NES_USE_SRAM=0) nothing allocates that window. */
     { 0x69759626u, 0u, 0u, 0u, 0u, 0u, 1u },
     { 0x0DBDD55Du, 25u, 1u },
+    /* sf97.nes (Street Fighter 97 multicart menu, "灰屏") — the header claims mapper 187, but the
+       board is the A9711-A9713 "Panda Prince" pirate (mapper 121 = MMC3 + protection latch):
+       the program seeds the latch at $8003 and reads its answer back from $5000-$5FFF, and while
+       the latch is armed the board owns the upper three 8KB PRG slots.  Under mapper 187 the
+       protection never resolves, $A000/$C000/$E000 stay on the boot banks and the game never
+       enables rendering.  Mesen's database (NewRisingSun) lists this CRC as mapper 121. */
+    { 0xDDCFB058u, 121u, 0u },
     /* Raid 2020 (Color Dreams, Unl) — the header claims mapper 7 (AxROM) and leaves bytes 8-15
        dirty, but the dump carries 64KB of CHR-ROM, which an AxROM board cannot have: AxROM has
        no CHR banking at all.  The game's own bank table (executed at $FFD4, data at $FFE0)

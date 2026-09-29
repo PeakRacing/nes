@@ -526,6 +526,54 @@ int test_mapper11_chr_bank_select(void) {
 }
 
 /*
+ * Mapper 121 (Panda Prince / MK4 / A9713 pirate board, sf97.nes): an MMC3 with a protection
+ * latch.  The program seeds the latch by writing $8003 and reads its answer back from
+ * $5000-$5FFF; while the latch holds an accepted value the board also owns the three upper 8KB
+ * PRG slots.  Under a plain MMC3 (mapper 187, what the header claims) the protection read
+ * returns garbage, the game never gets past its check and stays gray.
+ */
+int test_mapper121_protection(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 121, 16, 64);        /* 256KB PRG + 512KB CHR, like sf97.nes */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* $5000-$5FFF answers with the {83 83 42 00} table entry the program last selected. */
+    nes_test_cpu_write(nes, 0x5000, 0x00);
+    TEST_EQ_U32(0x83u, nes_test_cpu_read(nes, 0x5000));
+    nes_test_cpu_write(nes, 0x5FFF, 0x02);
+    TEST_EQ_U32(0x42u, nes_test_cpu_read(nes, 0x5000));
+    /* Other addresses in that window stay open bus. */
+    TEST_EQ_U32(0x00u, nes_test_cpu_read(nes, 0x4800));
+
+    /* Bank select $86 = PRG register 6, then a latch value $28 stores the reversed bank. */
+    nes_test_cpu_write(nes, 0x8000, 0x86);       /* MMC3: select R6 */
+    nes_test_cpu_write(nes, 0x8001, 0x0A);       /* reversed(0x0A) = 0x28 -> accepted */
+    nes_test_cpu_write(nes, 0x8003, 0x28);       /* arm the latch */
+    /* With the latch armed $E000 gets the derived bank; before that it was the last 8KB. */
+    if (nes_test_cpu_read(nes, 0xE000) == nes->nes_rom.prg_rom[(size_t)(16u * 2u - 1u) * 8192u]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 121 protection overrides the upper PRG slot", 121,
+                             "derived bank at $E000", "still the boot bank");
+    }
+
+    /* CHR: a 512KB CHR ROM needs 512 1KB banks (a uint8_t counter would truncate to 0), and the
+       half the MMC3 CHR mode selects is taken from the far 256KB. */
+    nes_test_cpu_write(nes, 0x8000, 0x00);       /* CHR mode 0 (bit7 clear), select R0 */
+    nes_test_cpu_write(nes, 0x8001, 0x40);       /* R0 = 2KB bank 0x40 -> 1KB banks 0x40/0x41 */
+    if (nes->nes_ppu.pattern_table[0] != chr + (size_t)(0x40u | 0x100u) * 1024u) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 121 CHR from the far 256KB half", 121,
+                             "bank 0x140 of the CHR ROM", "first half");
+    }
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * Sunsoft FME-7 (mapper 69): $C000-$FFFF belongs to the 5B audio chip (register select at $C000,
  * data at $E000) and the mapper must not decode those writes.  Mr Gimmick writes $E000 while
  * register 9 is selected, so treating it as a parameter write paged bank $38 into $8000-$9FFF;
