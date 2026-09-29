@@ -129,8 +129,11 @@ gitee: https://gitee.com/PeakRacing/nes/releases
 **mapper 99 本体始终编译**：它就是一个普通 mapper（板级寄存器写在 `$4016`、CHR/PRG 分页、8KB 工作 RAM、四屏 VRAM），
 语料里 `rom/mapper99/` 的 11 张 VS 游戏在默认构建下都能正常加载运行。
 
-**街机专属的部分**（RP2C04 系列 RGB 调色板 + 投币/服务开关）由宏 `NES_VS_SYSTEM` 隔离，**默认值为 `0`**；
-需要街机配色与投币键时，在 `nes_conf.h` 里改成 `1`，或构建时加 `-DNES_VS_SYSTEM=1`。
+**街机专属的部分**（RP2C04 系列 RGB 调色板 + 投币/服务开关）由宏 `NES_VS_SYSTEM` 隔离：
+**SDL2 / SDL3 桌面构建默认开启**（`sdl/*/port/nes_conf.h` 里为 `1`），核心与嵌入式默认 `0`（省约 1.3KB 色表）。
+
+之所以桌面端默认开：VS 游戏用颜色索引 `$0F` 画白色，而**家用 2C02 把 `$0F` 映射成黑色** ⇒ 不开街机调色板时，
+`vs platoon` 的士兵剪影与 `CREDIT` 计数会整片消失（看起来像卡在半个 logo 上），`vs battle city` 同样偏色。
 
 启用后：街机板没有第二个手柄，投币 / 开始信用 / 服务开关接在手柄口的高位上，
 而且游戏是在 8 位移位序列**之外**单独读它们：

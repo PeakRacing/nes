@@ -132,8 +132,14 @@ through `$4016`, plus CHR/PRG banking, 8KB of work RAM and four-screen VRAM), an
 `rom/mapper99/` load and run in the default build.
 
 **The arcade-only extras** (the RP2C04 RGB palettes and the coin/service switches) are isolated
-behind `NES_VS_SYSTEM`, which defaults to `0`.  Set it to `1` in `nes_conf.h`, or build with
-`-DNES_VS_SYSTEM=1`, to get the arcade colours and coin keys.
+behind `NES_VS_SYSTEM`: the **SDL2 / SDL3 desktop builds enable it by default** (`1` in
+`sdl/*/port/nes_conf.h`), while the core and embedded defaults stay `0` (saving the ~1.3KB of
+palette tables).
+
+Desktop enables it because VS games draw their white graphics with colour index `$0F`, which the
+**consumer 2C02 maps to black**: without the arcade palette `vs platoon` loses its soldier
+silhouettes and its `CREDIT` counter entirely (which looks like a hung half-drawn logo), and
+`vs battle city` is similarly off-colour.
 
 Once enabled: the arcade board has no second gamepad, and the coin / credit / service switches sit in
 the upper bits of the controller ports, read outside the 8-bit shift sequence:
