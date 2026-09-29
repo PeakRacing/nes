@@ -65,6 +65,14 @@ typedef struct nes_joypad{
         };
         uint16_t joypad;
     };
+    /* VS. UniSystem arcade switches.  The cabinet has no second gamepad: the coin/credit/service
+       inputs share the upper bits of the controller ports, which the games read *outside* the
+       shift loop (VS Battle City tests $4016 bit 4 for the coin, $4016 bit 3 for the credit/start
+       input and $4017 bit 2 for service).  The standard 8-bit shift is bit 0 only, so keeping
+       these bits out of `joypad` leaves ordinary controller reads untouched. */
+    uint8_t vs_coin;
+    uint8_t vs_start;
+    uint8_t vs_service;
 } nes_joypad_t;
 
 // https://www.nesdev.org/wiki/CPU_registers

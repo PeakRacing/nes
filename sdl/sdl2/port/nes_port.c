@@ -165,12 +165,15 @@ static void sdl_event(nes_t *nes) {
                         break;
                     case 94://6
                         nes->nes_cpu.joypad.B2 = 1;
+                        nes->nes_cpu.joypad.vs_service = 1; /* VS. System: 2P B = service switch */
                         break;
                     case 89://1
                         nes->nes_cpu.joypad.SE2 = 1;
+                        nes->nes_cpu.joypad.vs_start = 1;  /* VS. System: 2P Select = credit/start input */
                         break;
                     case 90://2
                         nes->nes_cpu.joypad.ST2 = 1;
+                        nes->nes_cpu.joypad.vs_coin = 1;   /* VS. System: 2P Start inserts a coin */
                         break;
                     default:
                         break;
@@ -219,12 +222,15 @@ static void sdl_event(nes_t *nes) {
                         break;
                     case 94://6
                         nes->nes_cpu.joypad.B2 = 0;
+                        nes->nes_cpu.joypad.vs_service = 0;
                         break;
                     case 89://1
                         nes->nes_cpu.joypad.SE2 = 0;
+                        nes->nes_cpu.joypad.vs_start = 0;
                         break;
                     case 90://2
                         nes->nes_cpu.joypad.ST2 = 0;
+                        nes->nes_cpu.joypad.vs_coin = 0;
                         break;
                     default:
                         break;
@@ -346,10 +352,14 @@ int nes_draw(int x1, int y1, int x2, int y2, nes_color_t* color_data){
 #define SDL_TEST_BTN_DOWN    (0x20u)
 #define SDL_TEST_BTN_LEFT    (0x40u)
 #define SDL_TEST_BTN_RIGHT   (0x80u)
+/* VS. System cabinet switches (see nes_joypad_t): not part of the 8 pad buttons. */
+#define SDL_TEST_BTN_COIN    (0x100u)
+#define SDL_TEST_BTN_SERVICE (0x200u)
+#define SDL_TEST_BTN_CREDIT  (0x400u)   /* VS. System: the arcade start input ($4016 bit 3) */
 
 typedef struct {
     uint32_t frame;
-    uint8_t  buttons;
+    uint16_t buttons;
 } sdl_test_key_t;
 
 typedef struct {
@@ -366,8 +376,8 @@ typedef struct {
 static sdl_test_driver_t sdl_test;
 
 /* "START", "RIGHT+A", "SELECT", ... -> button bitmask */
-static uint8_t sdl_test_parse_buttons(const char* text) {
-    uint8_t mask = 0;
+static uint16_t sdl_test_parse_buttons(const char* text) {
+    uint16_t mask = 0;
     while (*text != '\0') {
         if (*text == '+' || *text == ' ') {
             text++;
@@ -382,9 +392,18 @@ static uint8_t sdl_test_parse_buttons(const char* text) {
         } else if (strncmp(text, "SELECT", 6) == 0) {
             mask |= SDL_TEST_BTN_SELECT;
             text += 6;
+        } else if (strncmp(text, "SERVICE", 7) == 0) {
+            mask |= SDL_TEST_BTN_SERVICE;
+            text += 7;
         } else if (strncmp(text, "START", 5) == 0) {
             mask |= SDL_TEST_BTN_START;
             text += 5;
+        } else if (strncmp(text, "COIN", 4) == 0) {
+            mask |= SDL_TEST_BTN_COIN;
+            text += 4;
+        } else if (strncmp(text, "CREDIT", 6) == 0) {
+            mask |= SDL_TEST_BTN_CREDIT;
+            text += 6;
         } else if (strncmp(text, "UP", 2) == 0) {
             mask |= SDL_TEST_BTN_UP;
             text += 2;
@@ -439,7 +458,7 @@ static void sdl_test_init(void) {
 
 /* Held buttons for the current frame: the last entry at or before it wins. */
 static void sdl_test_apply_keys(nes_t* nes) {
-    uint8_t mask = 0;
+    uint16_t mask = 0;
     for (uint16_t i = 0; i < sdl_test.key_count; i++) {
         if (sdl_test.keys[i].frame > sdl_test.frame) {
             break;
@@ -454,6 +473,11 @@ static void sdl_test_apply_keys(nes_t* nes) {
     nes->nes_cpu.joypad.D1  = (mask & SDL_TEST_BTN_DOWN) ? 1u : 0u;
     nes->nes_cpu.joypad.L1  = (mask & SDL_TEST_BTN_LEFT) ? 1u : 0u;
     nes->nes_cpu.joypad.R1  = (mask & SDL_TEST_BTN_RIGHT) ? 1u : 0u;
+    /* VS. System cabinets have no second gamepad: COIN/SERVICE drive the arcade switches that VS
+       games read from $4016 bit 4 / bit 3 and $4017 bit 2. */
+    nes->nes_cpu.joypad.vs_coin    = (mask & SDL_TEST_BTN_COIN) ? 1u : 0u;
+    nes->nes_cpu.joypad.vs_service = (mask & SDL_TEST_BTN_SERVICE) ? 1u : 0u;
+    nes->nes_cpu.joypad.vs_start   = (mask & SDL_TEST_BTN_CREDIT) ? 1u : 0u;
 }
 
 static void sdl_test_tick(nes_t* nes) {

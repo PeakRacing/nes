@@ -585,6 +585,60 @@ int test_vs_ppu_palette(void) {
 }
 
 /*
+ * VS. System cabinets have no second gamepad: the coin/credit/service switches share the upper bits
+ * of the controller ports, and the games read them *outside* the 8-bit shift sequence.  VS Battle
+ * City latches the coin from $4016 bit 4 ("LDA $4016 / AND #$10 ... LDA #$05 / STA $51") and never
+ * leaves its attract mode without it — which is exactly why the pad alone looked unresponsive
+ * ("presses do nothing") even though the standard controller read worked fine.
+ */
+int test_vs_system_switches(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 99, 2, 2);
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+
+    /* A plain NES keeps the ports free of arcade bits, even if a switch is somehow held. */
+    nes->nes_rom.vs_system = 0;
+    nes->nes_cpu.joypad.vs_coin = 1;
+    nes->nes_cpu.joypad.vs_service = 1;
+    if ((nes_test_cpu_read(nes, 0x4016) & 0x18u) != 0u ||
+        (nes_test_cpu_read(nes, 0x4017) & 0x04u) != 0u) {
+        test_fixture_free(&f);
+        return mapper_report("VS switches stay off on a plain NES", 0,
+                             "$4016 bits 4/3 and $4017 bit 2 clear", "arcade bits leaked");
+    }
+
+    /* VS board: coin = $4016 bit 4, credit/start = $4016 bit 3, service = $4017 bit 2. */
+    nes->nes_rom.vs_system = 1;
+    if ((nes_test_cpu_read(nes, 0x4016) & 0x10u) != 0x10u) {
+        test_fixture_free(&f);
+        return mapper_report("VS coin is $4016 bit 4", 0, "bit set", "bit clear");
+    }
+    nes->nes_cpu.joypad.vs_start = 1;
+    if ((nes_test_cpu_read(nes, 0x4016) & 0x08u) != 0x08u) {
+        test_fixture_free(&f);
+        return mapper_report("VS credit/start is $4016 bit 3", 0, "bit set", "bit clear");
+    }
+    if ((nes_test_cpu_read(nes, 0x4017) & 0x04u) != 0x04u) {
+        test_fixture_free(&f);
+        return mapper_report("VS service is $4017 bit 2", 0, "bit set", "bit clear");
+    }
+
+    /* ...and the standard 8-bit shift still lives in bit 0, so ordinary controller reads work.
+       (Clear the credit bit first so this part only observes the coin bit.) */
+    nes->nes_cpu.joypad.vs_start = 0;
+    nes->nes_cpu.joypad.A1 = 1;
+    nes_test_cpu_write(nes, 0x4016, 0x01);       /* strobe */
+    nes_test_cpu_write(nes, 0x4016, 0x00);
+    TEST_EQ_U32(0x11u, nes_test_cpu_read(nes, 0x4016));   /* bit 0 = A, bit 4 = coin */
+    TEST_EQ_U32(0x10u, nes_test_cpu_read(nes, 0x4016));   /* A released, coin still held */
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * Mapper 99 (Nintendo VS. UniSystem, VS Battle City): the board's bank latch is not in cartridge
  * space at all - it is written through $4016, the same port the CPU uses to strobe the
  * controllers, so that write has to reach both the board and the joypad.  The latch picks the 8KB

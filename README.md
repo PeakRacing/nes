@@ -125,6 +125,23 @@ gitee: https://gitee.com/PeakRacing/nes/releases
 
 **Note: P2 uses numberic keypad**
 
+### VS. System arcade games (`vs xxx.nes`)
+
+The arcade board has no second gamepad: the coin, credit/start and service switches sit in the upper
+bits of the controller ports (`$4016` bit4 / bit3, `$4017` bit2) and the games read them outside the
+shift sequence. **A coin is required before the game will start**, so pressing START alone does
+nothing:
+
+|      Action      |         Key          |
+| :--------------: | :------------------: |
+|   COIN           |  `2` (P2 start)      |
+|   CREDIT         |  `1` (P2 select)     |
+|   SERVICE        |  `6` (P2 B)          |
+
+To play: press `2` to insert a coin, then `B` (P1 start) to begin, and use the P1 keys
+(`WASD`/`JK`) afterwards.  (For `vs battle city.nes` a coin sets `$51/$52` to 5 credits and the
+P1 start then enters a game.)
+
 ## Transplant instructions
 
 ​	The source code in the `inc`and `src` directories does not need to be modified, only the three files in the `port` directory `nes_conf.h` `nes_port.c` `nes_port.h`

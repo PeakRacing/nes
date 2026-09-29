@@ -56,6 +56,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "78 jf16 mirroring", test_mapper78_jf16_mirroring},
         {"mapper", "99 vs unisystem latch", test_mapper99_vs_latch},
         {"ppu", "vs system palette", test_vs_ppu_palette},
+        {"cpu", "vs system switches", test_vs_system_switches},
         {"mapper", "waixing chr-ram window", test_mapper4_waixing_window},
         {"mapper", "mmc3 prg-ram", test_mapper4_wram},
         {"mapper", "synthetic smoke", test_mapper_synthetic_smoke},
