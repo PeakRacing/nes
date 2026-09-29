@@ -96,8 +96,16 @@ static void nes_mapper_init(nes_t* nes) {
     nes_memset(m, 0, sizeof(nes_mapper17_t));
 
     uint16_t n = (uint16_t)(nes->nes_rom.prg_rom_size * 2u);
-    /* Power-on: slot3=last bank (bank15); slot0/1/2=bank0 */
-    m->prg[3] = (uint8_t)((n - 1u) & 0xFFu);
+    /* Power-on layout: the board comes up in its Mapper-6-compatible arrangement, i.e. the last
+     * 16KB is fixed at $C000-$FFFF (slot2 = bank 14, slot3 = bank 15) and $8000-$BFFF holds banks
+     * 0/1.  Games that want a switchable slot2 write $4506 themselves (Batman: Return of the Joker
+     * sets it to 14), but Q版沙罗曼蛇 calls straight into $C542 and depends on the power-on value:
+     * with slot2 = bank 0 that address holds "03 00 00", so the call ran into a BRK storm and the
+     * game never enabled rendering (gray screen). */
+    m->prg[0] = 0u;
+    m->prg[1] = 1u;
+    m->prg[2] = (uint8_t)((n >= 2u) ? (n - 2u) : 0u);
+    m->prg[3] = (uint8_t)(n - 1u);
 
     if (!nes->nes_rom.sram) {
         nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);

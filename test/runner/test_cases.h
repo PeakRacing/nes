@@ -59,6 +59,7 @@ int test_mapper1_rmw_reset_write(void);
 int test_mapper0_prg_ram(void);
 int test_mapper245_chr_ram_board(void);
 int test_mapper69_5b_audio_write(void);
+int test_mapper17_power_on_slots(void);
 int test_mapper4_waixing_window(void);
 int test_mapper4_wram(void);
 int test_mapper_synthetic_smoke(void);

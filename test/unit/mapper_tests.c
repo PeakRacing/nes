@@ -517,6 +517,39 @@ int test_mapper69_5b_audio_write(void) {
     return TEST_PASS;
 }
 
+/*
+ * FFE F8xxx (mapper 17) power-on layout.  The board comes up Mapper-6 compatible: the last 16KB is
+ * fixed at $C000-$FFFF (slot2 = bank 14, slot3 = bank 15) and $8000-$BFFF holds banks 0/1.
+ * Q版沙罗曼蛇 (Chinese trainer hack of Parodius) calls $C542 without ever writing $4506 and expects
+ * the bank-14 library there; with slot2 = bank 0 that address holds "03 00 00", so the call ran
+ * into a BRK storm and the game never enabled rendering (gray screen).  Batman sets $4506 itself,
+ * which is why it never saw the difference.
+ */
+int test_mapper17_power_on_slots(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 17, 8, 16);          /* 128KB PRG (16 x 8KB) + 128KB CHR, like both games */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks: the slots are compared byte-wise */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint16_t banks = (uint16_t)(nes->nes_rom.prg_rom_size * 2u);   /* 8KB banks */
+
+    TEST_EQ_U32(prg[0 * 8192], nes_test_cpu_read(nes, 0x8000));                    /* slot0 = 0 */
+    TEST_EQ_U32(prg[1 * 8192], nes_test_cpu_read(nes, 0xA000));                    /* slot1 = 1 */
+    TEST_EQ_U32(prg[(banks - 2u) * 8192], nes_test_cpu_read(nes, 0xC000));         /* slot2 = last-1 */
+    TEST_EQ_U32(prg[(banks - 1u) * 8192], nes_test_cpu_read(nes, 0xE000));         /* slot3 = last  */
+
+    /* $4506 still switches slot2, and $4507 slot3 (the register map itself is unchanged). */
+    nes_test_cpu_write(nes, 0x4506, 0x05);
+    TEST_EQ_U32(prg[5 * 8192], nes_test_cpu_read(nes, 0xC000));
+    nes_test_cpu_write(nes, 0x4507, 0x03);
+    TEST_EQ_U32(prg[3 * 8192], nes_test_cpu_read(nes, 0xE000));
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper_write_storm(void) {
     int failures = 0;
     for (int mapper = 0; mapper < 256; ++mapper) {

@@ -100,6 +100,23 @@ static const nes_romdb_entry_t romdb[] = {
     { 0x0DBDD55Du, 25u, 1u },
 };
 
+/*
+ * iNES trainers are 512 bytes of patch code that the console copies to $7000-$71FF at power-on, and
+ * games rely on it:  Q版沙罗曼蛇's IRQ vector is $71A0, i.e. inside the trainer.  Two things have to
+ * hold, and neither did before:
+ *   - the copy lands at $7000 ($6000 + 0x1000), not at the start of the window, and
+ *   - it happens after mapper_init(), because on most boards (and in the SDL/port builds with
+ *     NES_USE_SRAM=0) the mapper is what allocates the $6000-$7FFF window in the first place.
+ * Like the real console the patch is written last, so it wins over a battery image it overlaps.
+ * It is boot-time state, not a game write, so the battery file must not be marked dirty by it.
+ */
+static int nes_rom_apply_trainer(nes_t* nes, void* nes_file, long trainer_offset) {
+    if (nes->nes_rom.sram == NULL) return NES_OK;   /* board without a $6000-$7FFF window */
+    if (nes_fseek(nes_file, trainer_offset, SEEK_SET) != 0) return NES_ERROR;
+    if (nes_fread(nes->nes_rom.sram + 0x1000, TRAINER_SIZE, 1, nes_file) == 0) return NES_ERROR;
+    return NES_OK;
+}
+
 static void nes_romdb_lookup(nes_t* nes) {
     if (nes->nes_rom.prg_rom == NULL) return;
     size_t prg_len = (size_t)PRG_ROM_UNIT_SIZE * nes->nes_rom.prg_rom_size;
@@ -155,13 +172,9 @@ int nes_load_file(nes_t* nes, const char* file_path ){
             goto error;
         }
         if (nes_header_info.trainer){
-#if (NES_USE_SRAM == 1)
-            if (nes_fread(nes->nes_rom.sram, TRAINER_SIZE, 1, nes_file)==0){
-                goto error;
-            }
-#else
+            /* The 512 trainer bytes are copied to $7000-$71FF later, once mapper_init() has made
+             * sure the $6000-$7FFF window exists (see nes_rom_apply_trainer). */
             nes_fseek(nes_file, TRAINER_SIZE, SEEK_CUR);
-#endif
         }
         if (nes_header_info.identifier==2){ //NES 2.0
             nes_header_nes2_t* nes2_header_info = (nes_header_nes2_t*)&nes_header_info;
@@ -234,9 +247,7 @@ int nes_load_file(nes_t* nes, const char* file_path ){
     }else{
         goto error;
     }
-#if (NES_ROM_STREAM != 1)
-    nes_fclose(nes_file);
-#endif
+    /* The file stays open until the trainer (if any) has been copied, see below. */
     nes_cpu_init(nes);
 #if (NES_ENABLE_SOUND==1)
     nes_apu_init(nes);
@@ -253,6 +264,20 @@ int nes_load_file(nes_t* nes, const char* file_path ){
     /* Battery RAM is loaded after mapper_init(): mappers may allocate the SRAM themselves
      * (NES_USE_SRAM == 0 builds), and the game's own save must be in place before it runs. */
     (void)nes_sram_load(nes);
+    /* The trainer patch goes in last: it needs the window mapper_init() may have just created. */
+#if (NES_ROM_STREAM == 1)
+    /* Stream builds handed the handle over to the bank cache. */
+    void* trainer_file = (nes_file != NULL) ? nes_file : nes->nes_rom.rom_file;
+#else
+    void* trainer_file = nes_file;
+#endif
+    if (nes_header_info.trainer &&
+        nes_rom_apply_trainer(nes, trainer_file, (long)sizeof(nes_header_info)) != NES_OK) {
+        goto error;
+    }
+#if (NES_ROM_STREAM != 1)
+    nes_fclose(nes_file);
+#endif
     return NES_OK;
 error:
     if (nes_file){
@@ -369,6 +394,12 @@ int nes_load_rom(nes_t* nes, const uint8_t* nes_rom){
     }
     nes->nes_mapper.mapper_init(nes);
     nes_rom_apply_mirror_override(nes);
+    /* The trainer is 512 bytes of boot-time patch code for $7000-$71FF; it needs the window that
+     * mapper_init() may just have allocated (see nes_rom_apply_trainer). */
+    if (nes_header_info->trainer && nes->nes_rom.sram != NULL) {
+        nes_memcpy(nes->nes_rom.sram + 0x1000, (const uint8_t*)nes_rom + sizeof(nes_header_ines_t),
+                   TRAINER_SIZE);
+    }
     return NES_OK;
 error:
     if (nes){
