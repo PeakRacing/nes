@@ -656,6 +656,13 @@ void nes_run(nes_t* nes){
         nes_apu_frame(nes);
         NES_PROF_END(nes, NES_PROF_APU);
 #endif
+        /* The PPU clears the sprite 0 hit and sprite overflow flags at dot 1 of the pre-render
+           scanline, so every frame starts with both flags clear.  Games use them as raster timing
+           markers: VS Platoon's title screen polls $2002 bit 6 ("LDA $2002 / AND #$40 / BEQ ...")
+           and a flag that is set once and never cleared makes that wait return immediately, so the
+           PPU writes land at the wrong time and the screen never finishes drawing. */
+        nes->nes_ppu.STATUS_S = 0;
+        nes->nes_ppu.STATUS_O = 0;
         // https://www.nesdev.org/wiki/PPU_rendering#Visible_scanlines_(0-239)
         for(nes->scanline = 0; nes->scanline < NES_HEIGHT; nes->scanline++) { // 0-239 Visible frame
             uint16_t scanline_ticks = nes->timing.line_clocks;

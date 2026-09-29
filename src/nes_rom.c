@@ -128,6 +128,12 @@ static const nes_romdb_entry_t romdb[] = {
 #if (NES_VS_SYSTEM == 1)
     { 0x01357944u, 99u, 0u, 0u, 0u, 0u, 0u, 2u, 1u },   /* VS Battle City */
 #endif
+    /* VS Platoon: the header claims mapper 68 (Sunsoft-4), but the game writes the Sunsoft-3
+       (mapper 67) register map every frame - $8800/$9800/$A800/$B800 for the four 2KB CHR banks,
+       $E800 for mirroring and $F800 for the 16KB PRG bank - and Mesen's database agrees
+       (2019FE65,VsSystem,...,67,128,128,...,4,...,2).  NOTE: the title screen still freezes after
+       its logo in this core; the mapper is not the remaining problem (see AGENTS.md). */
+    { 0x2019FE65u, 67u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*
