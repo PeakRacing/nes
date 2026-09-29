@@ -41,6 +41,7 @@ static inline uint8_t nes_read_joypad(nes_t* nes,uint16_t address){
         state = (nes->nes_cpu.joypad.joypad & (0x8000 >> (nes->nes_cpu.joypad.offset1 & nes->nes_cpu.joypad.mask))) ? 1 : 0;
         /* VS. UniSystem: the coin/credit switches sit in the port's upper bits and are read
            independently of the shift sequence (the shift itself only ever looks at bit 0). */
+#if (NES_VS_SYSTEM == 1)
         if (nes->nes_rom.vs_system) {
             /* VS coin slots: the games accept a credit when $4016 bit 5 or bit 2 is set
                ("LDA $4016 / AND $4016 / AND #$24" -> INC the credit counter $4B in VS Battle City).
@@ -49,6 +50,7 @@ static inline uint8_t nes_read_joypad(nes_t* nes,uint16_t address){
             if (nes->nes_cpu.joypad.vs_coin)  state |= 0x24u;
             if (nes->nes_cpu.joypad.vs_start) state |= 0x08u;
         }
+#endif
         nes->nes_cpu.joypad.offset1++;
     }else if(address == 0x4017){
         if (nes->nes_cpu.joypad.exp_keyboard) {
@@ -60,9 +62,11 @@ static inline uint8_t nes_read_joypad(nes_t* nes,uint16_t address){
             return 0x1E;
         }
         state = (nes->nes_cpu.joypad.joypad & (0x80 >> (nes->nes_cpu.joypad.offset2 & nes->nes_cpu.joypad.mask))) ? 1 : 0;
+#if (NES_VS_SYSTEM == 1)
         if (nes->nes_rom.vs_system && nes->nes_cpu.joypad.vs_service) {
             state |= 0x04u;
         }
+#endif
         nes->nes_cpu.joypad.offset2++;
     }
     // NES_LOG_DEBUG("nes_read joypad %04X %d %02X %d\n",address,nes->nes_cpu.joypad.mask,nes->nes_cpu.joypad.joypad,state);

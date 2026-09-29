@@ -70,9 +70,11 @@ typedef struct nes_joypad{
        shift loop (VS Battle City tests $4016 bit 4 for the coin, $4016 bit 3 for the credit/start
        input and $4017 bit 2 for service).  The standard 8-bit shift is bit 0 only, so keeping
        these bits out of `joypad` leaves ordinary controller reads untouched. */
+#if (NES_VS_SYSTEM == 1)
     uint8_t vs_coin;
     uint8_t vs_start;
     uint8_t vs_service;
+#endif
 } nes_joypad_t;
 
 // https://www.nesdev.org/wiki/CPU_registers

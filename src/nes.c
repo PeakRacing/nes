@@ -52,6 +52,7 @@ static nes_color_t nes_palette[]={
 #endif /* NES_COLOR_DEPTH */
 };
 
+#if (NES_VS_SYSTEM == 1)
 /* VS. System arcade PPUs (RP2C03 / RP2C04-xxxx) drive RGB outputs from their own fixed palettes,
  * so the same 6-bit colour index looks different from a consumer 2C02 - VS Battle City shows the
  * game's green backdrop as black on the arcade PPU, for instance.  The tables below are the RGB888
@@ -108,6 +109,8 @@ static inline nes_color_t nes_palette_from_rgb(uint32_t rgb) {
     return (nes_color_t)0;
 #endif
 }
+#endif /* NES_VS_SYSTEM */
+
 /* PAL: 312 lines/frame at 50Hz, CPU:PPU = 3.2 dots per CPU cycle => 341/3.2 = 106.5625
  * CPU cycles per line (106 + 9/16), 80 cycles in the first chunk (256 dots). */
 void nes_timing_set_pal(nes_t* nes) {
@@ -159,14 +162,20 @@ void nes_palette_generate(nes_t* nes){
      * romdb picks it (nes_rom.vs_ppu, index 0 = consumer PPU).  The table choice is made once per
      * call, and this runs once per frame plus on palette RAM writes, so it stays off the pixel
      * path. */
+#if (NES_VS_SYSTEM == 1)
     const uint32_t* vs = NULL;
     const uint8_t vs_ppu = nes->nes_rom.vs_ppu;
     if (vs_ppu >= 1u && vs_ppu <= (uint8_t)(sizeof(nes_vs_palette_rgb) / sizeof(nes_vs_palette_rgb[0]))) {
         vs = nes_vs_palette_rgb[vs_ppu - 1u];
     }
+#endif
     for (uint8_t i = 0; i < 32; i++) {
         const uint8_t index = nes->nes_ppu.palette_indexes[i];
+#if (NES_VS_SYSTEM == 1)
         nes->nes_ppu.palette[i] = (vs != NULL) ? nes_palette_from_rgb(vs[index]) : nes_palette[index];
+#else
+        nes->nes_ppu.palette[i] = nes_palette[index];
+#endif
     }
     for (uint8_t i = 1; i < 8; i++){
         nes->nes_ppu.palette[4 * i] = nes->nes_ppu.palette[0];

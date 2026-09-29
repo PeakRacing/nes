@@ -38,6 +38,10 @@
 #define NES_ENABLE_HEAVY_MAPPERS (1)
 #define NES_ENABLE_PLANE1_MAPPERS (1) /* Enable NES 2.0 mappers Plane 1 table 256~511 */
 #define NES_ENABLE_PLANE2_MAPPERS (1) /* Enable NES 2.0 mappers Plane 2 table 512~767 */
+/* Nintendo VS. System arcade boards: mapper 99, the RP2C04-xxxx RGB palettes and the cabinet's
+ * coin/credit/service switches on the controller ports.  Off by default - it costs ~1.3KB of
+ * palette tables and those boards are not functionally complete yet (see AGENTS.md). */
+#define NES_VS_SYSTEM           (0)
 
 /* log level */
 /*

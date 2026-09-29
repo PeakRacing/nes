@@ -63,6 +63,14 @@
 #define NES_ROM_STREAM          (0)       /* stream ROM banks from file instead of loading entire ROM into RAM */
 #endif
 
+/* Nintendo VS. System arcade boards: mapper 99, the RP2C04-xxxx RGB palettes and the cabinet's
+ * coin/credit/service switches that share the controller ports' upper bits.  Off by default - it
+ * pulls in ~1.3KB of palette tables plus a handful of state bytes, and those boards are not
+ * functionally complete yet (see AGENTS.md). */
+#ifndef NES_VS_SYSTEM
+#define NES_VS_SYSTEM           (0)
+#endif
+
 #if (NES_ROM_STREAM == 1)
 #ifndef NES_PRG_CACHE_SLOTS
 #define NES_PRG_CACHE_SLOTS     (6)       /* number of 8KB PRG-ROM LRU cache slots (must > 4) */

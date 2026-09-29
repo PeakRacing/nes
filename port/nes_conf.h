@@ -29,6 +29,10 @@
  */
 #define NES_COLOR_DEPTH         (32)      /* color depth */
 #define NES_COLOR_SWAP          (0)       /* swap color channels */
+/* Nintendo VS. System arcade boards: mapper 99, the RP2C04-xxxx RGB palettes and the cabinet's
+ * coin/credit/service switches on the controller ports.  Off by default - it costs ~1.3KB of
+ * palette tables and those boards are not functionally complete yet (see AGENTS.md). */
+#define NES_VS_SYSTEM           (0)
 #define NES_RAM_LACK            (0)       /* lack of RAM */
 
 #define NES_USE_FS              (1)       /* use file system */

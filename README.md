@@ -127,20 +127,23 @@ gitee: https://gitee.com/PeakRacing/nes/releases
 
 ### VS. System arcade games (`vs xxx.nes`)
 
-The arcade board has no second gamepad: the coin, credit/start and service switches sit in the upper
-bits of the controller ports (`$4016` bit4 / bit3, `$4017` bit2) and the games read them outside the
-shift sequence. **A coin is required before the game will start**, so pressing START alone does
-nothing:
+**Not compiled by default**: the arcade support (mapper 99, the RP2C04 arcade palettes and the
+coin/service switches) is isolated behind `NES_VS_SYSTEM`, which defaults to `0`.  Set it to `1` in
+`nes_conf.h`, or build with `-DNES_VS_SYSTEM=1`.
 
-|      Action      |         Key          |
-| :--------------: | :------------------: |
-|   COIN           |  `2` (P2 start)      |
-|   CREDIT         |  `1` (P2 select)     |
-|   SERVICE        |  `6` (P2 B)          |
+Once enabled: the arcade board has no second gamepad, and the coin / credit / service switches sit in
+the upper bits of the controller ports, read outside the 8-bit shift sequence:
 
-To play: press `2` to insert a coin, then `B` (P1 start) to begin, and use the P1 keys
-(`WASD`/`JK`) afterwards.  (For `vs battle city.nes` a coin sets `$51/$52` to 5 credits and the
-P1 start then enters a game.)
+|     Action      |        Key         | Notes                                                                       |
+| :-------------: | :----------------: | :-------------------------------------------------------------------------- |
+|      COIN       |  `2` (P2 start)    | `$4016` bit5/bit2; **tap it** - the game only adds a credit on the falling edge |
+|     CREDIT      |  `1` (P2 select)   | `$4016` bit3                                                                |
+|     SERVICE     |  `6` (P2 B)        | `$4017` bit2                                                                |
+
+> **Known limitation**: only the video side is complete (mapper 99, four-screen and the arcade
+> colours all match Mesen); the game does **not** start yet - it stays in its attract loop waiting
+> for a start condition that is still being tracked down (see AGENTS.md), which is why the macro is
+> off by default.
 
 ## Transplant instructions
 

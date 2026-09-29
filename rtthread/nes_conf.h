@@ -46,6 +46,10 @@
 
 #define NES_RAM_LACK            (0)       /* lack of RAM */
 
+#ifdef PKG_NES_VS_SYSTEM
+#define NES_VS_SYSTEM           (1)       /* Nintendo VS. System arcade boards (mapper 99 + arcade palette) */
+#endif
+
 /*
 *  - NES_LOG_LEVEL_NONE     Do not log anything.
 *  - NES_LOG_LEVEL_ERROR    Log error.

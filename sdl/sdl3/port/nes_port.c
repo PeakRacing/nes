@@ -210,28 +210,34 @@ static void sdl_event(nes_t *nes) {
                         nes->nes_cpu.joypad.A2 = 1;
                         break;
                     case 94://6
-                    case 34://6 (main row, alias)
                         nes->nes_cpu.joypad.B2 = 1;
-                        nes->nes_cpu.joypad.vs_service = 1; /* VS. System: 2P B = service switch */
+#if (NES_VS_SYSTEM == 1)
+                    case 34://6 (main row, alias)
+                        nes->nes_cpu.joypad.vs_service = 1;
 #if (NES_USE_FS == 1)
-                        sdl_status("NES - SERVICE");   /* confirms the arcade key arrived */
+                        sdl_status("NES - SERVICE");
 #endif
+#endif /* NES_VS_SYSTEM */
                         break;
                     case 89://1
-                    case 30://1 (main row, alias)
                         nes->nes_cpu.joypad.SE2 = 1;
-                        nes->nes_cpu.joypad.vs_start = 1;  /* VS. System: 2P Select = credit/start input */
+#if (NES_VS_SYSTEM == 1)
+                    case 30://1 (main row, alias)
+                        nes->nes_cpu.joypad.vs_start = 1;
 #if (NES_USE_FS == 1)
-                        sdl_status("NES - CREDIT");   /* confirms the arcade key arrived */
+                        sdl_status("NES - CREDIT");
 #endif
+#endif /* NES_VS_SYSTEM */
                         break;
                     case 90://2
-                    case 31://2 (main row, alias)
                         nes->nes_cpu.joypad.ST2 = 1;
-                        nes->nes_cpu.joypad.vs_coin = 1;   /* VS. System: 2P Start inserts a coin */
+#if (NES_VS_SYSTEM == 1)
+                    case 31://2 (main row, alias)
+                        nes->nes_cpu.joypad.vs_coin = 1;
 #if (NES_USE_FS == 1)
-                        sdl_status("NES - COIN");   /* confirms the arcade key arrived */
+                        sdl_status("NES - COIN");
 #endif
+#endif /* NES_VS_SYSTEM */
                         break;
                     default:
                         break;
@@ -286,17 +292,26 @@ static void sdl_event(nes_t *nes) {
                     case 93://5
                         nes->nes_cpu.joypad.A2 = 0;
                         break;
-                    case 34://6 (main row, alias)
                     case 94://6
                         nes->nes_cpu.joypad.B2 = 0;
+#if (NES_VS_SYSTEM == 1)
+                    case 34://6 (main row, alias)
+                        nes->nes_cpu.joypad.vs_service = 0;
+#endif /* NES_VS_SYSTEM */
                         break;
-                    case 30://1 (main row, alias)
                     case 89://1
                         nes->nes_cpu.joypad.SE2 = 0;
+#if (NES_VS_SYSTEM == 1)
+                    case 30://1 (main row, alias)
+                        nes->nes_cpu.joypad.vs_start = 0;
+#endif /* NES_VS_SYSTEM */
                         break;
-                    case 31://2 (main row, alias)
                     case 90://2
                         nes->nes_cpu.joypad.ST2 = 0;
+#if (NES_VS_SYSTEM == 1)
+                    case 31://2 (main row, alias)
+                        nes->nes_cpu.joypad.vs_coin = 0;
+#endif /* NES_VS_SYSTEM */
                         break;
                     default:
                         break;

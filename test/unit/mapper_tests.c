@@ -525,6 +525,7 @@ int test_mapper11_chr_bank_select(void) {
     return TEST_PASS;
 }
 
+#if (NES_VS_SYSTEM == 1)
 /*
  * VS. System arcade PPUs (RP2C03 / RP2C04-xxxx) paint the same 6-bit colour index differently from
  * the consumer 2C02: RP2C04-0001 shows index $0A as orange where the NES palette has green, and
@@ -583,7 +584,9 @@ int test_vs_ppu_palette(void) {
     test_fixture_free(&f);
     return TEST_PASS;
 }
+#endif /* NES_VS_SYSTEM */
 
+#if (NES_VS_SYSTEM == 1)
 /*
  * VS. System cabinets have no second gamepad: the coin/credit/service switches share the upper bits
  * of the controller ports, and the games read them *outside* the 8-bit shift sequence.  VS Battle
@@ -637,7 +640,9 @@ int test_vs_system_switches(void) {
     test_fixture_free(&f);
     return TEST_PASS;
 }
+#endif /* NES_VS_SYSTEM */
 
+#if (NES_VS_SYSTEM == 1)
 /*
  * Mapper 99 (Nintendo VS. UniSystem, VS Battle City): the board's bank latch is not in cartridge
  * space at all - it is written through $4016, the same port the CPU uses to strobe the
@@ -682,6 +687,7 @@ int test_mapper99_vs_latch(void) {
     test_fixture_free(&f);
     return TEST_PASS;
 }
+#endif /* NES_VS_SYSTEM */
 
 /*
  * Mapper 78 (Jaleco JF-16) has two wirings and iNES 1.0 cannot tell them apart: Holy Diver

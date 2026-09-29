@@ -156,13 +156,15 @@ typedef struct nes_rom_info{
     uint8_t  mmc1_strict;               /* romdb: 1 = MMC1 uses a real 5-write counter */
     uint8_t  prg_ram;                   /* romdb: 1 = board has PRG RAM at $6000-$7FFF that must
                                             exist even when NES_USE_SRAM=0 (e.g. Family BASIC) */
+#if (NES_VS_SYSTEM == 1)
     uint8_t  vs_ppu;                    /* romdb: VS. System arcade PPU model, index matches Mesen's
                                             PpuModel enum (0 = consumer 2C02, 1 = RP2C03,
                                             2..5 = RP2C04-0001..0004); selects its RGB palette */
     uint8_t  vs_system;                 /* romdb: 1 = Nintendo VS. System arcade board.  Its cabinet
                                             has no second gamepad: the coin/credit/service switches
-                                            share $4016 bit 4 / bit 3 and $4017 bit 2, which the
-                                            games read outside the controller shift sequence */
+                                            share $4016 bit 5 / bit 2 / bit 3 and $4017 bit 2, which
+                                            the games read outside the controller shift sequence */
+#endif
     uint8_t  sram_dirty;
     uint8_t  sram_persist;               /*  1: frontend opted into <game>.sav persistence */                /*  1: battery RAM changed since the last flush to disk */
 #if (NES_USE_FS == 1)

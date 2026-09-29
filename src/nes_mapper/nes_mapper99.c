@@ -16,6 +16,8 @@
 
 #include "nes.h"
 
+#if (NES_VS_SYSTEM == 1)
+
 /*
  * Mapper 99 — Nintendo VS. UniSystem (VS Battle City, VS Gumshoe, ...).
  *
@@ -102,3 +104,5 @@ int nes_mapper99_init(nes_t* nes) {
     nes->nes_mapper.mapper_state_reapply  = nes_mapper_state_reapply;
     return NES_OK;
 }
+
+#endif /* NES_VS_SYSTEM */
