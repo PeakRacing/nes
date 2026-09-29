@@ -153,6 +153,10 @@ static const nes_romdb_entry_t romdb[] = {
        CNROM (mapper 3) - Mesen's database has C9EE15A7,Famicom,,,,3,32,32,0,0,0,0,v.  With the
        multicart mapper the CHR banks came from the wrong place and every tile was garbled. */
     { 0xC9EE15A7u, 3u, 0u, 0u, 0u, 0u, 0u },
+    /* 爱先生的占卜之星 (Waixing): the header claims mapper 65 (Irem H-3001), the board is the
+       plain Irem G-101 (mapper 32) - Mesen's database: 283AD224,Famicorn,,,,32,256,128,0,0,0,0,h.
+       H-3001 banks PRG in 8KB halves, so with the wrong board the reset code jumped into data. */
+    { 0x283AD224u, 32u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*

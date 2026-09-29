@@ -864,6 +864,64 @@ int test_mapper226_bank_formula(void) {
  * every tile from the wrong CHR bank ("游戏中乱码").  A romdb entry reroutes the ROM here.
  * Mesen's database: C9EE15A7,Famicorn,,,,3,32,32,0,0,0,0,v  (mapper 3, 32KB PRG, 32KB CHR).
  */
+/*
+ * Irem G-101 (mapper 32) banks PRG in 8KB units: $8000 and $A000 select banks, $C000/$E000 stay
+ * fixed to the last two - and bit 1 of $9000 swaps that around ("PRG mode 1": $8000 becomes the
+ * second-to-last bank while $C000 follows the $8000 register).  That 8KB granularity is exactly
+ * what the Waixing game 爱先生的占卜之星 needs: its iNES header claims mapper 65 (Irem H-3001, a
+ * different Irem board), and under that board the reset code jumps into the wrong bank and the
+ * screen stays grey.  Mesen's database has 283AD224,Famicorn,,,,32,256,128,0,0,0,0,h.
+ */
+int test_mapper32_irem_g101_prg_mode(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 32, 16, 4);          /* 256KB PRG = 32 x 8KB banks, plus some CHR */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the offsets can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on: $8000/$A000 on bank 0, the last two slots fixed. */
+    static const struct { uint8_t slot, bank; } boot[] = { { 0u, 0u }, { 1u, 0u }, { 2u, 30u }, { 3u, 31u } };
+    for (size_t i = 0; i < sizeof(boot) / sizeof(boot[0]); ++i) {
+        if (nes->nes_cpu.prg_banks[boot[i].slot] != prg + (size_t)boot[i].bank * 8192u) {
+            test_fixture_free(&f);
+            return mapper_report("mapper 32 power-on PRG layout", 32,
+                                 "$8000/$A000 free, $C000/$E000 on the last two banks", "wrong banks");
+        }
+    }
+
+    /* Mode 0: $8000 and $A000 are switchable, $C000/$E000 fixed. */
+    nes_test_cpu_write(nes, 0x8000, 5u);
+    nes_test_cpu_write(nes, 0xA000, 7u);
+    if (nes->nes_cpu.prg_banks[0] != prg + 5u * 8192u || nes->nes_cpu.prg_banks[1] != prg + 7u * 8192u ||
+        nes->nes_cpu.prg_banks[2] != prg + 30u * 8192u || nes->nes_cpu.prg_banks[3] != prg + 31u * 8192u) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 32 mode 0 PRG banks", 32,
+                             "$8000/$A000 switchable, $C000/$E000 fixed", "wrong banks");
+    }
+
+    /* Mode 1 ($9000 bit 1): $8000 goes to the second-to-last bank, $C000 follows the register. */
+    nes_test_cpu_write(nes, 0x9000, 0x02u);
+    if (nes->nes_cpu.prg_banks[0] != prg + 30u * 8192u || nes->nes_cpu.prg_banks[2] != prg + 5u * 8192u ||
+        nes->nes_cpu.prg_banks[1] != prg + 7u * 8192u || nes->nes_cpu.prg_banks[3] != prg + 31u * 8192u) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 32 mode 1 PRG banks", 32,
+                             "$8000 fixed to second-to-last, $C000 switchable", "wrong banks");
+    }
+
+    /* Back to mode 0 and the register must drive $8000 again. */
+    nes_test_cpu_write(nes, 0x9000, 0x00u);
+    if (nes->nes_cpu.prg_banks[0] != prg + 5u * 8192u || nes->nes_cpu.prg_banks[2] != prg + 30u * 8192u) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 32 returns to mode 0", 32,
+                             "$8000 switchable again", "mode bit stayed set");
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper3_cnrom_chr_bank(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 3, 2, 4);            /* 32KB PRG + 32KB CHR = four 8KB banks */
