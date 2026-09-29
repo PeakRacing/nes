@@ -15,7 +15,12 @@
  */
 
 #include "nes.h"
-#if defined(NES_TEST_PROFILE) && (NES_TEST_PROFILE == 1)
+/* This file reaches into both hook sets: NES_TEST_MODE drives the read/write logs below and
+ * NES_TEST_PROFILE the per-region timers, and the SDL nes-test target defines only the former.
+ * Leaving the declaration out is not merely a warning there: clang rejects the implicit calls
+ * outright ("ISO C99 and later do not support implicit function declarations"), which is how the
+ * macOS CI build failed. */
+#if (defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)) || (defined(NES_TEST_PROFILE) && (NES_TEST_PROFILE == 1))
 #include "nes_test.h"
 #endif
 
