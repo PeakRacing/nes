@@ -34,6 +34,12 @@ static uint32_t nes_crc32_update(uint32_t crc, const uint8_t* data, size_t len) 
     return crc;
 }
 
+#if (NES_VS_SYSTEM == 1)
+#define ROMDB_VS(ppu, sys)      , ppu##u, sys##u      /* the arcade PPU model + VS board flag */
+#else
+#define ROMDB_VS(ppu, sys)
+#endif
+
 typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; uint8_t mirror; uint8_t mmc1_strict; uint8_t prg_ram;
 #if (NES_VS_SYSTEM == 1)
                  uint8_t vs_ppu; uint8_t vs_system;
@@ -125,15 +131,13 @@ static const nes_romdb_entry_t romdb[] = {
        consumer 2C02 (the game's green backdrop becomes black, the white logo orange), so the
        palette model has to come from the CRC.  Index matches Mesen's PpuModel enum and the
        database entry 01357944,...,2 -- as does the rest of this table's content. */
-#if (NES_VS_SYSTEM == 1)
-    { 0x01357944u, 99u, 0u, 0u, 0u, 0u, 0u, 2u, 1u },   /* VS Battle City */
-#endif
+    { 0x01357944u, 99u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(2, 1) },   /* VS Battle City (RP2C04-0001) */
     /* VS Platoon: the header claims mapper 68 (Sunsoft-4), but the game writes the Sunsoft-3
        (mapper 67) register map every frame - $8800/$9800/$A800/$B800 for the four 2KB CHR banks,
        $E800 for mirroring and $F800 for the 16KB PRG bank - and Mesen's database agrees
        (2019FE65,VsSystem,...,67,128,128,...,4,...,2).  NOTE: the title screen still freezes after
        its logo in this core; the mapper is not the remaining problem (see AGENTS.md). */
-    { 0x2019FE65u, 67u, 0u, 0u, 0u, 0u, 0u },
+    { 0x2019FE65u, 67u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(2, 1) },
 };
 
 /*
