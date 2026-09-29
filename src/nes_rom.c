@@ -34,7 +34,7 @@ static uint32_t nes_crc32_update(uint32_t crc, const uint8_t* data, size_t len) 
     return crc;
 }
 
-typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; uint8_t mirror; uint8_t mmc1_strict; uint8_t prg_ram; } nes_romdb_entry_t;
+typedef struct { uint32_t crc32; uint16_t mapper; uint8_t vrc4d; uint8_t pal; uint8_t mirror; uint8_t mmc1_strict; uint8_t prg_ram; uint8_t vs_ppu; } nes_romdb_entry_t;
 
 /* Boards whose mirroring cannot be derived from the iNES header (pirate multicarts, wrong
  * header bits).  0 = leave the header's AUTO resolution alone. */
@@ -115,6 +115,13 @@ static const nes_romdb_entry_t romdb[] = {
        banks 1-5, renders with the wrong tiles ("画面乱").  Verified: with mapper 11 the
        in-game graphics become coherent (characters complete, no torn left column). */
     { 0xB1D03104u, 11u, 0u },
+
+    /* VS Battle City (VS. UniSystem, mapper 99).  Its header has no NES 2.0 field for the arcade
+       PPU, but the board's RP2C04-0001 paints the same colour indexes very differently from the
+       consumer 2C02 (the game's green backdrop becomes black, the white logo orange), so the
+       palette model has to come from the CRC.  Index matches Mesen's PpuModel enum and the
+       database entry 01357944,...,2 -- as does the rest of this table's content. */
+    { 0x01357944u, 99u, 0u, 0u, 0u, 0u, 0u, 2u },
 };
 
 /*
@@ -154,6 +161,8 @@ static void nes_romdb_lookup(nes_t* nes) {
             nes->nes_rom.mirror_override = romdb[i].mirror;
             nes->nes_rom.mmc1_strict = romdb[i].mmc1_strict;
             nes->nes_rom.prg_ram = romdb[i].prg_ram;
+            /* VS. System arcade PPU (its RGB palette differs from the consumer 2C02). */
+            nes->nes_rom.vs_ppu = romdb[i].vs_ppu;
             return;
         }
     }

@@ -526,6 +526,65 @@ int test_mapper11_chr_bank_select(void) {
 }
 
 /*
+ * VS. System arcade PPUs (RP2C03 / RP2C04-xxxx) paint the same 6-bit colour index differently from
+ * the consumer 2C02: RP2C04-0001 shows index $0A as orange where the NES palette has green, and
+ * index $1A as black where the NES palette is green.  VS Battle City draws its whole title screen
+ * with those two indexes, which is why it looked "green" until the arcade palette was selected
+ * through nes_rom.vs_ppu (romdb).  The table itself is Mesen2's (_ppuPaletteArgb).
+ */
+int test_vs_ppu_palette(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 99, 2, 2);
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+
+    /* Consumer 2C02: index $1A is green (never black). */
+    nes->nes_rom.vs_ppu = 0;
+    nes->nes_ppu.palette_indexes[0] = 0x1Au;
+    nes_palette_generate(nes);
+    const nes_color_t consumer = nes->nes_ppu.palette[0];
+    if ((uint32_t)(consumer & 0xFFFFFFu) == 0x000000u) {
+        test_fixture_free(&f);
+        return mapper_report("consumer PPU keeps the NES palette", 0,
+                             "a non-black colour for index $1A", "black");
+    }
+
+    /* RP2C04-0001 (Mesen PpuModel 2): index $1A is black and index $0A is orange. */
+    nes->nes_rom.vs_ppu = 2u;
+    nes_palette_generate(nes);
+    if ((uint32_t)(nes->nes_ppu.palette[0] & 0xFFFFFFu) != 0x000000u) {
+        test_fixture_free(&f);
+        return mapper_report("VS PPU palette is selected through nes_rom.vs_ppu", 0,
+                             "index $1A black on RP2C04-0001", "consumer colour");
+    }
+    nes->nes_ppu.palette_indexes[0] = 0x0Au;
+    nes_palette_generate(nes);
+#if (NES_COLOR_DEPTH == 32)
+    TEST_EQ_U32(0x00FFB600u, (uint32_t)(nes->nes_ppu.palette[0] & 0xFFFFFFu));   /* orange */
+#else
+    if ((uint32_t)(nes->nes_ppu.palette[0] & 0xFFFFFFu) == (uint32_t)(consumer & 0xFFFFFFu)) {
+        test_fixture_free(&f);
+        return mapper_report("VS PPU palette is selected through nes_rom.vs_ppu", 0,
+                             "index $0A differs from the consumer table", "same colour");
+    }
+#endif
+
+    /* An out-of-range model falls back to the consumer palette instead of reading out of bounds. */
+    nes->nes_rom.vs_ppu = 200u;
+    nes->nes_ppu.palette_indexes[0] = 0x1Au;
+    nes_palette_generate(nes);
+    if ((uint32_t)(nes->nes_ppu.palette[0] & 0xFFFFFFu) == 0x000000u) {
+        test_fixture_free(&f);
+        return mapper_report("unknown VS PPU model falls back", 0,
+                             "the consumer palette", "black (out of range table)");
+    }
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * Mapper 99 (Nintendo VS. UniSystem, VS Battle City): the board's bank latch is not in cartridge
  * space at all - it is written through $4016, the same port the CPU uses to strobe the
  * controllers, so that write has to reach both the board and the joypad.  The latch picks the 8KB
