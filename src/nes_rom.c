@@ -138,6 +138,9 @@ static const nes_romdb_entry_t romdb[] = {
        (2019FE65,VsSystem,...,67,128,128,...,4,...,2).  NOTE: the title screen still freezes after
        its logo in this core; the mapper is not the remaining problem (see AGENTS.md). */
     { 0x2019FE65u, 67u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(2, 1) },
+    /* VS Slalom: the header claims mapper 0 (NROM), but Mesen's database has it as a VS. UniSystem
+       board - 9AE2BAA0,VsSystem,...,99,32,8,...,3 - i.e. mapper 99 with the RP2C04-0002 PPU. */
+    { 0x9AE2BAA0u, 99u, 0u, 0u, 0u, 0u, 0u ROMDB_VS(3, 1) },
 };
 
 /*
