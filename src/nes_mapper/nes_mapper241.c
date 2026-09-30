@@ -33,10 +33,14 @@ static void nes_mapper_init(nes_t* nes) {
     xxx P PPPP
         | ||||
         +-++++- Select 32 KB PRG ROM bank for CPU $8000-$FFFF
+
+    Authority: Mesen2 Core/NES/Mappers/Unlicensed/Mapper241.h - it passes the whole byte and
+    lets the page count wrap.  Masking to 0x1F first (the old code) picks the wrong page for
+    images whose 32KB page count is not a power of two.
 */
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     (void)address;
-    nes_load_prgrom_32k(nes, 0, data & 0x1F);
+    nes_load_prgrom_32k(nes, 0, data);
 }
 
 int nes_mapper241_init(nes_t* nes) {

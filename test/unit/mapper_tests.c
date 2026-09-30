@@ -2283,8 +2283,69 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
-/* Mapper 245 (Waixing MMC3 + 0x40 PRG block latch; 勇者斗恶龙6/7 are CHR-RAM carts with a
-   fixed 4KB CHR layout).  Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_245.h */
+/* Mapper 189 (TXC MMC3 variant): the $4120-$7FFF register selects one 32KB block with its
+   two nibbles OR'd together.  Authority: Mesen2 Core/NES/Mappers/Txc/MMC3_189.h */
+int test_mapper189_txc_prg(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 189, 8, 16);         /* 128KB PRG (4 x 32KB) + 128KB CHR */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+
+    /* Below the $4120 window the write is not a register. */
+    nes_test_cpu_write(nes, 0x411Fu, 0x70u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* $4120 = 0x70: nibbles OR'd -> 7, wrapped onto the 4 available 32KB blocks -> block 3
+       (8KB banks 12-15).  Reading only the low nibble would stay on block 0. */
+    nes_test_cpu_write(nes, 0x4120u, 0x70u);
+    TEST_EQ_U32(12u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(15u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* $4121/$7FFF are the same register: 0x02 -> 32KB block 2 = 8KB banks 8-11. */
+    nes_test_cpu_write(nes, 0x7FFFu, 0x02u);
+    TEST_EQ_U32(8u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/* Mapper 241: the whole data byte selects the 32KB PRG page (the page count wraps) and CHR
+   is a fixed 8KB page.  Authority: Mesen2 Core/NES/Mappers/Unlicensed/Mapper241.h */
+int test_mapper241_prg_full_byte(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 241, 48, 0);         /* 768KB PRG (24 x 32KB) + 8KB CHR-RAM */
+    spec.save = 0;
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* 0x20 on a 24-page image wraps to page 8 (8KB banks 32-35).  Masking the value to five
+       bits first would wrongly select page 0. */
+    nes_test_cpu_write(nes, 0x8000u, 0x20u);
+    TEST_EQ_U32(32u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* 0x05 fits directly: 32KB page 5 = 8KB banks 20-23. */
+    nes_test_cpu_write(nes, 0xC000u, 0x05u);
+    TEST_EQ_U32(20u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* 0x25 (37) wraps onto the 24-page image: 37 % 24 = 13 = 8KB banks 52-55. */
+    nes_test_cpu_write(nes, 0xE000u, 0x25u);
+    TEST_EQ_U32(52u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
 int test_mapper245_prg_block(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 245, 64, 0);         /* 1MB PRG (128 x 8KB) + 8KB CHR-RAM */

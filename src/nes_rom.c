@@ -173,6 +173,14 @@ static const nes_romdb_entry_t romdb[] = {
        board is Waixing's MMC3 variant (mapper 115) - Mesen's database: C5E5C5B2 -> mapper 115,
        256KB PRG + 256KB CHR.  Without the entry the image cannot load at all. */
     { 0xC5E5C5B2u, 115u, 0u, 0u, 0u, 0u, 0u },
+    /* 四人街霸: the header claims UxROM (mapper 2) but the board is TXC's MMC3 variant
+       (mapper 189) - Mesen's database: 6E149729 -> mapper 189, 128KB PRG + 128KB CHR.
+       As UxROM the title screen never renders; as 189 it comes up at frame 4. */
+    { 0x6E149729u, 189u, 0u, 0u, 0u, 0u, 0u },
+    /* 泰坦尼克号(中文) / 泰坦尼克号 [火星电子]: the header claims mapper 34, the board is
+       mapper 241 (32KB PRG page + 8KB CHR-RAM) - Mesen's database: 54D98B79 -> mapper 241,
+       1024KB PRG, 8KB CHR-RAM.  Mapper 34 only renders a still screen here. */
+    { 0x54D98B79u, 241u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*
