@@ -31,6 +31,27 @@ Release highlights:
   so they are deliberately **not** implemented rather than guessed. The images in the corpus that carry
   those headers already render through their header mappers, and the plane 1/2 checkboxes in the READMEs
   stay unticked, which matches this finding.
+- **Mapper audit (27 boards rewritten or corrected, 14 romdb entries)** — every fix below was
+  checked against Mesen2 (`Core/NES/Mappers/...`) or FCEUX first, and each one has a unit test that
+  **fails if the fix is reverted**:
+  - rewritten: 51, 142, 171, 176 (Waixing FK23C), 178, 198 (MMC3_198), 199 (MMC3_199, authority
+    alignment only — its one ROM still does not render), 207, 208 (MMC3_208), 227, 240, 244, 245,
+    250, 132 and 147 (the TXC scrambler, one JV001 and one non-JV001 variant);
+  - decode corrected: 62, 86 (Jaleco JF-13 — all three fields were in the wrong place), 114, 115,
+    117, 133 (Sachen SA-72007), 149, 150, 12 (the outer CHR bit had been dead code), 85 (VRC7 — the
+    second register of each pair is selected by A3, not A4);
+  - `src/nes_rom.c` romdb entries now override a wrong header mapper for 14 images (189, 241, 115,
+    140, 176 ×2, 114, 178 ×2, 208, 198, 4);
+  - boards 4/18/21/23/25/73/153/162/164/165/167 also allocate their on-board work RAM
+    unconditionally (the iNES header often has no battery bit).
+- **Audit result** — the collection-level audit (`test/audit_mappers.py`, 575 images) went from
+  **36 mappers with an untrustworthy verdict down to 11**, and 40+ games changed from
+  blank/load_fail/unregistered to playable. Remaining items are documented rather than guessed:
+  79/12/86 only ever show a static screen (need a screenshot check), 242 and 天神之剑 do not render
+  under any candidate mapper in this core *or* in Mesen (dump/hack issue), 116/153 need big board
+  implementations, 111 (GTROM) needs core support for 16 banked nametables, and **512/256/558 are
+  deliberately not implemented because Mesen2 has no implementation to follow** (its factory only has
+  `case 256: break;` and no case at all for 512/558).
 - **Tests** — 88 unit/stress cases and a 567-image corpus baseline; `-Strict` stays at
   REGRESSED 0 / HASH_DIFF 0. The expansion-audio module compiles away entirely when the macro is 0
   (verified: 86/87 cases in the two configurations).
