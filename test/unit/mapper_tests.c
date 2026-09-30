@@ -2283,8 +2283,69 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
-/* Mapper 189 (TXC MMC3 variant): the $4120-$7FFF register selects one 32KB block with its
-   two nibbles OR'd together.  Authority: Mesen2 Core/NES/Mappers/Txc/MMC3_189.h */
+/* Mapper 117 (Waixing one-register-per-address board).  Authority: Mesen2
+   Core/NES/Mappers/Unlicensed/Mapper117.h */
+int test_mapper117_direct_slots(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 117, 16, 4);         /* 256KB PRG (32 x 8KB) + 32KB CHR (32 x 1KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: the last 32KB is visible (SelectPrgPage4x(0, -4)). */
+    TEST_EQ_U32(28u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(31u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* $8000-$8003 write one 8KB PRG slot each. */
+    nes_test_cpu_write(nes, 0x8000u, 0x05u);
+    nes_test_cpu_write(nes, 0x8003u, 0x07u);
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* $A000-$A007 write one 1KB CHR slot each. */
+    nes_test_cpu_write(nes, 0xA004u, 0x03u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_ppu.pattern_table[4] - chr) / 1024u);
+    /* ...and $8004 is NOT a CHR register. */
+    nes_test_cpu_write(nes, 0x8004u, 0x09u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_ppu.pattern_table[4] - chr) / 1024u);
+
+    /* $D000 mirroring. */
+    nes_test_cpu_write(nes, 0xD000u, 0x01u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 117 mirroring from $D000", 117,
+                             "horizontal wiring", "wrong nametable");
+    }
+
+    /* IRQ: $E000 arms the main enable, but the counter only runs once $C003 has also armed
+       the alt flag and loaded it - three scanlines with only $E000 must not fire. */
+    nes->nes_ppu.MASK_b = 1;
+    nes->nes_cpu.irq_pending = 0;
+    nes_test_cpu_write(nes, 0xC001u, 0x02u);
+    nes_test_cpu_write(nes, 0xE000u, 0x01u);
+    nes->nes_mapper.mapper_hsync(nes);
+    nes->nes_mapper.mapper_hsync(nes);
+    nes->nes_mapper.mapper_hsync(nes);
+    TEST_EQ_U32(0u, nes->nes_cpu.irq_pending);
+
+    nes_test_cpu_write(nes, 0xC003u, 0x00u);     /* counter = 2, alt armed */
+    nes->nes_mapper.mapper_hsync(nes);
+    TEST_EQ_U32(0u, nes->nes_cpu.irq_pending);
+    nes->nes_mapper.mapper_hsync(nes);
+    TEST_EQ_U32(1u, nes->nes_cpu.irq_pending);
+    /* The alt flag is one-shot: the next scanline must not fire again. */
+    nes->nes_cpu.irq_pending = 0;
+    nes->nes_mapper.mapper_hsync(nes);
+    TEST_EQ_U32(0u, nes->nes_cpu.irq_pending);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
 int test_mapper189_txc_prg(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 189, 8, 16);         /* 128KB PRG (4 x 32KB) + 128KB CHR */

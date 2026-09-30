@@ -16,28 +16,38 @@
 
 #include "nes.h"
 
-/* https://www.nesdev.org/wiki/INES_Mapper_117
- * Mapper 117 — FK23C (MMC3 + outer bank registers via APU $5000-$5003).
- * Standard MMC3 with 4 outer registers accessible at $5000-$5003:
- *   $5000: outer PRG bits[5:0]
- *   $5001: outer CHR bits[5:0]
- *   $5002: (PRG mode: bit7=1 → single 32KB fixed bank using $5000)
- *   $5003: outer CHR high bits (for large ROMs)
+/*
+ * Mapper 117 - Waixing "one register per address" board (三国志4 等).
+ * Authority: Mesen2 Core/NES/Mappers/Unlicensed/Mapper117.h.
+ *
+ * Four 8KB PRG slots and eight 1KB CHR slots are written DIRECTLY, one address per slot:
+ *
+ *   $8000-$8003 : PRG 8KB slot 0-3 = value
+ *   $A000-$A007 : CHR 1KB slot 0-7 = value
+ *   $C001       : IRQ reload value
+ *   $C002       : acknowledge the IRQ
+ *   $C003       : counter = reload value, and arm the "alt" enable flag
+ *   $D000       : mirroring (bit 0 set -> horizontal, clear -> vertical)
+ *   $E000       : IRQ enable = bit 0 (also acknowledges)
+ *
+ * The IRQ counter only counts down while BOTH enable flags are set: $E000 arms the main
+ * one, $C003 the alt one; reaching zero fires the IRQ and clears the alt flag.
+ *
+ * Power-on shows the LAST 32KB in $8000-$FFFF (SelectPrgPage4x(0, -4)).
+ *
+ * The previous implementation was a completely different board (an MMC3 with outer bank
+ * registers at $5000-$5003), so games that never see the expected free banks stayed blank.
  */
 
 typedef struct {
-    uint8_t bank_select;
-    uint8_t bank_values[8];
-    uint8_t mirroring;
-    uint8_t irq_latch;
+    uint8_t prg[4];
+    uint8_t chr[8];
+    uint8_t irq_reload_value;
     uint8_t irq_counter;
-    uint8_t irq_reload;
     uint8_t irq_enabled;
-    uint8_t prg_bank_count;
-    uint8_t chr_bank_count;
-    uint8_t outer_prg;
-    uint8_t outer_chr;
-    uint8_t mode;
+    uint8_t irq_enabled_alt;
+    uint16_t prg_bank_count;   /* number of 8KB PRG banks */
+    uint16_t chr_bank_count;   /* number of 1KB CHR banks */
 } mapper117_t;
 
 static void nes_mapper_deinit(nes_t* nes) {
@@ -45,54 +55,20 @@ static void nes_mapper_deinit(nes_t* nes) {
     nes->nes_mapper.mapper_register = NULL;
 }
 
-static void mapper117_update_banks(nes_t* nes) {
+static void mapper117_update_prg(nes_t* nes) {
     mapper117_t* m = (mapper117_t*)nes->nes_mapper.mapper_register;
-    uint8_t prg_mode = (m->bank_select >> 6) & 1u;
-    uint8_t chr_mode = (m->bank_select >> 7) & 1u;
-    uint8_t op = m->outer_prg & 0x3Fu;  /* outer PRG offset in 8KB units */
-    uint8_t oc = m->outer_chr;
-
-    /* If mode bit7: fixed 32KB bank from outer_prg */
-    if (m->mode & 0x80u) {
-        uint8_t b32 = (uint8_t)(op / 4u);
-        nes_load_prgrom_32k(nes, 0, (uint16_t)(b32 % (m->prg_bank_count / 4u)));
-    } else {
-        uint8_t last  = (uint8_t)(m->prg_bank_count - 1u);
-        uint8_t slast = (uint8_t)(m->prg_bank_count - 2u);
-        if (prg_mode == 0u) {
-            nes_load_prgrom_8k(nes, 0, (uint8_t)((op + m->bank_values[6]) % m->prg_bank_count));
-            nes_load_prgrom_8k(nes, 1, (uint8_t)((op + m->bank_values[7]) % m->prg_bank_count));
-            nes_load_prgrom_8k(nes, 2, slast);
-            nes_load_prgrom_8k(nes, 3, last);
-        } else {
-            nes_load_prgrom_8k(nes, 0, slast);
-            nes_load_prgrom_8k(nes, 1, (uint8_t)((op + m->bank_values[7]) % m->prg_bank_count));
-            nes_load_prgrom_8k(nes, 2, (uint8_t)((op + m->bank_values[6]) % m->prg_bank_count));
-            nes_load_prgrom_8k(nes, 3, last);
-        }
+    uint8_t slot;
+    for (slot = 0; slot < 4u; slot++) {
+        nes_load_prgrom_8k(nes, slot, m->prg[slot]);
     }
+}
 
+static void mapper117_update_chr(nes_t* nes) {
+    mapper117_t* m = (mapper117_t*)nes->nes_mapper.mapper_register;
+    uint8_t slot;
     if (m->chr_bank_count == 0u) return;
-    uint8_t coff = oc;
-
-    if (chr_mode == 0u) {
-        nes_load_chrrom_1k(nes, 0, (uint8_t)((coff + (m->bank_values[0] & 0xFEu)) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 1, (uint8_t)((coff + (m->bank_values[0] | 0x01u)) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 2, (uint8_t)((coff + (m->bank_values[1] & 0xFEu)) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 3, (uint8_t)((coff + (m->bank_values[1] | 0x01u)) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 4, (uint8_t)((coff + m->bank_values[2]) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 5, (uint8_t)((coff + m->bank_values[3]) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 6, (uint8_t)((coff + m->bank_values[4]) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 7, (uint8_t)((coff + m->bank_values[5]) % m->chr_bank_count));
-    } else {
-        nes_load_chrrom_1k(nes, 0, (uint8_t)((coff + m->bank_values[2]) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 1, (uint8_t)((coff + m->bank_values[3]) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 2, (uint8_t)((coff + m->bank_values[4]) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 3, (uint8_t)((coff + m->bank_values[5]) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 4, (uint8_t)((coff + (m->bank_values[0] & 0xFEu)) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 5, (uint8_t)((coff + (m->bank_values[0] | 0x01u)) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 6, (uint8_t)((coff + (m->bank_values[1] & 0xFEu)) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 7, (uint8_t)((coff + (m->bank_values[1] | 0x01u)) % m->chr_bank_count));
+    for (slot = 0; slot < 8u; slot++) {
+        nes_load_chrrom_1k(nes, slot, (uint16_t)(m->chr[slot] % m->chr_bank_count));
     }
 }
 
@@ -104,66 +80,84 @@ static void nes_mapper_init(nes_t* nes) {
     mapper117_t* m = (mapper117_t*)nes->nes_mapper.mapper_register;
     nes_memset(m, 0, sizeof(mapper117_t));
 
-    m->prg_bank_count = (uint8_t)(nes->nes_rom.prg_rom_size * 2u);
-    m->chr_bank_count = (uint8_t)(nes->nes_rom.chr_rom_size * 8u);
-    m->bank_values[6] = 0;
-    m->bank_values[7] = 1;
+    m->prg_bank_count = (uint16_t)(nes->nes_rom.prg_rom_size * 2u);
+    m->chr_bank_count = (uint16_t)(nes->nes_rom.chr_rom_size * 8u);
+
+    /* Power-on: the last 32KB sits in $8000-$FFFF (SelectPrgPage4x(0, -4)). */
+    if (m->prg_bank_count >= 4u) {
+        const uint16_t first = (uint16_t)(m->prg_bank_count - 4u);
+        for (uint8_t slot = 0; slot < 4u; slot++) {
+            m->prg[slot] = (uint8_t)(first + slot);
+        }
+    }
 
     if (nes->nes_rom.chr_rom_size == 0u) nes_load_chrrom_8k(nes, 0, 0);
-    mapper117_update_banks(nes);
+    mapper117_update_prg(nes);
+    mapper117_update_chr(nes);
 }
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     mapper117_t* m = (mapper117_t*)nes->nes_mapper.mapper_register;
-    switch (address & 0xE001u) {
-    case 0x8000: m->bank_select = data; mapper117_update_banks(nes); break;
-    case 0x8001: {
-        uint8_t reg = m->bank_select & 0x07u;
-        m->bank_values[reg] = data;
-        mapper117_update_banks(nes);
-        break;
+
+    if (address >= 0x8000u && address <= 0x8003u) {
+        m->prg[address & 0x03u] = data;
+        mapper117_update_prg(nes);
+        return;
     }
-    case 0xA000:
-        m->mirroring = data & 1u;
-        if (nes->nes_rom.four_screen == 0)
-            nes_ppu_screen_mirrors(nes, m->mirroring ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
-        break;
-    case 0xA001: break;
-    case 0xC000: m->irq_latch   = data; break;
-    case 0xC001: m->irq_reload  = 1; break;
-    case 0xE000: m->irq_enabled = 0; nes->nes_cpu.irq_pending = 0; break;
-    case 0xE001: m->irq_enabled = 1; break;
-    default: break;
+    if (address >= 0xA000u && address <= 0xA007u) {
+        m->chr[address & 0x07u] = data;
+        mapper117_update_chr(nes);
+        return;
     }
+    if (address >= 0xC000u && address <= 0xE000u) {
+        switch (address & 0xE003u) {
+        case 0xC001u: m->irq_reload_value = data; break;
+        case 0xC002u: nes->nes_cpu.irq_pending = 0; break;
+        case 0xC003u:
+            m->irq_counter = m->irq_reload_value;
+            m->irq_enabled_alt = 1u;
+            break;
+        case 0xE000u:
+            m->irq_enabled = (uint8_t)(data & 0x01u);
+            nes->nes_cpu.irq_pending = 0;
+            break;
+        default:
+            break;
+        }
+        return;
+    }
+    if (address == 0xD000u) {
+        if (nes->nes_rom.four_screen == 0) {
+            nes_ppu_screen_mirrors(nes, (data & 0x01u) ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
+        }
+    }
+    (void)m;
 }
 
-static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
-    mapper117_t* m = (mapper117_t*)nes->nes_mapper.mapper_register;
-    switch (address & 0x03u) {
-    case 0u: m->outer_prg = data & 0x3Fu; mapper117_update_banks(nes); break;
-    case 1u: m->outer_chr = data & 0x3Fu; mapper117_update_banks(nes); break;
-    case 2u: m->mode = data; mapper117_update_banks(nes); break;
-    default: break;
-    }
-}
-
+/* The scanline hook stands in for Mesen's A12 watcher: the counter only moves while both
+   enable flags are set, and hitting zero fires and disarms the alt flag. */
 static void nes_mapper_hsync(nes_t* nes) {
     mapper117_t* m = (mapper117_t*)nes->nes_mapper.mapper_register;
     if (nes->nes_ppu.MASK_b == 0 && nes->nes_ppu.MASK_s == 0) return;
-    if (m->irq_counter == 0u || m->irq_reload) {
-        m->irq_counter = m->irq_latch;
-    } else {
-        m->irq_counter--;
+    if (m->irq_enabled == 0u || m->irq_enabled_alt == 0u || m->irq_counter == 0u) return;
+
+    m->irq_counter--;
+    if (m->irq_counter == 0u) {
+        m->irq_enabled_alt = 0u;
+        nes_cpu_irq(nes);
     }
-    if (m->irq_counter == 0u && m->irq_enabled) nes_cpu_irq(nes);
-    m->irq_reload = 0;
+}
+
+static void nes_mapper_state_reapply(nes_t* nes) {
+    mapper117_update_prg(nes);
+    mapper117_update_chr(nes);
 }
 
 int nes_mapper117_init(nes_t* nes) {
     nes->nes_mapper.mapper_init   = nes_mapper_init;
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
     nes->nes_mapper.mapper_write  = nes_mapper_write;
-    nes->nes_mapper.mapper_apu    = nes_mapper_apu;
     nes->nes_mapper.mapper_hsync  = nes_mapper_hsync;
+    nes->nes_mapper.mapper_state_reapply = nes_mapper_state_reapply;
     return NES_OK;
 }

@@ -181,6 +181,10 @@ static const nes_romdb_entry_t romdb[] = {
        mapper 241 (32KB PRG page + 8KB CHR-RAM) - Mesen's database: 54D98B79 -> mapper 241,
        1024KB PRG, 8KB CHR-RAM.  Mapper 34 only renders a still screen here. */
     { 0x54D98B79u, 241u, 0u, 0u, 0u, 0u, 0u },
+    /* 妖怪俱乐部: the header claims mapper 66 (GxROM) but the board is Jaleco's JF-11/JF-14
+       (mapper 140) - Mesen's database: 6BC65D7E -> mapper 140, 128KB PRG + 32KB CHR.  As 66
+       the screen is a still image; as 140 it starts at frame 5. */
+    { 0x6BC65D7Eu, 140u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*

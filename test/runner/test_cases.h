@@ -104,6 +104,7 @@ int test_mapper240_register_window(void);
 int test_mapper245_prg_block(void);
 int test_mapper189_txc_prg(void);
 int test_mapper241_prg_full_byte(void);
+int test_mapper117_direct_slots(void);
 int test_mapper_synthetic_smoke(void);
 int test_mapper_write_storm(void);
 int test_mapper_bank_stress(void);
