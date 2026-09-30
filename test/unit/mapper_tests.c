@@ -2283,6 +2283,44 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
+/* Mapper 133 (Sachen SA-72007): one register selected by the address.
+   Authority: Mesen2 Core/NES/Mappers/Sachen/Sachen_133.h */
+int test_mapper133_sachen(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 133, 8, 8);          /* 128KB PRG (4 x 32KB) + 64KB CHR (8 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: PRG 32KB page 0, CHR 8KB page 0. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* $4100 (APU window): PRG = (value >> 2) & 1, CHR = value & 3. */
+    nes_test_cpu_write(nes, 0x4100u, 0x04u);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+    nes_test_cpu_write(nes, 0x4100u, 0x02u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* $C100 is the SAME register through the $8000-$FFFF window (the core routes those
+       writes to mapper_write, so a board that only listens on the APU hook misses them). */
+    nes_test_cpu_write(nes, 0xC100u, 0x07u);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* Any other address is not the register. */
+    nes_test_cpu_write(nes, 0xC200u, 0x00u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 /* Mapper 199 (MMC3 + four extension registers + private 8KB CHR-RAM).
    Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_199.h */
 int test_mapper199_ext_regs(void) {

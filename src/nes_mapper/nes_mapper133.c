@@ -16,10 +16,19 @@
 
 #include "nes.h"
 
-/* https://www.nesdev.org/wiki/INES_Mapper_133
- * Mapper 133 — SA-72007 (Sachen, similar to mapper 145).
- * Write to $8000-$FFFF: bit7→PRG bank, CHR bank from bits[3:0] via APU.
- * Simplified: single register for CHR + fixed PRG.
+/*
+ * Mapper 133 - Sachen SA-72007 (迷魂车 / 存储王 ...).
+ * Authority: Mesen2 Core/NES/Mappers/Sachen/Sachen_133.h.
+ *
+ *   PRG page size 32KB, CHR page size 8KB, one register selected by the ADDRESS:
+ *     (addr & 0x6100) == 0x4100  ->  PRG 32KB page = (value >> 2) & 1
+ *                                    CHR  8KB page = value & 3
+ *   The same window is reachable both in $4100-$7FFF (the core's mapper_apu hook) and in
+ *   $C100-$FFFF (mapper_write), so both hooks must decode it.
+ *   Power-on: PRG page 0, CHR page 0.
+ *
+ * The old implementation only listened on the APU window, decoded PRG from bit 7 and CHR
+ * from bits 0-2, so games that write the register above $8000 never changed page.
  */
 
 typedef struct {
@@ -35,12 +44,8 @@ static void nes_mapper_deinit(nes_t* nes) {
 
 static void mapper133_update_banks(nes_t* nes) {
     mapper133_t* m = (mapper133_t*)nes->nes_mapper.mapper_register;
-    uint8_t prg32 = (uint8_t)(m->prg_bank_count / 4u);
-    uint8_t chr8  = (uint8_t)(m->chr_bank_count / 8u);
-    if (prg32 == 0u) prg32 = 1u;
-    if (chr8  == 0u) chr8  = 1u;
-    nes_load_prgrom_32k(nes, 0, (uint16_t)(((m->reg >> 7u) & 0x01u) % prg32));
-    nes_load_chrrom_8k(nes, 0, (uint8_t)((m->reg & 0x07u) % chr8));
+    nes_load_prgrom_32k(nes, 0, (uint16_t)((m->reg >> 2u) & 0x01u));
+    nes_load_chrrom_8k(nes, 0, (uint8_t)(m->reg & 0x03u));
 }
 
 static void nes_mapper_init(nes_t* nes) {
@@ -55,16 +60,26 @@ static void nes_mapper_init(nes_t* nes) {
     mapper133_update_banks(nes);
 }
 
-static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
+/* One decode shared by both windows: only (addr & 0x6100) == 0x4100 is the register. */
+static void mapper133_apply(nes_t* nes, uint16_t address, uint8_t data) {
     mapper133_t* m = (mapper133_t*)nes->nes_mapper.mapper_register;
-    (void)address;
+    if ((address & 0x6100u) != 0x4100u) return;
     m->reg = data;
     mapper133_update_banks(nes);
+}
+
+static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
+    mapper133_apply(nes, address, data);
+}
+
+static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
+    mapper133_apply(nes, address, data);
 }
 
 int nes_mapper133_init(nes_t* nes) {
     nes->nes_mapper.mapper_init   = nes_mapper_init;
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
+    nes->nes_mapper.mapper_write  = nes_mapper_write;
     nes->nes_mapper.mapper_apu    = nes_mapper_apu;
     return NES_OK;
 }
