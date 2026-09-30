@@ -75,6 +75,7 @@ int test_mapper235_golden_game(void);
 int test_mapper235_open_bus(void);
 int test_mapper62_super_700in1(void);
 int test_mapper242_waixing_1200in1(void);
+int test_mapper25_vrc4_irq(void);
 int test_mapper226_bank_formula(void);
 int test_mapper78_jf16_mirroring(void);
 int test_mapper99_vs_latch(void);
