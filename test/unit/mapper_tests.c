@@ -914,6 +914,56 @@ int test_mapper226_bank_formula(void) {
  * uint8_t overflow: 256KB of CHR is 256 1KB pages, which truncated to 0 and skipped the CHR
  * mapping entirely.
  */
+/*
+ * Mapper 58 (Dendy multicart board): the *address* of the write is the register.  Address bit 6
+ * selects "same 16KB bank in both halves" vs the aligned 32KB pair (bank & 0x06), bits 0-2 are the
+ * bank, bits 3-5 are the 8KB CHR bank and bit 7 is the mirroring (set = horizontal).  The board
+ * decodes it both in the $6000-$7FFF window and in cartridge space; `68合1` only ever writes the
+ * latter (a single `STA $D728`), so a mapper that installed just the SRAM hook left the initial
+ * mapping in place and the menu came out as a screenful of repeating tiles.
+ */
+int test_mapper58_dendy_address_register(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 58, 8, 8);           /* 128KB PRG (8 x 16KB) + 64KB CHR (8 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the slots can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: $8000 -> bank 0, $A000 -> bank 1 (8KB slots 0 and 2). */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* The SRAM window works: $6062 -> bit 6 set (16KB mode), the same bank 2 in both halves,
+       CHR bank (0x6062 >> 3) & 7 = 4. */
+    nes_test_cpu_write(nes, 0x6062, 0x00u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* ...and so does cartridge space - this is the write `68合1` actually performs.  $8005 has
+       bit 6 clear, so the aligned 32KB pair (5 & 6) / 2 = page 2 = banks 4/5 appears. */
+    nes_test_cpu_write(nes, 0x8005, 0x00u);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* Bit 7 switches the mirroring to horizontal. */
+    nes_test_cpu_write(nes, 0x8085, 0x00u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 58 mirroring comes from address bit 7", 58,
+                             "horizontal wiring when bit 7 is set", "wrong nametable wiring");
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper249_waixing_permute(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 249, 16, 32);        /* 256KB PRG (32 x 8KB) + 256KB CHR (256 x 1KB) */

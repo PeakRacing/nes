@@ -69,6 +69,7 @@ int test_mapper231_bmc_20in1(void);
 int test_mapper230_contra_mode(void);
 int test_mapper229_bmc_31in1(void);
 int test_mapper249_waixing_permute(void);
+int test_mapper58_dendy_address_register(void);
 int test_mapper226_bank_formula(void);
 int test_mapper78_jf16_mirroring(void);
 int test_mapper99_vs_latch(void);
