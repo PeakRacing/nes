@@ -448,3 +448,52 @@ int test_apu_samples(void) {
     test_fixture_free(&f);
     return TEST_PASS;
 }
+
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+/* Mapper 85 carries a VRC7 (YM2413/OPLL).
+   Authority: Mesen2 Core/NES/Mappers/Konami/VRC7.h + Mappers/Audio/Vrc7Audio.h */
+int test_apu_vrc7_audio(void) {
+    test_rom_spec_t spec;
+    memset(&spec, 0, sizeof(spec));
+    spec.mapper = 85;
+    spec.prg_units = 8;
+    spec.chr_units = 8;
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
+    uint8_t* buf = nes->nes_apu.sample_buffer;
+
+    TEST_EQ_U32(NES_EXP_AUDIO_VRC7, nes->nes_mapper.mapper_audio);
+    /* The OPLL core is created lazily, so a game that never touches the chip allocates nothing. */
+    TEST_CHECK(a->vrc7_opll == NULL);
+
+    /* Instrument 1 at full volume, then key on channel 0 (block 1, F-num high 5, F-num low 0x80). */
+    nes_test_cpu_write(nes, 0x9010u, 0x30u);
+    nes_test_cpu_write(nes, 0x9030u, 0x10u);
+    nes_test_cpu_write(nes, 0x9010u, 0x20u);
+    nes_test_cpu_write(nes, 0x9030u, 0x15u);
+    nes_test_cpu_write(nes, 0x9010u, 0x10u);
+    nes_test_cpu_write(nes, 0x9030u, 0x80u);
+    TEST_CHECK(a->vrc7_opll != NULL);
+    TEST_EQ_U32(0x10u, a->vrc7_current_reg);
+
+    /* Render a segment: the FM level has to move the buffer off its DC baseline.  A silent or
+       mis-clocked chip would leave every sample at 128 - that is the assertion that matters. */
+    for (uint16_t i = 0; i < 512u; i++) buf[i] = 128u;
+    nes_exp_audio_render(nes, buf, 0, 512u, 512u * 40u);
+    uint32_t moved = 0;
+    for (uint16_t i = 0; i < 512u; i++) {
+        if (buf[i] != 128u) moved++;
+    }
+    TEST_CHECK(moved > 64u);
+
+    /* $E000 bit6 mutes the chip. */
+    nes_test_cpu_write(nes, 0xE000u, 0x40u);
+    TEST_EQ_U32(1u, a->vrc7_muted);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+#endif

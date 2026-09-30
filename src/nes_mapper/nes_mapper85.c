@@ -148,8 +148,14 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
         r->prg[2] = data;
         nes_load_prgrom_8k(nes, 2, r->prg[2]);
         break;
-    /* $9010 / $9030: FM audio - skip */
+    /* $9010 / $9030: the VRC7 FM (OPLL) register port.  The masked switch value keeps the
+       A4->A3 normalisation (those two addresses are the documented exception). */
+    case 0x9010u:
+    case 0x9030u:
+        nes_exp_audio_write(nes, address, data);
+        break;
     case 0xE000u:
+        nes_exp_audio_write(nes, address, data);   /* bit6 mutes the FM chip */
         r->mirror = data & 0x03u;
         if (nes->nes_rom.four_screen == 0) {
             nes_ppu_screen_mirrors(nes, vrc7_mirror_table[r->mirror]);
@@ -205,6 +211,7 @@ static void nes_mapper_cpu_clock(nes_t* nes, uint16_t cycles) {
 }
 
 int nes_mapper85_init(nes_t* nes) {
+    nes->nes_mapper.mapper_audio     = NES_EXP_AUDIO_VRC7;
     nes->nes_mapper.mapper_init      = nes_mapper_init;
     nes->nes_mapper.mapper_deinit    = nes_mapper_deinit;
     nes->nes_mapper.mapper_write     = nes_mapper_write;

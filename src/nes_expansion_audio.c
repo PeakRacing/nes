@@ -19,6 +19,8 @@
 
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
 
+#include "emu2413.h"   /* vendored YM2413/OPLL core (VRC7) */
+
 /*
  * VRC6 (Konami, mapper 24/26) - Authority: Mesen2 Core/NES/Mappers/Audio/Vrc6Audio.h,
  * Vrc6Pulse.h and Vrc6Saw.h.  Three channels clocked once per CPU cycle:
@@ -381,6 +383,33 @@ static void mmc5_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t co
 
 /* ------------------------------------------------------------------- API ---- */
 
+/* VRC7 (mapper 85): YM2413/OPLL.  One chip sample every 432 CPU cycles
+   (21477272 Hz master / 49716 Hz).  The core is created lazily on the first $9030 write, so
+   boards without the chip - and every non-VRC7 game - never allocate it. */
+#define VRC7_CYCLES_PER_SAMPLE (432u)
+
+static void vrc7_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t count, uint32_t step_q8) {
+    nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
+    OPLL* opll = (OPLL*)a->vrc7_opll;
+    if (opll == NULL) return;
+
+    const uint32_t need = VRC7_CYCLES_PER_SAMPLE * 256u;
+    int16_t level = a->vrc7_last_output;
+
+    for (uint16_t i = 0; i < count; i++) {
+        a->vrc7_acc += step_q8;
+        if (a->vrc7_acc >= need) {
+            a->vrc7_acc -= need;
+            level = OPLL_calc(opll);
+        }
+        int32_t mixed = (int32_t)buffer[start + i] + ((int32_t)level >> 8);
+        if (mixed > 255) mixed = 255;
+        else if (mixed < 0) mixed = 0;
+        buffer[start + i] = (uint8_t)mixed;
+    }
+    a->vrc7_last_output = level;
+}
+
 void nes_exp_audio_init(nes_t* nes) {
     nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
     nes_memset(a, 0, sizeof(nes_exp_audio_t));
@@ -451,6 +480,29 @@ void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
             break;
         default:
             break;
+        }
+        break;
+
+    case NES_EXP_AUDIO_VRC7:
+        /* $9010 latches the OPLL register address, $9030 is its data port; $E000 bit6 mutes. */
+        if ((address & 0xF030u) == 0x9010u) {
+            a->vrc7_current_reg = data;
+        } else if ((address & 0xF030u) == 0x9030u) {
+            if (!a->vrc7_muted) {
+                OPLL* opll = (OPLL*)a->vrc7_opll;
+                if (opll == NULL) {
+                    opll = OPLL_new(49716 * 72, 49716);
+                    if (opll != NULL) {
+                        OPLL_setChipType(opll, 1);      /* 1 = VRC7 mode (built-in patch set) */
+                        OPLL_resetPatch(opll, 1);
+                        OPLL_reset(opll);
+                    }
+                    a->vrc7_opll = opll;
+                }
+                if (opll != NULL) OPLL_writeReg(opll, a->vrc7_current_reg, data);
+            }
+        } else if (address == 0xE000u) {
+            a->vrc7_muted = (uint8_t)((data & 0x40u) != 0u);
         }
         break;
 
@@ -569,6 +621,10 @@ void nes_exp_audio_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t 
 
     case NES_EXP_AUDIO_MMC5:
         mmc5_render(nes, buffer, start, count, step_q8);
+        break;
+
+    case NES_EXP_AUDIO_VRC7:
+        vrc7_render(nes, buffer, start, count, step_q8);
         break;
 
     default:

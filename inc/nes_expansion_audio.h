@@ -109,6 +109,15 @@ typedef struct {
     uint8_t  mmc5_pcm_output;
     uint8_t  mmc5_pcm_read_mode;
     uint8_t  mmc5_pcm_irq_enabled;
+
+    /* --- VRC7 (mapper 85): YM2413/OPLL, driven by the vendored emu2413 core ---
+       `vrc7_opll` stays NULL until the first $9010 write, so boards without the chip
+       (and every non-VRC7 game) never allocate it. */
+    void*    vrc7_opll;
+    uint8_t  vrc7_current_reg;
+    uint8_t  vrc7_muted;
+    int16_t  vrc7_last_output;
+    uint32_t vrc7_acc;              /* CPU cycles owed to the next OPLL sample (432 per sample) */
 } nes_exp_audio_t;
 
 void nes_exp_audio_init(nes_t* nes);
