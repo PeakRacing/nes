@@ -45,6 +45,24 @@ extern "C" {
 
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
 
+/* One MMC5 pulse channel: APU-style envelope + length counter, no sweep unit. */
+typedef struct {
+    uint8_t  duty;
+    uint8_t  volume;            /* current envelope volume */
+    uint8_t  constant_volume;
+    uint8_t  halt;
+    uint8_t  enabled;
+    uint8_t  duty_pos;
+    uint16_t period;
+    int32_t  timer;
+    uint8_t  length_counter;
+    uint8_t  length_reload;
+    uint8_t  env_start;
+    uint8_t  env_divider;
+    uint8_t  env_decay;
+    uint32_t tick_acc;          /* 1/256 CPU cycle accumulator for the 240 Hz tick */
+} nes_mmc5_square_t;
+
 typedef struct {
     /* --- VRC6 (mapper 24/26): two pulses + saw, all clocked once per CPU cycle --- */
     struct {
@@ -85,6 +103,12 @@ typedef struct {
     int16_t  s5b_timer[3];
     uint8_t  s5b_step[3];
     uint32_t s5b_acc;               /* 1/256 CPU cycle accumulator (channels tick at CPU/2) */
+
+    /* --- MMC5 (mapper 5): two pulse channels plus an 8-bit PCM DAC --- */
+    nes_mmc5_square_t mmc5_square[2];
+    uint8_t  mmc5_pcm_output;
+    uint8_t  mmc5_pcm_read_mode;
+    uint8_t  mmc5_pcm_irq_enabled;
 } nes_exp_audio_t;
 
 void nes_exp_audio_init(nes_t* nes);

@@ -342,6 +342,73 @@ int test_apu_expansion_audio(void) {
     TEST_EQ_U32(0x00, buf[255]);
 
     test_fixture_free(&f);
+
+    /* --- MMC5 audio through a real mapper 5 board --- */
+    memset(&spec, 0, sizeof(spec));
+    spec.mapper = 5;
+    spec.prg_units = 16;
+    spec.chr_units = 8;
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes = f.nes;
+    a = &nes->nes_apu.exp_audio;
+    buf = nes->nes_apu.sample_buffer;
+    TEST_EQ_U32(NES_EXP_AUDIO_MMC5, nes->nes_mapper.mapper_audio);
+
+    /* Square 1: constant volume 15, duty 2, period 0x40, length counter index 1. */
+    nes_test_cpu_write(nes, 0x5000u, 0x9Fu);            /* duty 2, halt, constant, volume 15 */
+    nes_test_cpu_write(nes, 0x5002u, 0x40u);            /* timer low */
+    TEST_EQ_U32(2, a->mmc5_square[0].duty);
+    TEST_EQ_U32(15, a->mmc5_square[0].volume);
+    TEST_EQ_U32(0x40, a->mmc5_square[0].period);
+    /* $5001 (sweep on the APU) has no effect on this board. */
+    nes_test_cpu_write(nes, 0x5001u, 0x8Fu);
+    TEST_EQ_U32(0x40, a->mmc5_square[0].period);
+
+    /* $5015 enables the channel; the length counter only loads while it is enabled. */
+    nes_test_cpu_write(nes, 0x5015u, 0x01u);
+    TEST_EQ_U32(1, a->mmc5_square[0].enabled);
+    TEST_EQ_U32(0, a->mmc5_square[0].length_counter);
+    nes_test_cpu_write(nes, 0x5003u, 0x08u);            /* timer high 0 + length index 1 */
+    TEST_CHECK(a->mmc5_square[0].length_counter > 0);
+    TEST_EQ_U32(0x01, nes_test_cpu_read(nes, 0x5015u));   /* status read */
+
+    /* Run a segment over a mid-level buffer: the duty-high steps must pull samples down
+       (MMC5 polarity is reversed compared to the APU). */
+    for (uint16_t i = 0; i < 256u; i++) buf[i] = 0x80;
+    a->mmc5_square[0].duty_pos = 1;
+    nes_exp_audio_render(nes, buf, 0, 256, 256u * 40u);
+    uint8_t lowest = 0xFFu;
+    for (uint16_t i = 0; i < 256u; i++) {
+        if (buf[i] < lowest) lowest = buf[i];
+    }
+    TEST_CHECK(lowest < 0x80);
+    /* With the channel disabled the level must stay flat. */
+    nes_test_cpu_write(nes, 0x5015u, 0x00u);
+    nes_test_cpu_write(nes, 0x5015u, 0x01u);
+    nes_test_cpu_write(nes, 0x5003u, 0x08u);
+    nes_test_cpu_write(nes, 0x5015u, 0x00u);            /* ...and disabled again */
+    for (uint16_t i = 0; i < 64u; i++) buf[i] = 0x80;
+    nes_exp_audio_render(nes, buf, 0, 64, 64u * 40u);
+    TEST_EQ_U32(0x80, buf[0]);
+
+    /* PCM: $5011 sets the DAC, a written 0 keeps the previous level, and read mode
+       ignores writes entirely. */
+    nes_test_cpu_write(nes, 0x5011u, 0xC0u);
+    TEST_EQ_U32(0xC0, a->mmc5_pcm_output);
+    nes_test_cpu_write(nes, 0x5011u, 0x00u);
+    TEST_EQ_U32(0xC0, a->mmc5_pcm_output);
+    nes_test_cpu_write(nes, 0x5010u, 0x01u);            /* read mode on */
+    nes_test_cpu_write(nes, 0x5011u, 0x40u);
+    TEST_EQ_U32(0xC0, a->mmc5_pcm_output);
+    nes_test_cpu_write(nes, 0x5010u, 0x00u);
+
+    /* Disabling $5015 bit 0 clears the length counter and the status read. */
+    nes_test_cpu_write(nes, 0x5015u, 0x00u);
+    TEST_EQ_U32(0, a->mmc5_square[0].length_counter);
+    TEST_EQ_U32(0x00, nes_test_cpu_read(nes, 0x5015u));
+
+    test_fixture_free(&f);
     return TEST_PASS;
 }
 #endif

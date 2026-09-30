@@ -248,6 +248,137 @@ static uint16_t s5b_level(const nes_exp_audio_t* a) {
     return summed;
 }
 
+/* ------------------------------------------------------------------- MMC5 ---- */
+
+/*
+ * MMC5 audio (mapper 5) - Authority: Mesen2 Core/NES/Mappers/Audio/Mmc5Audio.h.
+ *   $5000-$5003 / $5004-$5007 : two pulse channels with the APU's register layout
+ *     (reg0 = volume/duty/halt/constant, reg1 = unused - the MMC5 pulses have no sweep,
+ *      reg2 = timer low, reg3 = timer high + length counter load)
+ *   $5010 : bit 0 = PCM read mode, bit 7 = PCM IRQ enable (IRQs are not implemented)
+ *   $5011 : 8-bit PCM DAC - a written 0 keeps the previous level, and writes are ignored
+ *           while read mode is on
+ *   $5015 : bit 0/1 enable square 1/2; reading it returns the two length counter flags
+ *
+ * The two squares tick once per CPU cycle and advance their 8-step duty every
+ * 2 * (period + 1) CPU cycles, so a given period sounds at the APU pulse's pitch; the
+ * envelope and length counter run off a ~240 Hz tick.  MMC5 output polarity is reversed
+ * compared to the APU, so the summed level is negated.
+ */
+
+/* Same duty patterns as the APU pulse channels. */
+static const uint8_t mmc5_duty_table[4][8] = {
+    { 0, 1, 0, 0, 0, 0, 0, 0 },
+    { 0, 1, 1, 0, 0, 0, 0, 0 },
+    { 0, 1, 1, 1, 1, 0, 0, 0 },
+    { 1, 0, 0, 1, 1, 1, 1, 1 }
+};
+
+static const uint8_t mmc5_length_table[32] = {
+    10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
+    12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30
+};
+
+static void mmc5_square_write(nes_exp_audio_t* a, uint8_t index, uint16_t address, uint8_t value) {
+    switch (address & 0x03u) {
+    case 0:
+        a->mmc5_square[index].duty = (uint8_t)((value >> 6) & 0x03u);
+        a->mmc5_square[index].halt = (uint8_t)((value & 0x20u) != 0u);
+        a->mmc5_square[index].constant_volume = (uint8_t)((value & 0x10u) != 0u);
+        if (a->mmc5_square[index].constant_volume) {
+            a->mmc5_square[index].volume = (uint8_t)(value & 0x0Fu);
+        }
+        break;
+    case 1:
+        /* No sweep unit on the MMC5 pulses: $5001/$5005 have no effect. */
+        break;
+    case 2:
+        a->mmc5_square[index].period =
+            (uint16_t)((a->mmc5_square[index].period & 0x0700u) | value);
+        break;
+    default:
+        a->mmc5_square[index].period =
+            (uint16_t)((a->mmc5_square[index].period & 0x00FFu) | ((uint16_t)(value & 0x07u) << 8));
+        a->mmc5_square[index].length_reload = (uint8_t)(value >> 3);
+        a->mmc5_square[index].env_start = 1;
+        /* The length counter reloads immediately (there is no frame counter on this board). */
+        if (a->mmc5_square[index].enabled) {
+            a->mmc5_square[index].length_counter = mmc5_length_table[value >> 3];
+        }
+        break;
+    }
+}
+
+/* Envelope + length counter tick (~240 Hz). */
+static void mmc5_square_tick(nes_exp_audio_t* a, uint8_t index) {
+    nes_mmc5_square_t* sq = &a->mmc5_square[index];    /* ~240 Hz envelope / length counter tick. */
+    if (sq->env_start) {
+        sq->env_start = 0;
+        sq->env_decay = 0x0Fu;
+        sq->env_divider = (uint8_t)(sq->length_reload + 1u);
+    } else if (sq->env_divider > 0u) {
+        sq->env_divider--;
+    } else {
+        sq->env_divider = (uint8_t)(sq->length_reload + 1u);
+        if (sq->env_decay > 0u) {
+            sq->env_decay--;
+        } else if (sq->halt) {
+            sq->env_decay = 0x0Fu;
+        }
+    }
+    if (!sq->constant_volume) {
+        sq->volume = sq->env_decay;
+    }
+    if (!sq->halt && sq->length_counter > 0u) {
+        sq->length_counter--;
+    }
+}
+
+static uint8_t mmc5_square_output(const nes_exp_audio_t* a, uint8_t index) {
+    const nes_mmc5_square_t* sq = &a->mmc5_square[index];
+    if (!sq->enabled || sq->length_counter == 0u) return 0;
+    return mmc5_duty_table[sq->duty][sq->duty_pos];
+}
+
+/* Mix one segment's worth of MMC5 audio.  `step_q8` is CPU cycles per sample in 1/256. */
+static void mmc5_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t count,
+                        uint32_t step_q8) {
+    nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
+    /* One tick every 240th of a second: 1.789773 MHz / 240 = 7457 CPU cycles. */
+    const uint32_t tick_q8 = 7457u << 8;
+
+    for (uint16_t i = 0; i < count; i++) {
+        for (uint8_t ch = 0; ch < 2u; ch++) {
+            nes_mmc5_square_t* sq = &a->mmc5_square[ch];
+            /* The duty timer is a countdown in 1/256 CPU cycles, so the channel keeps the
+               APU pulse pitch: one duty step per 2 * (period + 1) CPU cycles. */
+            sq->timer -= (int32_t)step_q8;
+            if (sq->timer <= 0) {
+                sq->duty_pos = (uint8_t)((sq->duty_pos - 1u) & 0x07u);
+                sq->timer += (int32_t)((2u * ((uint32_t)sq->period + 1u)) << 8);
+            }
+            sq->tick_acc += step_q8;
+            while (sq->tick_acc >= tick_q8) {
+                sq->tick_acc -= tick_q8;
+                mmc5_square_tick(a, ch);
+            }
+        }
+
+        const int32_t sq1 = (int32_t)mmc5_square_output(a, 0) * (int32_t)a->mmc5_square[0].volume;
+        const int32_t sq2 = (int32_t)mmc5_square_output(a, 1) * (int32_t)a->mmc5_square[1].volume;
+        /* "The sound output of the square channels are equivalent in volume to the
+           corresponding APU channels" -> reuse the APU pulse weight (247/128).
+           Mesen adds the raw unsigned PCM DAC to that sum; it is halved here so the DAC's
+           DC offset (which the NES's analogue high-pass removes) cannot swamp this 8-bit
+           mixer.  At power-on the DAC reads 0, so the channel stays silent either way. */
+        const int32_t squares = (sq1 + sq2) * 247 / 128;
+        const int32_t pcm = (int32_t)a->mmc5_pcm_output / 2;
+        const int32_t level = -(squares + pcm);          /* MMC5 polarity is reversed */
+        const int32_t mixed = (int32_t)buffer[start + i] + level;
+        buffer[start + i] = (uint8_t)(mixed < 0 ? 0 : (mixed > 255 ? 255 : mixed));
+    }
+}
+
 /* ------------------------------------------------------------------- API ---- */
 
 void nes_exp_audio_init(nes_t* nes) {
@@ -323,6 +454,36 @@ void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
         }
         break;
 
+    case NES_EXP_AUDIO_MMC5:
+        switch (address) {
+        case 0x5000u: case 0x5001u: case 0x5002u: case 0x5003u:
+            mmc5_square_write(a, 0, address, data);
+            break;
+        case 0x5004u: case 0x5005u: case 0x5006u: case 0x5007u:
+            mmc5_square_write(a, 1, address, data);
+            break;
+        case 0x5010u:
+            /* PCM read mode / PCM IRQ enable (IRQs are not implemented, as in Mesen). */
+            a->mmc5_pcm_read_mode = (uint8_t)((data & 0x01u) != 0u);
+            a->mmc5_pcm_irq_enabled = (uint8_t)((data & 0x80u) != 0u);
+            break;
+        case 0x5011u:
+            /* A written 0 keeps the previous level, and read mode ignores writes. */
+            if (!a->mmc5_pcm_read_mode && data != 0u) {
+                a->mmc5_pcm_output = data;
+            }
+            break;
+        case 0x5015u:
+            a->mmc5_square[0].enabled = (uint8_t)((data & 0x01u) != 0u);
+            a->mmc5_square[1].enabled = (uint8_t)((data & 0x02u) != 0u);
+            if (!a->mmc5_square[0].enabled) a->mmc5_square[0].length_counter = 0;
+            if (!a->mmc5_square[1].enabled) a->mmc5_square[1].length_counter = 0;
+            break;
+        default:
+            break;
+        }
+        break;
+
     default:
         break;
     }
@@ -337,6 +498,21 @@ uint8_t nes_exp_audio_read(nes_t* nes, uint16_t address) {
             a->n163_ram_position = (uint8_t)((a->n163_ram_position + 1u) & 0x7Fu);
         }
         return value;
+    }
+
+    if (nes->nes_mapper.mapper_audio == NES_EXP_AUDIO_MMC5) {
+        switch (address) {
+        case 0x5010u:
+            return 0;                       /* PCM IRQ status (not implemented, as in Mesen) */
+        case 0x5015u: {
+            uint8_t status = 0;
+            if (a->mmc5_square[0].length_counter > 0u) status |= 0x01u;
+            if (a->mmc5_square[1].length_counter > 0u) status |= 0x02u;
+            return status;
+        }
+        default:
+            break;
+        }
     }
     return 0;
 }
@@ -390,6 +566,10 @@ void nes_exp_audio_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t 
         a->s5b_acc = acc_q8;
         break;
     }
+
+    case NES_EXP_AUDIO_MMC5:
+        mmc5_render(nes, buffer, start, count, step_q8);
+        break;
 
     default:
         break;

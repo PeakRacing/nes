@@ -265,6 +265,13 @@ static void nes_mapper_init(nes_t* nes) {
 /* Handle writes to $5000-$5FFF */
 static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
     mapper5_register_t* mapper_reg = (mapper5_register_t*)nes->nes_mapper.mapper_register;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    /* MMC5 audio shares this window: $5000-$5007 (two pulses), $5010/$5011 (PCM) and
+     * $5015 (channel enable) belong to the sound hardware. */
+    if (address <= 0x5015u) {
+        nes_exp_audio_write(nes, address, data);
+    }
+#endif
     if (address >= 0x5C00 && address <= 0x5FFF) {
         /* ExRAM write: modes 0/1/2 all accept writes; mode 3 is read-only.
          * Real hardware zeros writes in modes 0/1 when not rendering, but that
@@ -363,6 +370,11 @@ static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
 /* Handle reads from $5000-$5FFF */
 static uint8_t nes_mapper_read_apu(nes_t* nes, uint16_t address) {
     mapper5_register_t* mapper_reg = (mapper5_register_t*)nes->nes_mapper.mapper_register;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    if (address == 0x5010u || address == 0x5015u) {
+        return nes_exp_audio_read(nes, address);
+    }
+#endif
     if (address >= 0x5C00 && address <= 0x5FFF) {
         /* ExRAM always CPU-readable regardless of mode */
         return mapper_reg->exram[address & 0x3FF];
@@ -456,5 +468,8 @@ int nes_mapper5_init(nes_t* nes) {
     nes->nes_mapper.mapper_vsync = nes_mapper_vsync;
     nes->nes_mapper.mapper_render_screen = nes_mapper_render_screen;
     nes->nes_mapper.mapper_state_reapply = mapper5_state_reapply;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    nes->nes_mapper.mapper_audio = NES_EXP_AUDIO_MMC5;
+#endif
     return NES_OK;
 }
