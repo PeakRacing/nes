@@ -89,6 +89,7 @@ int test_mapper25_wram(void);
 int test_mapper73_wram(void);
 int test_mapper162_waixing(void);
 int test_mapper165_fire_emblem(void);
+int test_mapper164_waixing(void);
 int test_mapper_synthetic_smoke(void);
 int test_mapper_write_storm(void);
 int test_mapper_bank_stress(void);

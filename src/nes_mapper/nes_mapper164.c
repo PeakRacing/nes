@@ -35,7 +35,10 @@ static void nes_mapper_init(nes_t* nes) {
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
     nes_mapper164_t* m = (nes_mapper164_t*)nes->nes_mapper.mapper_register;
-    m->prg_bank = 0;
+    /* Mesen powers this board up on the LAST 32KB page (0x0F), which is where the reset vector
+     * lives.  Starting on page 0 made 太空战士5 fetch its reset vector from the wrong bank and
+     * stay blank. */
+    m->prg_bank = 0x0Fu;
 
     nes_ppu_screen_mirrors(nes, NES_MIRROR_HORIZONTAL);
 
@@ -67,19 +70,23 @@ static void nes_mapper_deinit(nes_t* nes) {
 }
 
 /*
- * Writes to $4020-$5FFF are routed here via mapper_apu.
- * $5000: bits[5:0] = 32KB PRG bank select
- * $5300: bit[7] = mirroring (0=H, 1=V)
+ * Registers live at $5000-$5FFF, so writes arrive through mapper_apu.  Mesen2's
+ * Waixing/Waixing164.h defines exactly two of them:
+ *   addr & 0x7300 == $5000 -> _prgBank = (_prgBank & 0xF0) | (value & 0x0F)   (low nibble)
+ *   addr & 0x7300 == $5100 -> _prgBank = (_prgBank & 0x0F) | ((value & 0x0F) << 4) (high nibble)
+ * The old implementation read six bits from $5000 alone and ignored $5100 entirely, so
+ * 太空战士5 could never select the page holding its code.  There is no $5300 mirroring register.
  */
 static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
     nes_mapper164_t* m = (nes_mapper164_t*)nes->nes_mapper.mapper_register;
-    switch (address) {
-    case 0x5000:
-        m->prg_bank = data & 0x3F;
+    switch (address & 0x7300u) {
+    case 0x5000u:
+        m->prg_bank = (uint8_t)((m->prg_bank & 0xF0u) | (data & 0x0Fu));
         mapper164_update_prg(nes);
         break;
-    case 0x5300:
-        nes_ppu_screen_mirrors(nes, (data & 0x80) ? NES_MIRROR_VERTICAL : NES_MIRROR_HORIZONTAL);
+    case 0x5100u:
+        m->prg_bank = (uint8_t)((m->prg_bank & 0x0Fu) | ((data & 0x0Fu) << 4));
+        mapper164_update_prg(nes);
         break;
     default:
         break;

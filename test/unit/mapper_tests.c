@@ -246,6 +246,38 @@ int test_mapper25_wram(void) {
 }
 
 /*
+ * Mapper 164 (Waixing, 太空战士5).  Mesen2's Waixing/Waixing164.h: 32KB PRG pages, registers at
+ * $5000 (low nibble) and $5100 (high nibble), and power-on on the LAST page (0x0F) because that
+ * is where the reset vector lives.  The old implementation started on page 0, packed six bits
+ * into $5000 and ignored $5100, so the board fetched its reset vector from the wrong bank.
+ */
+int test_mapper164_waixing(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 164, 128, 0);   /* 2MB PRG = 64 x 32KB, so the high nibble is observable */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on page 0x0F -> 16KB banks 30 / 31 (NOT the last page: the board powers up on a
+       fixed page number 0x0F, not on the highest one). */
+    TEST_EQ_U32(30u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(31u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    TEST_CHECK(nes->nes_mapper.mapper_apu != NULL);
+    /* $5000 sets the low nibble: 0x0F & 0xF0 | 3 = 3 -> 16KB banks 6 / 7. */
+    nes->nes_mapper.mapper_apu(nes, 0x5000, 0x03);
+    TEST_EQ_U32(6u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    /* $5100 sets the high nibble: 3 & 0x0F | (1 << 4) = 0x13 -> 16KB banks 38 / 39. */
+    nes->nes_mapper.mapper_apu(nes, 0x5100, 0x01);
+    TEST_EQ_U32(38u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(39u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * Mapper 165 (the Chinese Fire Emblem board).  Mesen2's Mmc3Variants/MMC3_165.h is the
  * authority: standard MMC3 PRG banking plus MMC2-style CHR latches.  CHR slot 0 takes
  * register[latch0 ? 1 : 0] and slot 1 takes register[latch1 ? 4 : 2]; page 0 means the board's
