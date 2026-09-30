@@ -185,6 +185,13 @@ static const nes_romdb_entry_t romdb[] = {
        (mapper 140) - Mesen's database: 6BC65D7E -> mapper 140, 128KB PRG + 32KB CHR.  As 66
        the screen is a still image; as 140 it starts at frame 5. */
     { 0x6BC65D7Eu, 140u, 0u, 0u, 0u, 0u, 0u },
+    /* 三国志2 - 霸王的大陆 (中文加强版) [外星科技汉化]: the header claims mapper 74 but the
+       board is Waixing's FK23C - Mesen's database: 44C20420 -> mapper 176.  As 74 nothing
+       renders; as 176 the intro comes up at frame 8. */
+    { 0x44C20420u, 176u, 0u, 0u, 0u, 0u, 0u },
+    /* 星河战士 [恒格电子]: the header claims mapper 177, the board is FK23C as well -
+       Mesen's database: 02C41438 -> mapper 176 (frame 38 once the board is right). */
+    { 0x02C41438u, 176u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*

@@ -2283,8 +2283,75 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
-/* Mapper 117 (Waixing one-register-per-address board).  Authority: Mesen2
-   Core/NES/Mappers/Unlicensed/Mapper117.h */
+/* Mapper 176 (Waixing FK23C): 8KB PRG / 1KB CHR pages, 12 MMC3 registers, extension
+   registers in $5000-$5FFF and a 32KB WRAM at $6000-$7FFF.
+   Authority: Mesen2 Core/NES/Mappers/Waixing/Fk23C.h */
+int test_mapper176_fk23c(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 176, 64, 64);        /* 1MB PRG (128 x 8KB) + 512KB CHR (512 x 1KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: the MMC3 default register file (R6 = 0, R7 = 1) with PRG mode 0 and the
+       0x3F inner mask, so the two fixed slots are pages 0x3E/0x3F. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+    TEST_EQ_U32(62u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    TEST_EQ_U32(63u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+    /* ...and the MMC3 CHR layout: R0 = 0 -> 1KB pages 0/1, R1 = 2 -> pages 2/3. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_ppu.pattern_table[2] - chr) / 1024u);
+
+    /* $8000 selects register 6, $8001 = 0x2A: with PRG mode 0 the 0x3F mask keeps 0x2A. */
+    nes_test_cpu_write(nes, 0x8000u, 0x06u);
+    nes_test_cpu_write(nes, 0x8001u, 0x2Au);
+    TEST_EQ_U32(42u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* $5010 = 1 switches to PRG mode 1 (inner mask 0x1F) -> 0x2A & 0x1F = 10. */
+    nes_test_cpu_write(nes, 0x5010u, 0x01u);
+    TEST_EQ_U32(10u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    /* $5010 with the register bits missing is not a register write ($5010 mask). */
+    nes_test_cpu_write(nes, 0x5000u, 0x00u);
+    TEST_EQ_U32(10u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* CHR: R0 = 0x0A -> pages 10/11, and $5012 adds chrBaseBits bit 8 (0x20 << 3 = 0x100). */
+    nes_test_cpu_write(nes, 0x8000u, 0x00u);
+    nes_test_cpu_write(nes, 0x8001u, 0x0Au);
+    TEST_EQ_U32(10u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    TEST_EQ_U32(11u, (uint32_t)(nes->nes_ppu.pattern_table[1] - chr) / 1024u);
+    nes_test_cpu_write(nes, 0x5012u, 0x20u);
+    TEST_EQ_U32(266u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+
+    /* $A001 bit 7 opens WRAM bank 0 at $6000-$7FFF (32KB of board RAM, 4 x 8KB banks). */
+    nes_test_cpu_write(nes, 0x6000u, 0x55u);     /* WRAM off: the write must be dropped */
+    TEST_EQ_U32(0u, nes_test_cpu_read(nes, 0x6000u));
+    nes_test_cpu_write(nes, 0xA001u, 0x80u);
+    nes_test_cpu_write(nes, 0x6000u, 0x5Au);
+    TEST_EQ_U32(0x5Au, nes_test_cpu_read(nes, 0x6000u));
+
+    /* IRQ: $C000 latch, $C001 reload flag, $E001 enable.  The counter reaches zero on the
+       fourth scanline and the IRQ itself fires two CPU clocks later. */
+    nes->nes_ppu.MASK_b = 1;
+    nes->nes_cpu.irq_pending = 0;
+    nes_test_cpu_write(nes, 0xC000u, 0x03u);
+    nes_test_cpu_write(nes, 0xC001u, 0x00u);
+    nes_test_cpu_write(nes, 0xE001u, 0x00u);
+    nes->nes_mapper.mapper_hsync(nes);
+    nes->nes_mapper.mapper_hsync(nes);
+    nes->nes_mapper.mapper_hsync(nes);
+    TEST_EQ_U32(0u, nes->nes_cpu.irq_pending);
+    nes->nes_mapper.mapper_hsync(nes);
+    TEST_EQ_U32(0u, nes->nes_cpu.irq_pending);   /* only arms the 2-clock delay */
+    nes->nes_mapper.mapper_cpu_clock(nes, 2u);
+    TEST_EQ_U32(1u, nes->nes_cpu.irq_pending);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
 int test_mapper117_direct_slots(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 117, 16, 4);         /* 256KB PRG (32 x 8KB) + 32KB CHR (32 x 1KB) */
