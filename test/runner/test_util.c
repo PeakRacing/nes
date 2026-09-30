@@ -91,6 +91,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "115 waixing extension", test_mapper115_waixing_extension},
         {"mapper", "187 waixing outer reg", test_mapper187_waixing_outer},
         {"mapper", "240 register window", test_mapper240_register_window},
+        {"mapper", "245 prg block", test_mapper245_prg_block},
         {"mapper", "synthetic smoke", test_mapper_synthetic_smoke},
         {"mapper", "write storm", test_mapper_write_storm},
         {"mapper", "bank stress", test_mapper_bank_stress},

@@ -2283,8 +2283,50 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
-/* Mapper 240: one 32KB PRG page + one 8KB CHR page, register anywhere in $4020-$5FFF
-   (Mesen2 Mapper240.h).  The old implementation only decoded $4020-$40FF. */
+/* Mapper 245 (Waixing MMC3 + 0x40 PRG block latch; 勇者斗恶龙6/7 are CHR-RAM carts with a
+   fixed 4KB CHR layout).  Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_245.h */
+int test_mapper245_prg_block(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 245, 64, 0);         /* 1MB PRG (128 x 8KB) + 8KB CHR-RAM */
+    spec.save = 0;
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const ram = nes->nes_rom.chr_rom;
+
+    /* Power-on: R0 = 0 (no 0x40 block), the fixed slots are the last page of the first
+       64-page block (0x3F = 63), not the last page of the 1MB image. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+    TEST_EQ_U32(62u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    TEST_EQ_U32(63u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* CHR-RAM cart in CHR mode 0: slots 0-3 are the first 4KB, slots 4-7 the second. */
+    TEST_CHECK(ram != NULL);
+    if (ram != NULL) {
+        TEST_EQ_PTR(ram, nes->nes_ppu.pattern_table[0]);
+        TEST_EQ_PTR(ram + 4096, nes->nes_ppu.pattern_table[4]);
+    }
+
+    /* R0 = 2 -> orValue = 0x40: R6/R7 get the 512KB block and the fixed slots follow it. */
+    nes_test_cpu_write(nes, 0x8000u, 0x00u);     /* select R0, mode 0 */
+    nes_test_cpu_write(nes, 0x8001u, 0x02u);
+    TEST_EQ_U32(64u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(126u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    TEST_EQ_U32(127u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* CHR mode 1 swaps the two 4KB halves of the CHR-RAM. */
+    nes_test_cpu_write(nes, 0x8000u, 0x80u);
+    if (ram != NULL) {
+        TEST_EQ_PTR(ram + 4096, nes->nes_ppu.pattern_table[0]);
+        TEST_EQ_PTR(ram, nes->nes_ppu.pattern_table[4]);
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
 int test_mapper240_register_window(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 240, 16, 32);        /* 256KB PRG (8 x 32KB) + 256KB CHR (32 x 8KB) */

@@ -17,81 +17,103 @@
 #include "nes.h"
 
 /*
- * https://www.nesdev.org/wiki/INES_Mapper_245
- * Waixing mapper 245 — MMC3 variant where CHR bank values 0 and 1
- * redirect to 1KB pages within an embedded 2KB CHR-RAM buffer instead
- * of CHR-ROM.  All other behaviour is identical to MMC3 (mapper 4).
+ * Mapper 245 - Waixing MMC3 with a 512KB PRG block latch (勇者斗恶龙6/7 等).
+ * Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_245.h.
+ *
+ * MMC3 plus one extra bit of PRG banking and a fixed CHR layout for CHR-RAM carts:
+ *
+ *   PRG : orValue = (R0 & 0x02) ? 0x40 : 0x00
+ *         R6/R7 are masked with 0x3F and OR'd with orValue, and the fixed slots take the
+ *         LAST PAGE OF THE SELECTED 64-PAGE BLOCK (0x3F | orValue) - not the last page of
+ *         the image - whenever the ROM has at least 64 8KB pages.
+ *           mode 0: slot0 = R6, slot1 = R7, slot2 = last-1, slot3 = last
+ *           mode 1: slot0 = last-1, slot1 = R7, slot2 = R6, slot3 = last
+ *   CHR : boards without CHR-ROM (勇者斗恶龙6/7 are CHR-RAM carts) get the two 4KB halves
+ *         forced to the 1KB pages 0-3 / 4-7 according to the MMC3 CHR mode - the MMC3 CHR
+ *         registers do not apply at all.
+ *
+ * The previous implementation invented a private 2KB CHR-RAM for MMC3 bank values 0/1
+ * (the same wrong model that mapper 115 had), and it ignored the 0x40 PRG block bit, so
+ * multi-block images came up with the wrong banks.
  */
-
-#define MAPPER245_CHR_RAM_SIZE 2048u
 
 typedef struct {
     uint8_t bank_select;
-    uint8_t bank_values[8]; /* R0-R7 */
+    uint8_t bank_values[8];     /* R0-R7 */
     uint8_t mirroring;
     uint8_t prg_ram_protect;
     uint8_t irq_latch;
     uint8_t irq_counter;
     uint8_t irq_reload;
     uint8_t irq_enabled;
-    uint8_t prg_bank_count; /* number of 8KB PRG banks */
-    uint8_t chr_bank_count; /* number of 1KB CHR-ROM banks */
-    uint8_t chr_ram[MAPPER245_CHR_RAM_SIZE]; /* 2KB CHR-RAM for bank values 0 and 1 */
-} nes_mapper245_t;
+    uint16_t prg_bank_count;    /* number of 8KB PRG banks */
+    uint16_t chr_bank_count;    /* number of 1KB CHR banks */
+} mapper245_t;
 
 static void nes_mapper_deinit(nes_t* nes) {
     nes_free(nes->nes_mapper.mapper_register);
     nes->nes_mapper.mapper_register = NULL;
 }
 
-/*
- * Load a single 1KB CHR slot.  Bank values 0 and 1 map to the first and
- * second 1KB page of the embedded chr_ram; all other values use CHR-ROM.
- */
-static void mapper245_load_chr1k(nes_t* nes, nes_mapper245_t* m, uint8_t slot, uint8_t bank) {
-    if (bank == 0u || bank == 1u) {
-        nes->nes_ppu.pattern_table[slot] = m->chr_ram + bank * 1024u;
-    } else if (m->chr_bank_count > 0) {
-        nes_load_chrrom_1k(nes, slot, bank % m->chr_bank_count);
+static void mapper245_load_prg8k(nes_t* nes, uint16_t count, uint8_t slot, uint16_t page) {
+    if (count == 0u) return;
+    nes_load_prgrom_8k(nes, slot, (uint16_t)(page % count));
+}
+
+static void mapper245_load_chr1k(nes_t* nes, mapper245_t* m, uint8_t slot, uint16_t bank) {
+    if (m->chr_bank_count > 0u) {
+        nes_load_chrrom_1k(nes, slot, (uint16_t)(bank % m->chr_bank_count));
     }
 }
 
 static void mapper245_update_banks(nes_t* nes) {
-    nes_mapper245_t* m = (nes_mapper245_t*)nes->nes_mapper.mapper_register;
-    uint8_t prg_mode = (m->bank_select >> 6) & 1u;
-    uint8_t chr_mode = (m->bank_select >> 7) & 1u;
-    uint8_t last     = m->prg_bank_count - 1u;
-    uint8_t slast    = m->prg_bank_count - 2u;
+    mapper245_t* m = (mapper245_t*)nes->nes_mapper.mapper_register;
+    const uint8_t prg_mode = (uint8_t)((m->bank_select >> 6) & 1u);
+    const uint8_t chr_mode = (uint8_t)((m->bank_select >> 7) & 1u);
+    const uint8_t or_value = (uint8_t)((m->bank_values[0] & 0x02u) ? 0x40u : 0x00u);
+    const uint16_t r6 = (uint16_t)((m->bank_values[6] & 0x3Fu) | or_value);
+    const uint16_t r7 = (uint16_t)((m->bank_values[7] & 0x3Fu) | or_value);
+    const uint16_t count = (m->prg_bank_count != 0u) ? m->prg_bank_count : 1u;
+    const uint16_t last_block_page = (count >= 0x40u) ? (uint16_t)(0x3Fu | or_value)
+                                                       : (uint16_t)(count - 1u);
 
-    /* PRG banking (same as MMC3) */
     if (prg_mode == 0u) {
-        nes_load_prgrom_8k(nes, 0, m->bank_values[6] % m->prg_bank_count);
-        nes_load_prgrom_8k(nes, 1, m->bank_values[7] % m->prg_bank_count);
-        nes_load_prgrom_8k(nes, 2, slast);
-        nes_load_prgrom_8k(nes, 3, last);
+        mapper245_load_prg8k(nes, count, 0, r6);
+        mapper245_load_prg8k(nes, count, 1, r7);
+        mapper245_load_prg8k(nes, count, 2, (uint16_t)(last_block_page - 1u));
+        mapper245_load_prg8k(nes, count, 3, last_block_page);
     } else {
-        nes_load_prgrom_8k(nes, 0, slast);
-        nes_load_prgrom_8k(nes, 1, m->bank_values[7] % m->prg_bank_count);
-        nes_load_prgrom_8k(nes, 2, m->bank_values[6] % m->prg_bank_count);
-        nes_load_prgrom_8k(nes, 3, last);
+        mapper245_load_prg8k(nes, count, 0, (uint16_t)(last_block_page - 1u));
+        mapper245_load_prg8k(nes, count, 1, r7);
+        mapper245_load_prg8k(nes, count, 2, r6);
+        mapper245_load_prg8k(nes, count, 3, last_block_page);
     }
 
-    /* CHR banking with CHR-RAM override for banks 0/1 */
-    if (m->chr_bank_count == 0u) {
-        /* A board with no CHR-ROM has no banks to page in: the game fills the 8KB CHR-RAM itself
-         * through $2007 and needs all of it visible.  The 汉字化 Zelda hack writes every one of
-         * the 8192 pattern bytes (all eight 1KB regions), so leaving the bank-0/1 override in
-         * place would fold those uploads onto the same two pages and every tile comes out wrong. */
-        for (uint8_t slot = 0; slot < 8u; slot++) {
-            nes_load_chrrom_1k(nes, slot, slot);   /* CHR-RAM board: identity map */
+    if (nes->nes_rom.chr_rom_size == 0u) {
+        /* CHR-RAM board: the two 4KB halves are fixed and the MMC3 CHR registers are unused.
+         * The whole 8KB CHR-RAM is resident, so the halves are swapped by pointing the
+         * pattern table straight into it (nes_load_chrrom_4k ignores the page for CHR-RAM). */
+        uint8_t* const ram = nes->nes_rom.chr_rom;
+        uint8_t i;
+        if (ram != NULL) {
+            for (i = 0; i < 4u; i++) {
+                if (chr_mode != 0u) {
+                    nes->nes_ppu.pattern_table[i] = ram + 4096u + (uint32_t)i * 1024u;
+                    nes->nes_ppu.pattern_table[i + 4u] = ram + (uint32_t)i * 1024u;
+                } else {
+                    nes->nes_ppu.pattern_table[i] = ram + (uint32_t)i * 1024u;
+                    nes->nes_ppu.pattern_table[i + 4u] = ram + 4096u + (uint32_t)i * 1024u;
+                }
+            }
         }
         return;
     }
+
     if (chr_mode == 0u) {
-        mapper245_load_chr1k(nes, m, 0, m->bank_values[0] & 0xFEu);
-        mapper245_load_chr1k(nes, m, 1, m->bank_values[0] | 0x01u);
-        mapper245_load_chr1k(nes, m, 2, m->bank_values[1] & 0xFEu);
-        mapper245_load_chr1k(nes, m, 3, m->bank_values[1] | 0x01u);
+        mapper245_load_chr1k(nes, m, 0, (uint16_t)(m->bank_values[0] & 0xFEu));
+        mapper245_load_chr1k(nes, m, 1, (uint16_t)(m->bank_values[0] | 0x01u));
+        mapper245_load_chr1k(nes, m, 2, (uint16_t)(m->bank_values[1] & 0xFEu));
+        mapper245_load_chr1k(nes, m, 3, (uint16_t)(m->bank_values[1] | 0x01u));
         mapper245_load_chr1k(nes, m, 4, m->bank_values[2]);
         mapper245_load_chr1k(nes, m, 5, m->bank_values[3]);
         mapper245_load_chr1k(nes, m, 6, m->bank_values[4]);
@@ -101,27 +123,28 @@ static void mapper245_update_banks(nes_t* nes) {
         mapper245_load_chr1k(nes, m, 1, m->bank_values[3]);
         mapper245_load_chr1k(nes, m, 2, m->bank_values[4]);
         mapper245_load_chr1k(nes, m, 3, m->bank_values[5]);
-        mapper245_load_chr1k(nes, m, 4, m->bank_values[0] & 0xFEu);
-        mapper245_load_chr1k(nes, m, 5, m->bank_values[0] | 0x01u);
-        mapper245_load_chr1k(nes, m, 6, m->bank_values[1] & 0xFEu);
-        mapper245_load_chr1k(nes, m, 7, m->bank_values[1] | 0x01u);
+        mapper245_load_chr1k(nes, m, 4, (uint16_t)(m->bank_values[0] & 0xFEu));
+        mapper245_load_chr1k(nes, m, 5, (uint16_t)(m->bank_values[0] | 0x01u));
+        mapper245_load_chr1k(nes, m, 6, (uint16_t)(m->bank_values[1] & 0xFEu));
+        mapper245_load_chr1k(nes, m, 7, (uint16_t)(m->bank_values[1] | 0x01u));
     }
 }
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(nes_mapper245_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper245_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
-    nes_mapper245_t* m = (nes_mapper245_t*)nes->nes_mapper.mapper_register;
-    nes_memset(m, 0, sizeof(nes_mapper245_t));
+    mapper245_t* m = (mapper245_t*)nes->nes_mapper.mapper_register;
+    nes_memset(m, 0, sizeof(mapper245_t));
 
-    m->prg_bank_count = (uint8_t)(nes->nes_rom.prg_rom_size * 2u);
-    m->chr_bank_count = (uint8_t)(nes->nes_rom.chr_rom_size * 8u);
+    m->prg_bank_count = (uint16_t)(nes->nes_rom.prg_rom_size * 2u);
+    m->chr_bank_count = (uint16_t)(nes->nes_rom.chr_rom_size * 8u);
 
     m->bank_values[6] = 0;
     m->bank_values[7] = 1;
 
+    if (nes->nes_rom.chr_rom_size == 0u) nes_load_chrrom_8k(nes, 0, 0);
     mapper245_update_banks(nes);
 }
 
@@ -133,20 +156,20 @@ static void nes_mapper_init(nes_t* nes) {
  *   $E000 (even): IRQ disable  $E001 (odd): IRQ enable
  */
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
-    nes_mapper245_t* m = (nes_mapper245_t*)nes->nes_mapper.mapper_register;
+    mapper245_t* m = (mapper245_t*)nes->nes_mapper.mapper_register;
     switch (address & 0xE001u) {
     case 0x8000u:
         m->bank_select = data;
         mapper245_update_banks(nes);
         break;
     case 0x8001u: {
-        uint8_t reg = m->bank_select & 0x07u;
+        const uint8_t reg = (uint8_t)(m->bank_select & 0x07u);
         m->bank_values[reg] = data;
         mapper245_update_banks(nes);
         break;
     }
     case 0xA000u:
-        m->mirroring = data & 0x01u;
+        m->mirroring = (uint8_t)(data & 0x01u);
         if (nes->nes_rom.four_screen == 0) {
             nes_ppu_screen_mirrors(nes, m->mirroring ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
         }
@@ -172,9 +195,9 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     }
 }
 
-/* Scanline IRQ — identical to MMC3. */
+/* Scanline IRQ - identical to MMC3. */
 static void nes_mapper_hsync(nes_t* nes) {
-    nes_mapper245_t* m = (nes_mapper245_t*)nes->nes_mapper.mapper_register;
+    mapper245_t* m = (mapper245_t*)nes->nes_mapper.mapper_register;
     if (nes->nes_ppu.MASK_b == 0 && nes->nes_ppu.MASK_s == 0) return;
 
     if (m->irq_counter == 0 || m->irq_reload) {

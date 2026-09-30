@@ -101,6 +101,7 @@ int test_mapper227_bmc_1200in1(void);
 int test_mapper115_waixing_extension(void);
 int test_mapper187_waixing_outer(void);
 int test_mapper240_register_window(void);
+int test_mapper245_prg_block(void);
 int test_mapper_synthetic_smoke(void);
 int test_mapper_write_storm(void);
 int test_mapper_bank_stress(void);
