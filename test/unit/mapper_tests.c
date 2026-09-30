@@ -2188,6 +2188,131 @@ int test_mapper244_decathlon(void) {
     return TEST_PASS;
 }
 
+/* Mapper 115 (Waixing MMC3 + bank extension): $4100-$7FFF extension registers and the
+   $5080 protection latch read back from $5000-$5FFF.
+   Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_115.h */
+int test_mapper115_waixing_extension(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 115, 16, 64);        /* 256KB PRG (16 x 16KB = 32 x 8KB) + 512KB CHR */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on MMC3 layout: R6 = 0, R7 = 1, the last two banks fixed. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+    TEST_EQ_U32(30u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    TEST_EQ_U32(31u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+
+    /* Odd extension write sets CHR page bit 8: R0 = 0 -> 1KB page 0x100. */
+    nes_test_cpu_write(nes, 0x4101u, 0x01u);
+    TEST_EQ_U32(256u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    nes_test_cpu_write(nes, 0x4101u, 0x00u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+
+    /* Even extension write with bit 7 clear does nothing. */
+    nes_test_cpu_write(nes, 0x4100u, 0x0Fu);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* bit 7 set, bit 5 clear: both 16KB halves take bank (value & 0x0F) = 15. */
+    nes_test_cpu_write(nes, 0x4100u, 0x8Fu);
+    TEST_EQ_U32(30u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(30u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+
+    /* bit 7 + bit 5: one 32KB block = (value & 0x0F) >> 1 = 2 -> 8KB banks 8-11. */
+    nes_test_cpu_write(nes, 0x4100u, 0xA4u);
+    TEST_EQ_U32(8u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(11u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* The protection register is written at $5080 and read back anywhere in $5000-$5FFF. */
+    nes_test_cpu_write(nes, 0x5080u, 0x5Au);
+    TEST_EQ_U32(0x5Au, nes_test_cpu_read(nes, 0x5080u));
+    TEST_EQ_U32(0x5Au, nes_test_cpu_read(nes, 0x5FFFu));
+    /* ...and it did not disturb the PRG mapping. */
+    TEST_EQ_U32(8u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/* Mapper 187 (Waixing MMC3 + outer register + security latch).
+   Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_187.h */
+int test_mapper187_waixing_outer(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 187, 16, 64);        /* 256KB PRG (32 x 8KB) + 512KB CHR (512 x 1KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* The extra CHR bit 8 goes to the half the CHR mode does not bank in 1KB units: with
+       CHR mode 0 (bank select bit 7 clear) that is slots 0-3. */
+    TEST_EQ_U32(256u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[4] - chr) / 1024u);
+
+    /* $8001 is ignored until an $8000 write arms the latch. */
+    nes_test_cpu_write(nes, 0x8001u, 0x05u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    nes_test_cpu_write(nes, 0x8000u, 0x06u);     /* R6, mode 0 */
+    nes_test_cpu_write(nes, 0x8001u, 0x05u);
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* $5000-$5FFF reads return the security table indexed by the latch. */
+    TEST_EQ_U32(0x83u, nes_test_cpu_read(nes, 0x5000u));
+
+    /* $6000 holds the outer PRG register: bit 7 set, bits 0-4 = 1, bit 5 clear ->
+       both 16KB halves take 8KB page (exPage << 1) = 2. */
+    nes_test_cpu_write(nes, 0x6000u, 0x81u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+
+    /* Any other $6000-$7FFF address must NOT touch the outer register (the 少年街霸2 probe
+       shows the game storing unrelated data at $6031/$60F0/$686F). */
+    nes_test_cpu_write(nes, 0x6031u, 0x00u);
+    nes_test_cpu_write(nes, 0x686Fu, 0x00u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/* Mapper 240: one 32KB PRG page + one 8KB CHR page, register anywhere in $4020-$5FFF
+   (Mesen2 Mapper240.h).  The old implementation only decoded $4020-$40FF. */
+int test_mapper240_register_window(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 240, 16, 32);        /* 256KB PRG (8 x 32KB) + 256KB CHR (32 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* $5000 (well outside the old $40FF window): PRG = 2, CHR = 10. */
+    nes_test_cpu_write(nes, 0x5000u, 0x2Au);
+    TEST_EQ_U32(8u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(10u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+    /* $4020 and $5FFF are the same window: 0x31 -> PRG 32KB page 3 = 8KB banks 12-15. */
+    nes_test_cpu_write(nes, 0x4020u, 0x31u);
+    TEST_EQ_U32(12u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    nes_test_cpu_write(nes, 0x5FFFu, 0x12u);     /* PRG 32KB page 1 = 8KB banks 4-7, CHR page 2 */
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 /* Mapper 150 (Sachen 74LS374N): $4100 selects a register, $4101 writes it (the decode
    masks the address with $C101, so the same pair is mirrored through $7FFF).
    Authority: Mesen2 Core/NES/Mappers/Sachen/Sachen74LS374N.h */

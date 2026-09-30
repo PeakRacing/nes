@@ -169,6 +169,10 @@ static const nes_romdb_entry_t romdb[] = {
     /* 1200合1: the header claims mapper 227, the board is mapper 242's (Waixing) 512KB multicart
        with 8KB CHR-RAM - Mesen's database: 4962C024,Famicom,,,,242,512,0,8,0,0,0,h,1. */
     { 0x4962C024u, 242u, 0u, 0u, 0u, 0u, 0u },
+    /* 包青天(中文版) / 包青天 [卡圣]: the header claims mapper 248 (which does not exist), the
+       board is Waixing's MMC3 variant (mapper 115) - Mesen's database: C5E5C5B2 -> mapper 115,
+       256KB PRG + 256KB CHR.  Without the entry the image cannot load at all. */
+    { 0xC5E5C5B2u, 115u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*

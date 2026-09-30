@@ -27,7 +27,7 @@ static void nes_mapper_init(nes_t* nes) {
 }
 
 /*
-    Register at $4020-$40FF:
+    Register at $4020-$5FFF (Mesen2 Mapper240.h: the whole window, not just $4020-$40FF):
     7  bit  0
     ---- ----
     PPPP CCCC
@@ -36,7 +36,7 @@ static void nes_mapper_init(nes_t* nes) {
     ++++------ Select 32 KB PRG ROM bank at $8000-$FFFF
 */
 static void nes_mapper_apu_write(nes_t* nes, uint16_t address, uint8_t data) {
-    if (address >= 0x4020 && address <= 0x40FF) {
+    if (address >= 0x4020 && address <= 0x5FFF) {
         nes_load_prgrom_32k(nes, 0, (data >> 4) & 0x0F);
         nes_load_chrrom_8k(nes, 0, data & 0x0F);
     }
