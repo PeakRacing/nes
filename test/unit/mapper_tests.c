@@ -246,6 +246,46 @@ int test_mapper25_wram(void) {
 }
 
 /*
+ * Mapper 162 (Waixing).  Mesen2's Waixing162.h is the authority: 32KB PRG pages, four registers
+ * at $5000-$5FFF selected by address bits 9-8, power-on regs 3/0/0/7, and a bank formula that
+ * switches on bits 0 and 2 of regs[3].  The old implementation used one register at $8000, a
+ * 16KB page and a single formula, so 西游记后传 booted into the wrong 32KB page and stayed blank.
+ * Note the registers live in $5000-$5FFF, which the core routes to mapper_apu - the board must
+ * install that hook or every bank switch is silently dropped.
+ */
+int test_mapper162_waixing(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 162, 64, 0);    /* 1MB PRG = 64 x 16KB, CHR-RAM */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on: regs = 3/0/0/7 -> regs[3]&5 == 5 -> page = (3 & 0x0F) | ((0 & 0x0F) << 4) = 3.
+       So $8000 maps 16KB bank 6 and $C000 maps bank 7. */
+    TEST_EQ_U32(6u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* The registers are reached through the $5000-$5FFF hook, not $8000-$FFFF. */
+    TEST_CHECK(nes->nes_mapper.mapper_apu != NULL);
+    /* regs[3] stays 7 (bits 0x5 == 5), regs[2] = 1 -> page = 3 | (1 << 4) = 19
+       -> 16KB banks 38 and 39. */
+    nes->nes_mapper.mapper_apu(nes, 0x5200, 0x01);
+    TEST_EQ_U32(38u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(39u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* regs[3] = 4 flips to the "case 4" formula: page = (regs[0] & 0x0E)|((regs[1]>>1)&1)|((regs[2]&0x0F)<<4). */
+    nes->nes_mapper.mapper_apu(nes, 0x5000, 0x05);   /* regs[0] = 5 -> 0x04 */
+    nes->nes_mapper.mapper_apu(nes, 0x5100, 0x02);   /* regs[1] = 2 -> (2>>1)&1 = 1 */
+    nes->nes_mapper.mapper_apu(nes, 0x5300, 0x04);   /* regs[3] = 4 -> case 4 */
+    /* page = 0x04 | 1 | (0x01 << 4) = 0x15 = 21 -> 16KB banks 42 / 43 */
+    TEST_EQ_U32(42u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * Same class of bug as mapper 25: the board owns work RAM at $6000-$7FFF that the iNES header
  * does not advertise with a battery bit.  沙罗曼蛇3 is the Famicom Disk System Salamander moved
  * onto a VRC3 cartridge, and the FDS gives the game WRAM from $6000 up - it decompresses the

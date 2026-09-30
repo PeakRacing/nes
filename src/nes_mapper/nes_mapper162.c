@@ -17,15 +17,19 @@
 #include "nes.h"
 
 /* https://www.nesdev.org/wiki/INES_Mapper_162
- * Mapper 162 — Waixing variant (simplified pirate).
- * PRG 16KB × 2 switchable + CHR 8KB fixed.
- * Register at $8000: bits[3:0] → PRG 16KB bank pair.
+ * Mapper 162 — Waixing.  Verified against Mesen2 Core/NES/Mappers/Waixing/Waixing162.h:
+ *   - PRG page size is 0x8000 (32KB), CHR is fixed to 8KB page 0
+ *   - the four registers live at $5000-$5FFF, selected by address bits 9-8
+ *   - power-on values are regs[0]=3, regs[1]=0, regs[2]=0, regs[3]=7
+ *   - the bank formula depends on bits 0 and 2 of regs[3], not on a single expression
+ * The old implementation put a single register at $8000 with a 16KB page and one fixed
+ * formula, so 西游记后传 booted into the wrong 32KB page and never turned the screen on.
  */
 
 typedef struct {
     uint8_t regs[4];
-    uint8_t prg_bank_count;
-    uint8_t chr_bank_count;
+    uint16_t prg_page_count;   /* 32KB pages */
+    uint16_t chr_page_count;   /* 8KB pages */
 } mapper162_t;
 
 static void nes_mapper_deinit(nes_t* nes) {
@@ -35,13 +39,26 @@ static void nes_mapper_deinit(nes_t* nes) {
 
 static void mapper162_update_banks(nes_t* nes) {
     mapper162_t* m = (mapper162_t*)nes->nes_mapper.mapper_register;
-    uint8_t prg16 = (uint8_t)(m->prg_bank_count / 2u);
-    if (prg16 == 0u) prg16 = 1u;
-    uint8_t bank = (uint8_t)(((m->regs[0] & 0x0Fu) | ((m->regs[2] & 0x01u) << 4u)) % prg16);
-    nes_load_prgrom_16k(nes, 0, (uint16_t)bank);
-    nes_load_prgrom_16k(nes, 1, (uint16_t)(prg16 - 1u));
-    if (nes->nes_rom.chr_rom_size == 0u)
-        nes_load_chrrom_8k(nes, 0, 0);
+    uint16_t page;
+    switch (m->regs[3] & 0x05u) {
+    case 0x00u:
+        page = (uint16_t)((m->regs[0] & 0x0Cu) | (m->regs[1] & 0x02u) | ((m->regs[2] & 0x0Fu) << 4));
+        break;
+    case 0x01u:
+        page = (uint16_t)((m->regs[0] & 0x0Cu) | ((m->regs[2] & 0x0Fu) << 4));
+        break;
+    case 0x04u:
+        page = (uint16_t)((m->regs[0] & 0x0Eu) | ((m->regs[1] >> 1) & 0x01u) | ((m->regs[2] & 0x0Fu) << 4));
+        break;
+    default: /* 0x05 */
+        page = (uint16_t)((m->regs[0] & 0x0Fu) | ((m->regs[2] & 0x0Fu) << 4));
+        break;
+    }
+    if (m->prg_page_count != 0u) page = (uint16_t)(page % m->prg_page_count);
+    /* 32KB page -> the two 16KB slots of the core's PRG windows. */
+    nes_load_prgrom_16k(nes, 0, (uint16_t)(page * 2u));
+    nes_load_prgrom_16k(nes, 1, (uint16_t)(page * 2u + 1u));
+    nes_load_chrrom_8k(nes, 0, 0);   /* CHR is not banked */
 }
 
 static void nes_mapper_init(nes_t* nes) {
@@ -51,16 +68,17 @@ static void nes_mapper_init(nes_t* nes) {
     }
     mapper162_t* m = (mapper162_t*)nes->nes_mapper.mapper_register;
     nes_memset(m, 0, sizeof(mapper162_t));
-    m->prg_bank_count = (uint8_t)(nes->nes_rom.prg_rom_size * 2u);
-    m->chr_bank_count = (uint8_t)(nes->nes_rom.chr_rom_size * 8u);
-    m->regs[3] = 0x07u;
+    m->prg_page_count = (uint16_t)(nes->nes_rom.prg_rom_size / 2u);
+    m->chr_page_count = (uint16_t)nes->nes_rom.chr_rom_size;
+    m->regs[0] = 3u;   /* power-on values from Mesen */
+    m->regs[1] = 0u;
+    m->regs[2] = 0u;
+    m->regs[3] = 7u;
     mapper162_update_banks(nes);
 
-    /* 8KB work RAM at $6000-$7FFF.  The Mesen database lists work/save RAM for these boards
-     * (mapper 162: workRAM=8/saveRAM=0 KB) and the iNES header often has no battery bit, so
-     * gating this on save_ram would leave the window reading 0 - the same failure that hid the
-     * intros of 沙罗曼蛇2/沙罗曼蛇3.  The core maps nes_rom.sram at $6000-$7FFF; boards that use
-     * the window for registers install mapper_sram/mapper_read_sram, which take priority. */
+    /* 8KB work RAM at $6000-$7FFF (the Mesen database lists workRAM=8 for mapper 162 and the
+     * iNES header has no battery bit).  The board's registers sit at $5000-$5FFF, one page
+     * below, so the two windows do not collide. */
     if (nes->nes_rom.sram == NULL) {
         nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
         if (nes->nes_rom.sram != NULL) {
@@ -71,16 +89,17 @@ static void nes_mapper_init(nes_t* nes) {
     }
 }
 
-static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
+/* The registers are in $5000-$5FFF, which the core routes to mapper_apu (not mapper_write),
+ * so the write hook has to be installed there or every bank switch is dropped. */
+static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
     mapper162_t* m = (mapper162_t*)nes->nes_mapper.mapper_register;
-    uint8_t idx = (uint8_t)((address >> 13u) & 0x03u);
-    m->regs[idx] = data;
+    m->regs[(address >> 8) & 0x03u] = data;
     mapper162_update_banks(nes);
 }
 
 int nes_mapper162_init(nes_t* nes) {
     nes->nes_mapper.mapper_init   = nes_mapper_init;
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
-    nes->nes_mapper.mapper_write  = nes_mapper_write;
+    nes->nes_mapper.mapper_apu    = nes_mapper_apu;
     return NES_OK;
 }
