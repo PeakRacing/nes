@@ -297,6 +297,51 @@ int test_apu_expansion_audio(void) {
     TEST_EQ_U32(0x40, buf[0]);
 
     test_fixture_free(&f);
+
+    /* --- Sunsoft 5B through a real mapper 69 board --- */
+    memset(&spec, 0, sizeof(spec));
+    spec.mapper = 69;
+    spec.prg_units = 16;
+    spec.chr_units = 8;
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes = f.nes;
+    a = &nes->nes_apu.exp_audio;
+    buf = nes->nes_apu.sample_buffer;
+    TEST_EQ_U32(NES_EXP_AUDIO_S5B, nes->nes_mapper.mapper_audio);
+
+    /* The volume table grows by 1.5 dB per step (Mesen's double ramp, truncated). */
+    TEST_EQ_U32(0, a->s5b_volume_lut[0]);
+    TEST_EQ_U32(1, a->s5b_volume_lut[1]);
+    TEST_CHECK(a->s5b_volume_lut[15] > a->s5b_volume_lut[8]);
+    TEST_CHECK(a->s5b_volume_lut[8] > a->s5b_volume_lut[4]);
+
+    /* $C000 selects the register, $E000 writes it; registers above 0x0F are ignored. */
+    nes_test_cpu_write(nes, 0xC000u, 0x00u);            /* channel A period low */
+    nes_test_cpu_write(nes, 0xE000u, 0x10u);
+    nes_test_cpu_write(nes, 0xC000u, 0x08u);            /* channel A volume */
+    nes_test_cpu_write(nes, 0xE000u, 0x0Fu);
+    TEST_EQ_U32(0x10, a->s5b_regs[0x00]);
+    TEST_EQ_U32(0x0F, a->s5b_regs[0x08]);
+    nes_test_cpu_write(nes, 0xC000u, 0x20u);            /* out of range select */
+    nes_test_cpu_write(nes, 0xE000u, 0xFFu);
+    TEST_EQ_U32(0, a->s5b_regs[0x01]);                  /* untouched */
+
+    /* Run the chip: the channel outputs its volume (buffer moves up by volume / 3). */
+    for (uint16_t i = 0; i < 256u; i++) buf[i] = 0x00;
+    a->s5b_timer[0] = 0;                                /* force a step on the first tick */
+    a->s5b_step[0] = 0;
+    nes_exp_audio_render(nes, buf, 0, 256, 256u * 40u);
+    TEST_CHECK(buf[255] == (uint8_t)(a->s5b_volume_lut[0x0F] / 3));
+
+    /* Disabling the tone bit (regs[7] bit 0) silences the channel. */
+    nes_test_cpu_write(nes, 0xC000u, 0x07u);
+    nes_test_cpu_write(nes, 0xE000u, 0x01u);
+    for (uint16_t i = 0; i < 256u; i++) buf[i] = 0x00;
+    nes_exp_audio_render(nes, buf, 0, 256, 256u * 40u);
+    TEST_EQ_U32(0x00, buf[255]);
+
+    test_fixture_free(&f);
     return TEST_PASS;
 }
 #endif

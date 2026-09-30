@@ -202,6 +202,52 @@ static uint8_t vrc6_level(const nes_exp_audio_t* a) {
     return (uint8_t)(pulses + saw);
 }
 
+/* --------------------------------------------------------------- Sunsoft 5B ---- */
+
+/*
+ * Sunsoft 5B (mapper 69) - Authority: Mesen2 Core/NES/Mappers/Audio/Sunsoft5bAudio.h.
+ *   $C000 = register select, $E000 = data (registers 0-15).
+ *   regs[ch*2] / regs[ch*2+1] = 16-bit tone period, regs[7] bits 0-2 disable tone,
+ *   regs[8+ch] bits 0-3 = volume (through a +1.5 dB per step table).
+ *   The three channels tick on every SECOND CPU cycle; a 16-step counter driven by the
+ *   period outputs the channel volume while step < 8 (a 50% square).
+ *
+ * Mesen (and this implementation) sum the tone channels only: the envelope generator and
+ * the noise channel are not synthesised, which matches the reference implementation.
+ */
+static void s5b_build_volume_lut(nes_exp_audio_t* a) {
+    /* output *= 1.1885022^2 per step, kept in Q16 and truncated like Mesen's double. */
+    uint32_t output_q16 = 65536u;                     /* 1.0 */
+    a->s5b_volume_lut[0] = 0;
+    for (int i = 1; i < 0x10; i++) {
+        output_q16 = (uint32_t)(((uint64_t)output_q16 * 92564u) >> 16);   /* *1.41253 */
+        a->s5b_volume_lut[i] = (uint8_t)(output_q16 >> 16);
+    }
+}
+
+static void s5b_clock(nes_exp_audio_t* a) {
+    for (int ch = 0; ch < 3; ch++) {
+        a->s5b_timer[ch]--;
+        if (a->s5b_timer[ch] <= 0) {
+            const uint16_t period = (uint16_t)(a->s5b_regs[ch * 2] |
+                                               ((uint16_t)a->s5b_regs[ch * 2 + 1] << 8));
+            a->s5b_timer[ch] = (int16_t)period;
+            a->s5b_step[ch] = (uint8_t)((a->s5b_step[ch] + 1u) & 0x0Fu);
+        }
+    }
+}
+
+static uint16_t s5b_level(const nes_exp_audio_t* a) {
+    uint16_t summed = 0;
+    for (int ch = 0; ch < 3; ch++) {
+        const uint8_t tone_enabled = (uint8_t)(((a->s5b_regs[7] >> ch) & 0x01u) == 0u);
+        if (tone_enabled && a->s5b_step[ch] < 0x08u) {
+            summed = (uint16_t)(summed + a->s5b_volume_lut[a->s5b_regs[8 + ch] & 0x0Fu]);
+        }
+    }
+    return summed;
+}
+
 /* ------------------------------------------------------------------- API ---- */
 
 void nes_exp_audio_init(nes_t* nes) {
@@ -214,6 +260,7 @@ void nes_exp_audio_init(nes_t* nes) {
     a->vrc6_pulse[1].timer = 1;
     a->vrc6_saw.timer = 1;
     a->n163_current_channel = 7;
+    s5b_build_volume_lut(a);
 }
 
 void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
@@ -255,6 +302,21 @@ void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
         case 0xF800u:
             a->n163_ram_position = (uint8_t)(data & 0x7Fu);
             a->n163_auto_increment = (uint8_t)((data & 0x80u) != 0u);
+            break;
+        default:
+            break;
+        }
+        break;
+
+    case NES_EXP_AUDIO_S5B:
+        switch (address & 0xE000u) {
+        case 0xC000u:
+            a->s5b_current_register = data;
+            break;
+        case 0xE000u:
+            if (a->s5b_current_register <= 0x0Fu) {
+                a->s5b_regs[a->s5b_current_register] = data;
+            }
             break;
         default:
             break;
@@ -309,6 +371,23 @@ void nes_exp_audio_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t 
             buffer[start + i] = (uint8_t)(mixed < 0 ? 0 : (mixed > 255 ? 255 : mixed));
         }
         a->n163_acc = acc_q8;
+        break;
+    }
+
+    case NES_EXP_AUDIO_S5B: {
+        /* The channels tick every second CPU cycle, so accumulate cycles and consume them
+           two at a time. */
+        uint32_t acc_q8 = a->s5b_acc;
+        for (uint16_t i = 0; i < count; i++) {
+            acc_q8 += step_q8;
+            while (acc_q8 >= 512u) {           /* 2 CPU cycles */
+                acc_q8 -= 512u;
+                s5b_clock(a);
+            }
+            const int32_t mixed = (int32_t)buffer[start + i] + (int32_t)s5b_level(a) / 3;
+            buffer[start + i] = (uint8_t)(mixed < 0 ? 0 : (mixed > 255 ? 255 : mixed));
+        }
+        a->s5b_acc = acc_q8;
         break;
     }
 

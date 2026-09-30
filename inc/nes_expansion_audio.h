@@ -77,6 +77,14 @@ typedef struct {
     int16_t  n163_last_output;
     uint8_t  n163_disable;
     uint32_t n163_acc;              /* 1/256 CPU cycle timer accumulator */
+
+    /* --- Sunsoft 5B (mapper 69): AY-3-8910 style, three square channels --- */
+    uint8_t  s5b_regs[0x10];
+    uint8_t  s5b_current_register;
+    uint8_t  s5b_volume_lut[0x10];
+    int16_t  s5b_timer[3];
+    uint8_t  s5b_step[3];
+    uint32_t s5b_acc;               /* 1/256 CPU cycle accumulator (channels tick at CPU/2) */
 } nes_exp_audio_t;
 
 void nes_exp_audio_init(nes_t* nes);
