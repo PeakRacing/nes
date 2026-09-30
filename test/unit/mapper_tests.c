@@ -922,6 +922,65 @@ int test_mapper226_bank_formula(void) {
  * latter (a single `STA $D728`), so a mapper that installed just the SRAM hook left the initial
  * mapping in place and the menu came out as a screenful of repeating tiles.
  */
+/*
+ * Mapper 255 (BMC PCB-018, the discrete 110-in-1 / 115-in-1 board; mapper 225 is the same board
+ * in FCEUX).  The write address is the register: bits 6-11 are the PRG field, bits 0-5 the CHR
+ * field, bit 12 picks 32KB (prg >> 1) vs "prg in both 16KB halves", bit 13 is the mirroring and
+ * bit 14 is an extra bank bit that lands on bit 6 of both fields (7 bits total, matching the
+ * 128 x 16KB PRG and 128 x 8KB CHR of these images).  $5000-$5FFF also carries four nibbles of
+ * extra RAM behind address bit 11, which 115-in-1 needs.  The previous implementation read bits
+ * 14/13 as mirroring/mode, dropped the extra bank bit and used another PRG formula, so both
+ * multicarts mapped onto the same wrong 32KB page and showed one identical screen.
+ */
+int test_mapper255_bmc_pcb018(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 255, 128, 128);      /* 2MB PRG (128 x 16KB) + 1MB CHR (128 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the slots can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: prg = 0, mode = 0 -> 32KB page 0 (8KB banks 0-3), CHR bank 0. */
+    for (uint8_t slot = 0; slot < 4; slot++) {
+        TEST_EQ_U32((uint32_t)slot, (uint32_t)(nes->nes_cpu.prg_banks[slot] - prg) / 8192u);
+    }
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* $9140: bit 12 set -> 16KB mode with prg = 5, so both halves take bank 5. */
+    nes_test_cpu_write(nes, 0x9140, 0x00u);
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* $C083: bit 14 set (bank bit -> bit 6), prg field 2, chr field 3 -> prg 66 / chr 67, and
+       bit 12 clear means 32KB page 66 >> 1 = 33, i.e. the pair 66/67. */
+    nes_test_cpu_write(nes, 0xC083, 0x00u);
+    TEST_EQ_U32(66u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(67u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+    TEST_EQ_U32(67u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* Bit 13 is the mirroring. */
+    nes_test_cpu_write(nes, 0xA000, 0x00u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 255 mirroring comes from address bit 13", 255,
+                             "horizontal wiring when bit 13 is set", "wrong nametable wiring");
+    }
+
+    /* The $5000-$5FFF extra RAM (address bit 11 picks it, the low two bits pick the nibble). */
+    nes_test_cpu_write(nes, 0x5802, 0xABu);
+    TEST_EQ_U32(0x0Bu, (uint32_t)nes_test_cpu_read(nes, 0x5802));
+    nes_test_cpu_write(nes, 0x5803, 0x07u);
+    TEST_EQ_U32(0x07u, (uint32_t)nes_test_cpu_read(nes, 0x5803));
+    TEST_EQ_U32(0x0Bu, (uint32_t)nes_test_cpu_read(nes, 0x5802));
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper58_dendy_address_register(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 58, 8, 8);           /* 128KB PRG (8 x 16KB) + 64KB CHR (8 x 8KB) */
