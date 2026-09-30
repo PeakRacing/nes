@@ -2187,3 +2187,119 @@ int test_mapper244_decathlon(void) {
     test_fixture_free(&f);
     return TEST_PASS;
 }
+
+/* Mapper 150 (Sachen 74LS374N): $4100 selects a register, $4101 writes it (the decode
+   masks the address with $C101, so the same pair is mirrored through $7FFF).
+   Authority: Mesen2 Core/NES/Mappers/Sachen/Sachen74LS374N.h */
+int test_mapper150_sachen_374(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 150, 8, 8);          /* 128KB PRG (4 x 32KB) + 64KB CHR (8 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: 32KB page 0 in the whole window, CHR page 0. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* $6000-$7FFF is NOT a data window on this board (the old implementation treated it
+       as one): a stray write there must leave the mapping alone. */
+    nes_test_cpu_write(nes, 0x6000u, 0x05u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* regs[5] = 2 -> 32KB PRG page 2 = 8KB pages 8-11. */
+    nes_test_cpu_write(nes, 0x4100u, 0x05u);
+    nes_test_cpu_write(nes, 0x4101u, 0x02u);
+    TEST_EQ_U32(8u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* regs[6] = 1 -> CHR 8KB page ((regs[4] & 1) << 2) | 1 = 1. */
+    nes_test_cpu_write(nes, 0x4100u, 0x06u);
+    nes_test_cpu_write(nes, 0x4101u, 0x01u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* regs[4] = 1 now -> CHR page 4 | 1 = 5, and the register write is mirrored at $4901. */
+    nes_test_cpu_write(nes, 0x4900u, 0x04u);
+    nes_test_cpu_write(nes, 0x4901u, 0x01u);
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* regs[7] bits 2:1 = 1 -> horizontal wiring. */
+    nes_test_cpu_write(nes, 0x4100u, 0x07u);
+    nes_test_cpu_write(nes, 0x4101u, 0x02u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 150 mirroring from regs[7]", 150,
+                             "horizontal wiring", "wrong nametable");
+    }
+
+    /* Reading $4101 hands back the selected register in the low three bits. */
+    nes_test_cpu_write(nes, 0x4100u, 0x06u);
+    TEST_EQ_U32(1u, nes_test_cpu_read(nes, 0x4101u) & 0x07u);
+    /* ...and the idle address bus is not a register write. */
+    nes_test_cpu_write(nes, 0x4200u, 0x07u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/* Mapper 227 (BMC 1200-in-1 / 南晶 大富翁): the bank comes from the *address* of the
+   write, CHR is not banked at all.  Authority: Mesen2 Mapper227.h */
+int test_mapper227_bmc_1200in1(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 227, 64, 2);         /* 1MB PRG (64 x 16KB) + 16KB CHR */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on ($8000): both 16KB slots on bank 0, vertical. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[2] ||
+        nes->nes_ppu.name_table[1] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[1]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 227 power-on", 227,
+                             "vertical wiring", "wrong nametable");
+    }
+
+    /* $800C: prgBank = 3, sFlag/lFlag clear -> slot 0 = bank 3, slot 1 = bank 3 & 0x38 = 0.
+       CHR must not move at all (the old implementation banked it here). */
+    nes_test_cpu_write(nes, 0x800Cu, 0x00u);
+    TEST_EQ_U32(6u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* $8300: address bit 8 sets prgBank bit 5 and bit 9 is lFlag without sFlag
+       -> slot 0 = 0x20 (8KB 64), slot 1 = 0x20 | 7 = 0x27 (8KB 78), vertical. */
+    nes_test_cpu_write(nes, 0x8300u, 0x00u);
+    TEST_EQ_U32(64u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(78u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+
+    /* $8301: the same with sFlag -> slot 0 = 0x20 & 0x3E = 0x20, slot 1 = 0x27. */
+    nes_test_cpu_write(nes, 0x8301u, 0x00u);
+    TEST_EQ_U32(64u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(78u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+
+    /* $8187: prgMode (bit 7) with sFlag -> prgBank = 33, the aligned 32KB pair is 32/33
+       (8KB pages 64-67), and address bit 1 gives horizontal wiring. */
+    nes_test_cpu_write(nes, 0x8187u, 0x00u);
+    TEST_EQ_U32(64u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(66u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 227 mirroring from address bit 1", 227,
+                             "horizontal wiring", "wrong nametable");
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}

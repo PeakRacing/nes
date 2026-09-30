@@ -16,40 +16,62 @@
 
 #include "nes.h"
 
-/* https://www.nesdev.org/wiki/INES_Mapper_227
- * BMC 1200-in-1 — similar to mapper 225, bank select via address bits.
- * Write $8000-$FFFF:
- *   address[9]    = mirroring (0=V, 1=H)
- *   address[8]    = PRG mode (0=32KB, 1=16KB)
- *   address[7:1]  = PRG bank (7 bits, 16KB granularity)
- *   address[0]    = extra PRG bit
- * CHR bank = address[7:1].
+/*
+ * Mapper 227 - BMC 1200-in-1 / 南晶科技 大富翁 (超级大富翁, 香帅传奇 ...).
+ * Authority: Mesen2 Core/NES/Mappers/Unlicensed/Mapper227.h.
+ *
+ * The register is the *address* of any $8000-$FFFF write (the data byte is ignored):
+ *
+ *   prgBank = ((addr >> 2) & 0x1F) | ((addr & 0x100) >> 3)     (6 bits, 16KB pages)
+ *   sFlag   = addr bit 0
+ *   lFlag   = addr bit 9
+ *   prgMode = addr bit 7
+ *
+ *   prgMode = 1 : sFlag -> the aligned 32KB pair (prgBank & 0xFE), else prgBank in both
+ *                 16KB slots
+ *   prgMode = 0 : slot 0 = sFlag ? prgBank & 0x3E : prgBank
+ *                 slot 1 = lFlag ? prgBank | 0x07 : prgBank & 0x38
+ *
+ *   mirroring   : addr bit 1 -> horizontal, otherwise vertical
+ *   CHR         : not banked at all - one fixed 8KB page
+ *
+ * Power-on runs the same path with addr = $8000: both 16KB slots on bank 0, vertical.
+ * The old implementation banked CHR and read the PRG/mirroring bits from different
+ * address lines, so the games came up blank.
  */
 
-static void nes_mapper_init(nes_t* nes) {
-    nes_load_prgrom_32k(nes, 0, 0);
-    if (nes->nes_rom.chr_rom_size > 0) {
-        nes_load_chrrom_8k(nes, 0, 0);
+static void nes_mapper_apply(nes_t* nes, uint16_t addr) {
+    const uint16_t prg_bank = (uint16_t)(((addr >> 2) & 0x1Fu) | ((addr & 0x100u) >> 3));
+    const uint8_t  s_flag = (uint8_t)(addr & 0x01u);
+    const uint8_t  l_flag = (uint8_t)((addr >> 9) & 0x01u);
+    const uint8_t  prg_mode = (uint8_t)((addr >> 7) & 0x01u);
+
+    if (prg_mode) {
+        if (s_flag) {
+            nes_load_prgrom_32k(nes, 0, (uint16_t)((prg_bank & 0xFEu) >> 1));
+        } else {
+            nes_load_prgrom_16k(nes, 0, prg_bank);
+            nes_load_prgrom_16k(nes, 1, prg_bank);
+        }
+    } else {
+        nes_load_prgrom_16k(nes, 0, (uint16_t)(s_flag ? (prg_bank & 0x3Eu) : prg_bank));
+        nes_load_prgrom_16k(nes, 1, (uint16_t)(l_flag ? (prg_bank | 0x07u) : (prg_bank & 0x38u)));
     }
+
+    if (nes->nes_rom.four_screen == 0) {
+        nes_ppu_screen_mirrors(nes, (addr & 0x02u) ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
+    }
+}
+
+static void nes_mapper_init(nes_t* nes) {
+    /* CHR is a single fixed 8KB page (CHR-RAM on the 南晶 boards). */
+    nes_load_chrrom_8k(nes, 0, 0);
+    nes_mapper_apply(nes, 0x8000u);
 }
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     (void)data;
-    uint16_t prg = (uint16_t)((address >> 1) & 0x7Fu);
-    uint8_t  chr = (uint8_t)(prg & 0x3Fu);
-    if (nes->nes_rom.four_screen == 0) {
-        nes_ppu_screen_mirrors(nes, (address & 0x200u) ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
-    }
-    if (address & 0x100u) {
-        /* 16KB mode */
-        nes_load_prgrom_16k(nes, 0, prg);
-        nes_load_prgrom_16k(nes, 1, prg);
-    } else {
-        nes_load_prgrom_32k(nes, 0, (uint16_t)(prg >> 1));
-    }
-    if (nes->nes_rom.chr_rom_size > 0) {
-        nes_load_chrrom_8k(nes, 0, chr);
-    }
+    nes_mapper_apply(nes, address);
 }
 
 int nes_mapper227_init(nes_t* nes) {

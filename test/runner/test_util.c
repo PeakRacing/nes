@@ -86,6 +86,8 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "171 kaiser 7058", test_mapper171_kaiser_chr},
         {"mapper", "207 taito x1-005 mirroring", test_mapper207_taito_mirroring},
         {"mapper", "244 decathlon", test_mapper244_decathlon},
+        {"mapper", "150 sachen 74ls374n", test_mapper150_sachen_374},
+        {"mapper", "227 bmc 1200in1", test_mapper227_bmc_1200in1},
         {"mapper", "synthetic smoke", test_mapper_synthetic_smoke},
         {"mapper", "write storm", test_mapper_write_storm},
         {"mapper", "bank stress", test_mapper_bank_stress},

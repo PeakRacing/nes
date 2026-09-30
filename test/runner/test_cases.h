@@ -96,6 +96,8 @@ int test_mapper149_sachen_chr(void);
 int test_mapper171_kaiser_chr(void);
 int test_mapper207_taito_mirroring(void);
 int test_mapper244_decathlon(void);
+int test_mapper150_sachen_374(void);
+int test_mapper227_bmc_1200in1(void);
 int test_mapper_synthetic_smoke(void);
 int test_mapper_write_storm(void);
 int test_mapper_bank_stress(void);
