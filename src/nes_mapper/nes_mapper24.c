@@ -81,6 +81,11 @@ static const nes_mirror_type_t vrc6_mirror_table[4] = {
  */
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     mapper24_register_t* r = (mapper24_register_t*)nes->nes_mapper.mapper_register;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    /* VRC6 audio: $9000-$9003 pulse 1 (and halt/clock shift), $A000-$A002 pulse 2,
+     * $B000-$B002 sawtooth.  The mapper keeps its own view of those addresses. */
+    nes_exp_audio_write(nes, address, data);
+#endif
 
     switch (address & 0xF000u) {
     case 0x8000u:
@@ -176,5 +181,8 @@ int nes_mapper24_init(nes_t* nes) {
     nes->nes_mapper.mapper_deinit    = nes_mapper_deinit;
     nes->nes_mapper.mapper_write     = nes_mapper_write;
     nes->nes_mapper.mapper_cpu_clock = nes_mapper_cpu_clock;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    nes->nes_mapper.mapper_audio = NES_EXP_AUDIO_VRC6;
+#endif
     return NES_OK;
 }

@@ -110,6 +110,13 @@
 #define NES_ENABLE_HEAVY_MAPPERS        (0)
 #endif
 
+/* Cartridge expansion audio (VRC6 / Sunsoft 5B / Namco 163 / MMC5 / VRC7).  Desktop SDL
+ * targets enable it next to NES_ENABLE_SOUND; core and MCU builds leave it at 0, where the
+ * whole module compiles away and the APU mixer keeps its original shape. */
+#ifndef NES_ENABLE_EXPANSION_AUDIO
+#define NES_ENABLE_EXPANSION_AUDIO      (0)
+#endif
+
 #ifndef NES_ENABLE_PLANE1_MAPPERS
 #define NES_ENABLE_PLANE1_MAPPERS       (0)
 #endif

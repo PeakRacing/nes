@@ -177,6 +177,130 @@ int test_apu_dmc(void) {
     return TEST_PASS;
 }
 
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+/* Cartridge expansion audio.  Authorities: Mesen2 Core/NES/Mappers/Audio/Namco163Audio.h,
+ * Vrc6Audio.h / Vrc6Pulse.h / Vrc6Saw.h. */
+int test_apu_expansion_audio(void) {
+    test_rom_spec_t spec;
+    uint8_t* buf;
+    nes_exp_audio_t* a;
+
+    /* --- Namco 163 through a real mapper 19 board (registers via the CPU bus) --- */
+    memset(&spec, 0, sizeof(spec));
+    spec.mapper = 19;
+    spec.prg_units = 16;
+    spec.chr_units = 8;
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    a = &nes->nes_apu.exp_audio;
+    buf = nes->nes_apu.sample_buffer;
+    TEST_EQ_U32(NES_EXP_AUDIO_N163, nes->nes_mapper.mapper_audio);
+
+    /* $F800 sets the position + auto-increment, $4800 is the wave RAM port. */
+    nes_test_cpu_write(nes, 0x4800u, 0x11u);            /* no $F800 yet -> position 0 */
+    TEST_EQ_U32(0x11, a->n163_ram[0]);
+    nes_test_cpu_write(nes, 0xF800u, 0x80u | 0x20u);    /* position 0x20, auto-increment on */
+    nes_test_cpu_write(nes, 0x4800u, 0x22u);
+    nes_test_cpu_write(nes, 0x4800u, 0x33u);
+    TEST_EQ_U32(0x22, a->n163_ram[0x20]);
+    TEST_EQ_U32(0x33, a->n163_ram[0x21]);
+    /* The read port returns the byte at the current position (auto-increment had walked it
+       to 0x22 after the two writes above, so pin it back to 0x20 first). */
+    nes_test_cpu_write(nes, 0xF800u, 0x20u);            /* position 0x20, auto-increment off */
+    TEST_EQ_U32(0x22, nes_test_cpu_read(nes, 0x4800u));
+    nes_test_cpu_write(nes, 0x4800u, 0x44u);
+    nes_test_cpu_write(nes, 0x4800u, 0x55u);
+    /* Without auto-increment both writes land on position 0x20 (the second one wins) and
+       0x21 keeps the byte the incrementing writes put there. */
+    TEST_EQ_U32(0x55, a->n163_ram[0x20]);
+    TEST_EQ_U32(0x33, a->n163_ram[0x21]);
+
+    /* One audible channel (ram[0x7F] bits 4-6 = 0 -> channel 7 only). */
+    a->n163_ram[0x7F] = 0x00;
+    a->n163_ram[0x40 + 7 * 8 + 0] = 0x00;               /* frequency low */
+    a->n163_ram[0x40 + 7 * 8 + 2] = 0x00;               /* frequency mid */
+    a->n163_ram[0x40 + 7 * 8 + 4] = 0x00;               /* frequency high / wave length */
+    a->n163_ram[0x40 + 7 * 8 + 6] = 0x00;               /* wave address */
+    a->n163_ram[0x40 + 7 * 8 + 7] = 0x0F;               /* volume 15 */
+    a->n163_ram[0x00] = 0x0F;                           /* wave nibbles (low nibble first) */
+    a->n163_last_output = 0;
+    nes_exp_audio_render(nes, buf, 0, 64, 64u * 15u);
+    /* Advance lands the phase on sample 15 -> (15 - 8) * 15 = 105. */
+    TEST_EQ_U32(105, (uint32_t)a->n163_channel_out[7]);
+    /* The chip level is that single channel divided by (count + 1) = 105. */
+    TEST_EQ_U32(105, (uint32_t)a->n163_last_output);
+
+    /* $E000 bit 6 disables the sound channel. */
+    nes_test_cpu_write(nes, 0xE000u, 0x40u);
+    TEST_CHECK(a->n163_disable != 0);
+    nes_test_cpu_write(nes, 0xE000u, 0x00u);
+    TEST_EQ_U32(0, a->n163_disable);
+    test_fixture_free(&f);
+
+    /* --- VRC6 through a real mapper 24 board --- */
+    memset(&spec, 0, sizeof(spec));
+    spec.mapper = 24;
+    spec.prg_units = 16;
+    spec.chr_units = 8;
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes = f.nes;
+    a = &nes->nes_apu.exp_audio;
+    buf = nes->nes_apu.sample_buffer;
+    TEST_EQ_U32(NES_EXP_AUDIO_VRC6, nes->nes_mapper.mapper_audio);
+
+    nes_test_cpu_write(nes, 0x9000u, 0x8Fu);            /* pulse1: volume 15, ignore duty */
+    nes_test_cpu_write(nes, 0x9001u, 0x10u);            /* frequency low */
+    nes_test_cpu_write(nes, 0x9002u, 0x80u);            /* frequency high 0 + enable */
+    TEST_EQ_U32(15, a->vrc6_pulse[0].volume);
+    TEST_EQ_U32(1, a->vrc6_pulse[0].ignore_duty);
+    TEST_EQ_U32(1, a->vrc6_pulse[0].enabled);
+    TEST_EQ_U32(0x010, a->vrc6_pulse[0].frequency);
+
+    /* One frame's worth of clocks: the timer walks but ignore-duty holds the level at 15. */
+    nes_exp_audio_render(nes, buf, 0, 128, 128u * 40u);
+    TEST_EQ_U32(15, (uint32_t)a->vrc6_pulse[0].volume);
+    TEST_CHECK(buf[0] >= 7);                            /* level / 2 got mixed in */
+
+    /* $9003 bit 0 halts all three channels. */
+    nes_test_cpu_write(nes, 0x9003u, 0x01u);
+    TEST_EQ_U32(1, a->vrc6_halt);
+    const int32_t frozen = a->vrc6_pulse[0].timer;
+    nes_exp_audio_render(nes, buf, 0, 32, 32u * 40u);
+    TEST_EQ_U32((uint32_t)frozen, (uint32_t)a->vrc6_pulse[0].timer);
+    /* $9003 bits 1/2 select the frequency shift (4 / 8). */
+    nes_test_cpu_write(nes, 0x9003u, 0x04u);
+    TEST_EQ_U32(8, a->vrc6_shift);
+    nes_test_cpu_write(nes, 0x9003u, 0x02u);
+    TEST_EQ_U32(4, a->vrc6_shift);
+    nes_test_cpu_write(nes, 0x9003u, 0x00u);
+    TEST_EQ_U32(0, a->vrc6_shift);
+
+    /* Sawtooth: the accumulator grows on every second step and resets on step 0. */
+    nes_test_cpu_write(nes, 0xB000u, 0x20u);            /* accumulator rate */
+    nes_test_cpu_write(nes, 0xB001u, 0x01u);            /* frequency low */
+    nes_test_cpu_write(nes, 0xB002u, 0x80u);            /* enable */
+    TEST_EQ_U32(1, a->vrc6_saw.enabled);
+    TEST_EQ_U32(0x20, a->vrc6_saw.acc_rate);
+    nes_exp_audio_render(nes, buf, 0, 64, 64u * 8u);
+    TEST_CHECK(a->vrc6_saw.accumulator > 0);
+    /* Clearing the enable bit clears the accumulator. */
+    nes_test_cpu_write(nes, 0xB002u, 0x00u);
+    TEST_EQ_U32(0, a->vrc6_saw.accumulator);
+
+    /* A board without a chip must leave the buffer untouched. */
+    nes->nes_mapper.mapper_audio = NES_EXP_AUDIO_NONE;
+    buf[0] = 0x40;
+    nes_exp_audio_render(nes, buf, 0, 8, 64u);
+    TEST_EQ_U32(0x40, buf[0]);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+#endif
+
 int test_apu_samples(void) {
     test_fixture_t f;
     TEST_CHECK(apu_fixture(&f));

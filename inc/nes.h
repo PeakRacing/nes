@@ -21,6 +21,7 @@
 #include "nes_cpu.h"
 #include "nes_ppu.h"
 #include "nes_apu.h"
+#include "nes_expansion_audio.h"
 #include "nes_mapper.h"
 #include "nes_state.h"
 

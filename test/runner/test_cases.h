@@ -43,6 +43,7 @@ int test_ppu_timing_regions(void);
 int test_apu_length_counters(void);
 int test_apu_frame_irq(void);
 int test_apu_dmc(void);
+int test_apu_expansion_audio(void);
 int test_apu_samples(void);
 
 /* rom */

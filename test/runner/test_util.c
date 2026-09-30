@@ -39,6 +39,9 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"apu", "length counters and 4015", test_apu_length_counters},
         {"apu", "frame counter irq", test_apu_frame_irq},
         {"apu", "dmc sample playback", test_apu_dmc},
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+        {"apu", "expansion audio", test_apu_expansion_audio},
+#endif
         {"apu", "samples", test_apu_samples},
         {"rom", "layout and CRC", test_rom_layout},
         {"rom", "invalid images", test_rom_errors},

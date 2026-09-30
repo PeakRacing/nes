@@ -88,6 +88,10 @@ static inline uint16_t vrc6b_normalize(uint16_t addr) {
 }
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    /* VRC6 audio shares the $9000-$B002 window with the mapper's own registers. */
+    nes_exp_audio_write(nes, address, data);
+#endif
     mapper26_register_t* r = (mapper26_register_t*)nes->nes_mapper.mapper_register;
     uint16_t addr = vrc6b_normalize(address);
 
@@ -184,5 +188,8 @@ int nes_mapper26_init(nes_t* nes) {
     nes->nes_mapper.mapper_deinit    = nes_mapper_deinit;
     nes->nes_mapper.mapper_write     = nes_mapper_write;
     nes->nes_mapper.mapper_cpu_clock = nes_mapper_cpu_clock;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    nes->nes_mapper.mapper_audio = NES_EXP_AUDIO_VRC6;
+#endif
     return NES_OK;
 }

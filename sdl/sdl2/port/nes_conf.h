@@ -20,6 +20,9 @@
 #endif
 
 #define NES_ENABLE_SOUND        (1)       /* enable sound */
+/* Cartridge expansion audio (VRC6 / Sunsoft 5B / Namco 163 / MMC5 / VRC7):
+ * desktop keeps it on, MCU/core builds leave it at 0 (see inc/nes_default.h). */
+#define NES_ENABLE_EXPANSION_AUDIO (1)
 #define NES_USE_SRAM            (0)       /* use SRAM */
 
 #define NES_FRAME_SKIP          (0)       /* skip frames */

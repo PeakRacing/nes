@@ -137,6 +137,11 @@ static void nes_mapper_init(nes_t* nes) {
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     nes_mapper19_t* m = (nes_mapper19_t*)nes->nes_mapper.mapper_register;
     uint16_t reg = address & 0xF800u;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    /* The Namco 163 audio chip shares this window: $E000 (sound disable) and $F800 (wave RAM
+     * address port) are register writes for both the mapper and the chip. */
+    nes_exp_audio_write(nes, address, data);
+#endif
 
     if (reg >= 0x8000u && reg <= 0xB800u) {
         uint8_t slot = (uint8_t)((reg - 0x8000u) >> 11);
@@ -176,6 +181,10 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
 
 static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
     nes_mapper19_t* m = (nes_mapper19_t*)nes->nes_mapper.mapper_register;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    /* $4800-$4FFF is the chip's wave RAM port. */
+    nes_exp_audio_write(nes, address, data);
+#endif
     switch (address & 0xF800u) {
     case 0x4800:
         m->iram[m->sound_addr & 0x7Fu] = data;
@@ -246,5 +255,9 @@ int nes_mapper19_init(nes_t* nes) {
     nes->nes_mapper.mapper_read_apu  = nes_mapper_read_apu;
     nes->nes_mapper.mapper_cpu_clock = nes_mapper_cpu_clock;
     nes->nes_mapper.mapper_state_reapply = mapper19_state_reapply;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    /* Namco 163 wavetable audio (also used by mapper 210's variants). */
+    nes->nes_mapper.mapper_audio = NES_EXP_AUDIO_N163;
+#endif
     return NES_OK;
 }

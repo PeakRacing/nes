@@ -265,6 +265,21 @@ static inline void nes_apu_play(nes_t* nes){
     }
 }
 
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+/* Cartridge expansion audio is mixed in per segment: one indirect call per 1/4 frame, and
+ * only for the boards that actually carry a chip (mapper_audio == NES_EXP_AUDIO_NONE is the
+ * common case and returns immediately). */
+static inline void nes_apu_render_expansion(nes_t* nes) {
+    nes_apu_t* apu = &nes->nes_apu;
+    const uint16_t seg = (uint16_t)(apu->clock_count & 3);
+    const uint16_t sample_start = (uint16_t)(seg * nes->timing.samples_per_frame / 4);
+    const uint16_t sample_end = (uint16_t)((seg + 1) * nes->timing.samples_per_frame / 4);
+    const uint32_t seg_cycles = (uint32_t)(nes->timing.cpu_clock / ((uint32_t)4u * nes->timing.frame_rate));
+    nes_exp_audio_render(nes, apu->sample_buffer, sample_start,
+                         (uint16_t)(sample_end - sample_start), seg_cycles);
+}
+#endif
+
 static inline void nes_apu_frame_irq(nes_t *nes){
     if (nes->nes_apu.irq_inhibit_flag==0){
         nes->nes_apu.frame_interrupt = 1;
@@ -396,6 +411,9 @@ void nes_apu_frame(nes_t* nes){
         }
     }
     nes_apu_play(nes);
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    nes_apu_render_expansion(nes);
+#endif
     nes->nes_apu.clock_count++;
 }
 
@@ -411,6 +429,9 @@ void nes_apu_init(nes_t *nes){
     nes->nes_apu.dmc.irq_flag = 0;
     nes->nes_apu.dmc.timer_acc = 0;
     nes->nes_apu.irq_line = 0;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    nes_exp_audio_init(nes);
+#endif
 }
 
 uint8_t nes_read_apu_register(nes_t *nes,uint16_t address){

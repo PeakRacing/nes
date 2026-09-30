@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include "nes_expansion_audio.h"
+
 #ifdef __cplusplus
     extern "C" {
 #endif
@@ -229,6 +231,10 @@ typedef struct nes_apu{
      * because the mappers acknowledge *their* IRQ by clearing that flag and a $4015 read
      * would then silently swallow a mapper interrupt (and vice versa). */
     uint8_t irq_line;
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+    /* Cartridge expansion audio lives here so it is saved together with the APU state. */
+    nes_exp_audio_t exp_audio;
+#endif
     // sample_buffer: pulse1 pulse2 triangle noise dmc output
     uint8_t sample_buffer[NES_APU_SAMPLE_PER_SYNC_MAX];
     uint16_t sample_index;
