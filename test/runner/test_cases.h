@@ -64,6 +64,7 @@ int test_mapper11_chr_bank_select(void);
 int test_mapper121_protection(void);
 int test_mapper3_cnrom_chr_bank(void);
 int test_mapper32_irem_g101_prg_mode(void);
+int test_mapper57_dendy_registers(void);
 int test_mapper226_bank_formula(void);
 int test_mapper78_jf16_mirroring(void);
 int test_mapper99_vs_latch(void);

@@ -872,6 +872,72 @@ int test_mapper226_bank_formula(void) {
  * different Irem board), and under that board the reset code jumps into the wrong bank and the
  * screen stays grey.  Mesen's database has 283AD224,Famicorn,,,,32,256,128,0,0,0,0,h.
  */
+/*
+ * Mapper 57 (the Dendy multicart board, "6 in 1"): two registers mirrored over the whole
+ * $8000-$FFFF range in 2KB steps - $8000-$87FF (and $9000-$97FF, ...) is register 0,
+ * $8800-$8FFF (and $9800-$9FFF, ...) is register 1.  Register 1 bits 5-6 pick the 16KB PRG
+ * bank, bit 4 switches between "same bank in both halves" and an even 32KB pair, bit 3 is the
+ * nametable mirroring; the 8KB CHR bank is register 0 bit 6 plus (register 0 | register 1) & 7.
+ * A previous implementation read a single write value as "outer game select + PRG mode + inner
+ * bank", which left the 6-in-1 image stuck on a blank screen.
+ */
+int test_mapper57_dendy_registers(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 57, 8, 16);          /* 128KB PRG (8 x 16KB) + 128KB CHR (16 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the slots can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: both registers clear -> vertical mirroring, bank 0 in both 16KB halves.
+       Note prg_banks[] holds 8KB windows (0 = $8000, 2 = $C000), so the halves are slots 0 and 2. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* Register 0 ($8000) bit 6 and bit 0 both feed the CHR bank: 8 | 1 = 9. */
+    nes_test_cpu_write(nes, 0x8000, 0x41u);
+    TEST_EQ_U32(9u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* Register 1 ($8800) bit 3 set -> horizontal wiring: NT0/NT1 share a page, NT2/NT3 the other. */
+    nes_test_cpu_write(nes, 0x8800, 0x08u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 57 mirroring comes from register 1 bit 3", 57,
+                             "horizontal wiring when bit 3 is set", "wrong nametable wiring");
+    }
+
+    /* ...and register 1 is mirrored at $9800 as well: clearing bit 3 gives vertical wiring. */
+    nes_test_cpu_write(nes, 0x9800, 0x00u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[2] ||
+        nes->nes_ppu.name_table[1] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[1]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 57 register 1 is mirrored at $9800", 57,
+                             "vertical wiring after clearing bit 3", "wrong nametable wiring");
+    }
+
+    /* 32KB mode (bit 4, bank bits 5-6 = 10 -> even bank 2) loads banks 2 and 3. */
+    nes_test_cpu_write(nes, 0x8800, 0x50u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* 16KB mode (bit 4 clear, bank 3) mirrors bank 3 into both halves. */
+    nes_test_cpu_write(nes, 0x8800, 0x60u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* Register 1 bits 0-2 also take part in the CHR bank: (0x41 | 0x60) & 7 = 1, plus 8 = 9. */
+    TEST_EQ_U32(9u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper32_irem_g101_prg_mode(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 32, 16, 4);          /* 256KB PRG = 32 x 8KB banks, plus some CHR */
