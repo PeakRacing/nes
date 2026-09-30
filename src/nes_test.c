@@ -310,13 +310,18 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
        after the call site, stores it in $02/$03 and finishes with `JMP ($0002)` ($E4E5: 85 03).
        Logging that one store therefore records the whole state machine in order: the dispatch
        index $51, the target, and the state bytes that decide whether the animation thread runs. */
-    if (address == 0x0003u && pc == 0xE4E6u && getenv("NES_DBG_DISP") != NULL) {
+    if (address == 0x0003u && pc >= 0xE4D0u && pc <= 0xE4E8u && getenv("NES_DBG_DISP") != NULL) {
         static long disp_n;
         const long disp_max = 500;
         const uint8_t* r = nes->nes_cpu.cpu_ram;
         if (disp_n < disp_max) {
-            fprintf(stderr, "[DISP] #%ld 索引$51=%02X 目标=$%02X%02X  状态: $18=%02X $19=%02X $F5=%02X $1B=%02X $23=%02X $50=%02X\n",
-                    disp_n, (unsigned)r[0x51], (unsigned)r[0x03], (unsigned)r[0x02],
+            /* $00/$01 hold the JSR return address at this point, and the thread table starts at
+               return+1, so printing both identifies the dispatcher and lets the whole table be read
+               straight out of the ROM afterwards. */
+            fprintf(stderr, "[DISP] #%ld 调用点=$%02X%02X $51=%02X 目标=$%02X%02X A=%02X X=%02X Y=%02X  状态: $18=%02X $19=%02X $F5=%02X $1B=%02X $23=%02X $50=%02X\n",
+                    disp_n, (unsigned)r[0x01], (unsigned)r[0x00], (unsigned)r[0x51],
+                    (unsigned)r[0x03], (unsigned)r[0x02],
+                    (unsigned)nes->nes_cpu.A, (unsigned)nes->nes_cpu.X, (unsigned)nes->nes_cpu.Y,
                     (unsigned)r[0x18], (unsigned)r[0x19], (unsigned)r[0xF5],
                     (unsigned)r[0x1B], (unsigned)r[0x23], (unsigned)r[0x50]);
         }
