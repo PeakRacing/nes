@@ -133,17 +133,20 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
     if (!getenv("NES_DBG_WLOG_ALL") && (address < 0x2000u || address >= 0x4000u)) {
         return;
     }
-    /* CHR-DUMP: the first non-zero $2007 upload is when real tile data arrives. */
-    if (address == 0x2007u && data != 0x00u) {
+    /* CHR-DUMP: the first non-zero $2007 upload is when real tile data arrives.  It also fires on
+       every non-zero write to $3F00, which is where a game installs its backdrop - that catches
+       the palette state as the menu is actually running instead of the power-on zeros. */
+    {
         static int dumped;
-        if (!dumped) {
+        const int is_pal_write = (address == 0x2007u && nes->nes_ppu.v_reg >= 0x3F00u);
+        if (address == 0x2007u && (data != 0x00u || is_pal_write) && (!dumped || is_pal_write)) {
             const uint8_t* chr = nes->nes_rom.chr_rom;
             long nz_chr = 0, nz_nt = 0;
             unsigned i;
             dumped = 1;
-            fprintf(stderr, "[CHR-DUMP] pc=%04X data=%02X chr_rom=%p chr_rom_size=%u\n",
+            fprintf(stderr, "[CHR-DUMP] pc=%04X data=%02X chr_rom=%p chr_rom_size=%u v_reg=%04X\n",
                     (unsigned)pc, (unsigned)data, (const void*)chr,
-                    (unsigned)nes->nes_rom.chr_rom_size);
+                    (unsigned)nes->nes_rom.chr_rom_size, (unsigned)nes->nes_ppu.v_reg);
             for (i = 0; chr && i < 8192u; i++) { if (chr[i]) nz_chr++; }
             fprintf(stderr, "[CHR-DUMP] CHR 非零字节 = %ld / 8192\n", nz_chr);
             for (i = 0; i < 8u; i++) {
