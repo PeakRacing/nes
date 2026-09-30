@@ -2283,6 +2283,42 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
+/* Mapper 147 (Sachen SA-72008 + TXC JV001 scrambler).
+   Authority: Mesen2 Core/NES/Mappers/Sachen/Sachen_147.h + Mappers/Txc/TxcChip.h */
+int test_mapper147_txc(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 147, 8, 16);         /* 128KB PRG (4 x 32KB) + 128KB CHR (16 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: output 0 -> PRG 32KB page 0, CHR 8KB page 0. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* The mapper nibble-swaps the value it feeds the chip: scrambled 0x3E means
+       staging = 0x0E, inverter = 0x30, so the CPU writes 0xF8 to $4102. */
+    nes_test_cpu_write(nes, 0x4102u, 0xF8u);
+    /* $4100 latches staging into the accumulator; it powers on inverted, so the value is
+       XORed with 0xFF -> accumulator = 0xF1. */
+    nes_test_cpu_write(nes, 0x4100u, 0x00u);
+    /* A write at $8000+ latches output = (accumulator & 0x0F) | (inverter & 0xF0) = 0x31
+       -> PRG 32KB page 3 (8KB page 12), CHR 8KB page 8. */
+    nes_test_cpu_write(nes, 0xC100u, 0x00u);
+    TEST_EQ_U32(12u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(8u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* Read path: (addr & 0x103) == 0x100 returns the scrambled chip value:
+       (accumulator & 0x0F) | ((inverter ^ 0xFF) & 0xF0) = 0xC1, un-scrambled to 0x07. */
+    TEST_EQ_U32(0x07u, nes_test_cpu_read(nes, 0x4100u));
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 /* Mapper 133 (Sachen SA-72007): one register selected by the address.
    Authority: Mesen2 Core/NES/Mappers/Sachen/Sachen_133.h */
 int test_mapper133_sachen(void) {
