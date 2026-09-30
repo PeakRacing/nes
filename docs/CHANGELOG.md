@@ -25,6 +25,12 @@ Release highlights:
   (mapper 19/210/163), **VRC6** (24/26), **Sunsoft 5B** (69) and **MMC5** (5). Boards declare their
   chip through `nes_mapper.mapper_audio`; the chip state lives in the APU so it travels with save
   states. VRC7 (OPLL) is not implemented yet.
+- **NES 2.0 plane 1/2 audit** — the four boards named in the plan were checked against Mesen2 before
+  any code was written. 268 has an authority (`Mmc3Variants/MMC3_Coolboy`) and is a candidate for later;
+  **256/512/558 have none** (Mesen2 itself only has `case 256: break;` and no case at all for 512/558),
+  so they are deliberately **not** implemented rather than guessed. The images in the corpus that carry
+  those headers already render through their header mappers, and the plane 1/2 checkboxes in the READMEs
+  stay unticked, which matches this finding.
 - **Tests** — 88 unit/stress cases and a 567-image corpus baseline; `-Strict` stays at
   REGRESSED 0 / HASH_DIFF 0. The expansion-audio module compiles away entirely when the macro is 0
   (verified: 86/87 cases in the two configurations).
