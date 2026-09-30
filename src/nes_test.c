@@ -327,6 +327,25 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
         }
         disp_n++;
     }
+    /* RAM-DUMP: with NES_DBG_RAMDUMP=<n>, on the n-th $4014 write the full 2KB of CPU RAM is
+       written to NES_DBG_RAMFILE (default ram.bin).  Paired with the same dump taken from a Mesen
+       save state it turns "why does this game behave differently" into a byte diff of the two RAM
+       images instead of guesswork.  Needs NES_DBG_WLOG_ALL=1 like the other $4014 probes. */
+    if (address == 0x4014u && getenv("NES_DBG_RAMDUMP") != NULL) {
+        static long rd_n;
+        const long rd_want = strtol(getenv("NES_DBG_RAMDUMP"), NULL, 10);
+        rd_n++;
+        if (rd_n == rd_want) {
+            const char* path = getenv("NES_DBG_RAMFILE");
+            FILE* f = fopen(path ? path : "ram.bin", "wb");
+            if (f != NULL) {
+                fwrite(nes->nes_cpu.cpu_ram, 1, 2048u, f);
+                fclose(f);
+                fprintf(stderr, "[RAMDUMP] 第 %ld 次 $4014：2KB RAM 已写入 %s\n",
+                        (long)rd_n, path ? path : "ram.bin");
+            }
+        }
+    }
     {
         static long cap;
         if (cap == 0) { const char* e = getenv("NES_DBG_WLOG_MAX"); cap = e ? strtol(e, NULL, 10) : 200000; }
