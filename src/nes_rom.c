@@ -205,6 +205,10 @@ static const nes_romdb_entry_t romdb[] = {
     /* 快打传说(中文) / 快打传说 [Gouder]: the header claims mapper 189, but the board is the
        protection-latched MMC3 of mapper 208 - Mesen's database: 07EB2C12 -> 208. */
     { 0x07EB2C12u, 208u, 0u, 0u, 0u, 0u, 0u },
+    /* 吞食天地2-诸葛孔明传(中文): the header claims mapper 4, but the board is the MMC3
+       variant of mapper 198 (exReg PRG slots + 4KB WRAM mirrored over $5000-$7FFF) -
+       Mesen's database: AC05EBB7 -> 198 (frame 13; as mapper 4 the screen stays blank). */
+    { 0xAC05EBB7u, 198u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*

@@ -2283,6 +2283,44 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
+/* Mapper 198 (MMC3 variant: exReg PRG slots + 4KB WRAM mirrored over $5000-$7FFF).
+   Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_198.h */
+int test_mapper198_mmc3_variant(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 198, 64, 0);         /* 1MB PRG (128 x 8KB) + CHR-RAM */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on: slots 0-3 = exRegs = { 0, 1, last-1, last }. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+    TEST_EQ_U32(126u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    TEST_EQ_U32(127u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* MMC3 register 6 feeds exRegs[0] through the board's mask; the MMC3 mode bit does not
+       move the slots around. */
+    nes_test_cpu_write(nes, 0x8000u, 0x06u);
+    nes_test_cpu_write(nes, 0x8001u, 0x05u);
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    /* A value >= 0x40 uses the wider 0x4F mask. */
+    nes_test_cpu_write(nes, 0x8001u, 0x4Fu);
+    TEST_EQ_U32(0x4Fu, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* 4KB work RAM mirrored over $5000-$7FFF. */
+    nes_test_cpu_write(nes, 0x5000u, 0x5Au);
+    TEST_EQ_U32(0x5Au, nes_test_cpu_read(nes, 0x5000u));
+    TEST_EQ_U32(0x5Au, nes_test_cpu_read(nes, 0x6000u));   /* mirror */
+    TEST_EQ_U32(0x5Au, nes_test_cpu_read(nes, 0x7000u));   /* mirror */
+    nes_test_cpu_write(nes, 0x6000u, 0xA5u);
+    TEST_EQ_U32(0xA5u, nes_test_cpu_read(nes, 0x5000u));   /* same 4KB cell */
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 /* Mapper 147 (Sachen SA-72008 + TXC JV001 scrambler).
    Authority: Mesen2 Core/NES/Mappers/Sachen/Sachen_147.h + Mappers/Txc/TxcChip.h */
 int test_mapper147_txc(void) {
