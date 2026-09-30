@@ -44,8 +44,20 @@ static const uint16_t noise_period_table[16] = {
 };
 
 
-static inline void nes_apu_pulse_sweep(pulse_t* pulse, uint8_t period_one){
-    if (pulse->sweep_divider == 0 && pulse->enabled && pulse->shift){
+/* The APU's own IRQ line: frame counter and DMC both feed it.  Keeping it separate from
+ * nes_cpu.irq_pending is what stops a $4015 read from acknowledging a mapper's IRQ. */
+static inline void nes_apu_update_irq_line(nes_t* nes) {
+    nes->nes_apu.irq_line = (uint8_t)((nes->nes_apu.frame_interrupt || nes->nes_apu.dmc.irq_flag) ? 1u : 0u);
+}
+
+uint8_t nes_apu_irq_pending(const nes_t* nes) {
+    return nes->nes_apu.irq_line;
+}
+
+/* Defined next to the other DMC helpers below; the mixer loop needs it earlier. */
+static inline void nes_apu_dmc_advance(nes_t* nes, uint32_t cycles_q8);
+
+static inline void nes_apu_pulse_sweep(pulse_t* pulse, uint8_t period_one){    if (pulse->sweep_divider == 0 && pulse->enabled && pulse->shift){
         if (pulse->cur_period >= 8 && pulse->cur_period <= 0x7ff){
             if (pulse->negate){
                     pulse->cur_period = pulse->cur_period - (pulse->cur_period >> pulse->shift) - period_one;
@@ -182,6 +194,14 @@ static inline void nes_apu_play(nes_t* nes){
         (uint32_t)((uint64_t)nes->timing.cpu_clock * 65536 / ((uint64_t)NES_APU_SAMPLE_RATE * noi_period)) : 0;
     const uint8_t noi_mode = noi->loop_noise;
 
+    // DMC: 每个输出采样把定时器推进"每采样对应的 CPU 周期"（1/256 周期定点），
+    // 这样 DAC 电平的变化跟得上采样率，而不是每 1/4 帧才跳一次。
+    uint32_t dmc_step_q8;
+    {
+        const uint32_t seg_samples = (uint32_t)(sample_end - sample_start);
+        const uint32_t seg_cycles = (uint32_t)(nes->timing.cpu_clock / ((uint32_t)4u * nes->timing.frame_rate));
+        dmc_step_q8 = (seg_samples != 0u) ? (uint32_t)(((uint64_t)seg_cycles << 8) / seg_samples) : 0u;
+    }
     // 缓存到局部变量加速热循环
     uint32_t p1_phase = p1->phase_acc;
     uint32_t p2_phase = p2->phase_acc;
@@ -221,10 +241,15 @@ static inline void nes_apu_play(nes_t* nes){
         }
 
         // 混音: 线性近似 https://www.nesdev.org/wiki/APU_Mixer#Linear_Approximation
-        // pulse_out ≈ 0.00752*(p1+p2), tnd_out ≈ 0.00851*tri + 0.00494*noise
-        // 乘以256并使用定点 >>7: (247*(p1+p2) + 279*tri + 162*noise) >> 7
-        uint16_t mixed = (uint16_t)((247 * ((uint16_t)p1_out + p2_out) + 279 * tri_out + 162 * noi_out) >> 7);
+        // pulse_out ≈ 0.00752*(p1+p2), tnd_out ≈ 0.00851*tri + 0.00494*noise + 0.00335*dmc
+        // 乘以256并使用定点 >>7: (247*(p1+p2) + 279*tri + 162*noise + 110*dmc) >> 7
+        const uint8_t dmc_out = apu->dmc.out_level;
+        uint16_t mixed = (uint16_t)((247 * ((uint16_t)p1_out + p2_out) + 279 * tri_out + 162 * noi_out
+                                     + 110 * dmc_out) >> 7);
         apu->sample_buffer[i] = (uint8_t)(mixed > 255 ? 255 : mixed);
+
+        // DMC 定时器推进（只在本通道使能时才有开销）
+        if (apu->dmc.enabled) nes_apu_dmc_advance(nes, dmc_step_q8);
     }
 
     // 写回相位累加器
@@ -243,7 +268,81 @@ static inline void nes_apu_play(nes_t* nes){
 static inline void nes_apu_frame_irq(nes_t *nes){
     if (nes->nes_apu.irq_inhibit_flag==0){
         nes->nes_apu.frame_interrupt = 1;
-        nes_cpu_irq(nes);
+        nes_apu_update_irq_line(nes);
+    }
+}
+
+/*
+ * DMC ($4010-$4013).  The sample is fetched one byte at a time through the CPU bus and
+ * decoded one bit per timer tick; the DAC level is what the mixer adds in.
+ * https://www.nesdev.org/wiki/APU_DMC
+ */
+static const uint16_t dmc_rate_table[16] = {
+    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54
+};
+
+static void nes_apu_dmc_stop(dmc_t* d) {
+    d->bytes_remaining = 0;
+    d->silence = 1;
+    d->bits_remaining = 0;
+}
+
+/* $4015 bit 4 written as 1: (re)start the sample when nothing is playing. */
+static void nes_apu_dmc_restart(dmc_t* d) {
+    d->cur_address = (uint16_t)(0xC000u + ((uint16_t)d->sample_address << 6));
+    d->bytes_remaining = (uint16_t)(((uint16_t)d->sample_length << 4) + 1u);
+    d->silence = 0;
+    d->bits_remaining = 0;
+}
+
+static void nes_apu_dmc_tick(nes_t* nes) {
+    dmc_t* d = &nes->nes_apu.dmc;
+
+    if (!d->enabled) return;
+
+    if (!d->silence) {
+        if (d->bits_remaining == 0u) {
+            d->shift_reg = d->sample_buffer;
+            d->bits_remaining = 8u;
+        }
+        if (d->shift_reg & 1u) {
+            if (d->out_level <= 125u) d->out_level = (uint8_t)(d->out_level + 2u);
+        } else {
+            if (d->out_level >= 2u)   d->out_level = (uint8_t)(d->out_level - 2u);
+        }
+        d->shift_reg >>= 1;
+        d->bits_remaining--;
+    }
+
+    /* Refill the sample buffer when it has been shifted out. */
+    if (d->bits_remaining == 0u && d->bytes_remaining > 0u) {
+        d->sample_buffer = nes_cpu_dma_read(nes, d->cur_address);
+        d->cur_address = (d->cur_address == 0xFFFFu) ? 0x8000u : (uint16_t)(d->cur_address + 1u);
+        d->bytes_remaining--;
+        if (d->bytes_remaining == 0u) {
+            if (d->loop) {
+                nes_apu_dmc_restart(d);
+            } else {
+                d->silence = 1;
+                if (d->irq_enable) {
+                    d->irq_flag = 1;
+                    nes_apu_update_irq_line(nes);
+                }
+            }
+        }
+    }
+}
+
+/* Advance the DMC by `cycles_q8` (1/256 CPU cycle units). */
+static inline void nes_apu_dmc_advance(nes_t* nes, uint32_t cycles_q8) {
+    dmc_t* d = &nes->nes_apu.dmc;
+    uint32_t period = (uint32_t)d->timer_period << 8;
+    if (period == 0u) period = 256u;
+    d->timer_acc += cycles_q8;
+    while (d->timer_acc >= period) {
+        d->timer_acc -= period;
+        nes_apu_dmc_tick(nes);
+        if (!d->enabled) { d->timer_acc = 0; break; }
     }
 }
 
@@ -303,21 +402,37 @@ void nes_apu_frame(nes_t* nes){
 void nes_apu_init(nes_t *nes){
     nes->nes_apu.status = 0;
     nes->nes_apu.noise.lfsr = 1;
+    /* DMC idle: 4KB sample window, rate index 0, DAC at 0, no IRQ. */
+    nes->nes_apu.dmc.enabled = 0;
+    nes->nes_apu.dmc.silence = 1;
+    nes->nes_apu.dmc.timer_period = dmc_rate_table[0];
+    nes->nes_apu.dmc.out_level = 0;
+    nes->nes_apu.dmc.bytes_remaining = 0;
+    nes->nes_apu.dmc.irq_flag = 0;
+    nes->nes_apu.dmc.timer_acc = 0;
+    nes->nes_apu.irq_line = 0;
 }
 
 uint8_t nes_read_apu_register(nes_t *nes,uint16_t address){
     uint8_t data = 0;
     if(address==0x4015){
-        data=nes->nes_apu.status&0xc0;
+        /* Bits 6/7 are the live interrupt flags (frame counter and DMC), not whatever was
+         * last written to the enable register. */
+        data = (uint8_t)((nes->nes_apu.frame_interrupt ? 0x40u : 0u) |
+                         (nes->nes_apu.dmc.irq_flag ? 0x80u : 0u));
 
         if (nes->nes_apu.pulse1.length_counter) data |= 1;
         if (nes->nes_apu.pulse2.length_counter) data |= (1 << 1);
         if (nes->nes_apu.triangle.length_counter) data |= (1 << 2);
         if (nes->nes_apu.noise.length_counter) data |= (1 << 3);
-        if (nes->nes_apu.dmc.load_counter) data |= (1 << 4);
+        if (nes->nes_apu.dmc.bytes_remaining) data |= (1 << 4);
 
+        /* Reading $4015 acknowledges the APU's own interrupts only.  It must NOT clear
+         * nes_cpu.irq_pending: that flag also carries the mapper IRQ line (MMC3 & friends
+         * acknowledge by writing it directly), and wiping it here silently ate those. */
         nes->nes_apu.frame_interrupt = 0;
-        nes->nes_cpu.irq_pending = 0;
+        nes->nes_apu.dmc.irq_flag = 0;
+        nes_apu_update_irq_line(nes);
     }else{
         NES_LOG_DEBUG("nes_read apu %04X %02X\n",address,data);
     }
@@ -406,9 +521,17 @@ void nes_write_apu_register(nes_t* nes,uint16_t address,uint8_t data){
         // DMC ($4010–$4013)
         case 0x4010:
             nes->nes_apu.dmc.control0=data;
+            nes->nes_apu.dmc.timer_period = dmc_rate_table[nes->nes_apu.dmc.frequency];
+            if (nes->nes_apu.dmc.irq_enable) {
+                /* Writing $4010 with the IRQ enable bit set clears the DMC interrupt flag. */
+                nes->nes_apu.dmc.irq_flag = 0;
+                nes_apu_update_irq_line(nes);
+            }
             break;
         case 0x4011:
+            /* 7-bit DAC load: takes effect immediately. */
             nes->nes_apu.dmc.control1=data;
+            nes->nes_apu.dmc.out_level = (uint8_t)(data & 0x7Fu);
             break;
         case 0x4012:
             nes->nes_apu.dmc.sample_address=data;
@@ -433,17 +556,29 @@ void nes_write_apu_register(nes_t* nes,uint16_t address,uint8_t data){
             if (nes->nes_apu.status_noise==0){
                 nes->nes_apu.noise.length_counter=0;
             }
-            // nes->nes_apu.dmc_interrupt = 0;
+            /* DMC enable: 0->1 restarts the sample when nothing is playing, 1->0 stops it
+             * and clears the interrupt flag. */
+            if (nes->nes_apu.status_dmc) {
+                if (nes->nes_apu.dmc.bytes_remaining == 0u) {
+                    nes_apu_dmc_restart(&nes->nes_apu.dmc);
+                }
+            } else {
+                nes_apu_dmc_stop(&nes->nes_apu.dmc);
+                nes->nes_apu.dmc.irq_flag = 0;
+            }
+            nes->nes_apu.dmc.enabled = nes->nes_apu.status_dmc;
+            nes_apu_update_irq_line(nes);
             break;
         case 0x4017:
             nes->nes_apu.frame_counter=data;
             if (nes->nes_apu.irq_inhibit_flag){
+                /* IRQ inhibit de-asserts the frame counter's contribution to the APU line
+                 * (and only that: a mapper IRQ is a different source, see $4015). */
                 nes->nes_apu.frame_interrupt = 0;
-                /* IRQ inhibit de-asserts the APU IRQ line.
-                   Only clear irq_pending when frame_interrupt was the source;
-                   mapper IRQs will re-assert on the next cpu_clock tick. */
-                nes->nes_cpu.irq_pending = 0;
+                nes_apu_update_irq_line(nes);
             }
+            /* Writing $4017 resets the frame counter sequence. */
+            nes->nes_apu.clock_count = 0;
             if (nes->nes_apu.mode){
                 nes_apu_length_counter_and_sweep(nes);
                 nes_apu_envelopes_and_linear_counter(nes);

@@ -117,6 +117,11 @@ typedef struct nes_cpu{
 void nes_cpu_init(nes_t *nes);
 void nes_cpu_reset(nes_t* nes);
 void nes_cpu_irq(nes_t* nes);
+#if (NES_ENABLE_SOUND == 1)
+/* Read one byte the way the DMC's sample fetcher does: straight off the CPU bus
+ * (mapper-mapped PRG/SRAM included) and without touching the test-mode read log. */
+uint8_t nes_cpu_dma_read(nes_t* nes, uint16_t address);
+#endif
 
 void nes_opcode(nes_t* nes,uint16_t ticks);
 

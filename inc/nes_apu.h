@@ -174,6 +174,22 @@ typedef struct {
     };
     uint8_t sample_address;                 /*	Sample address (A) */
     uint8_t sample_length;                  /*	Sample length (L) */
+
+    /* --- playback state -------------------------------------------------
+     * $4015 bit 4 enables the channel; the sample is re-fetched one byte at a time
+     * through the CPU bus, decoded one bit per timer tick and accumulated into the
+     * 7-bit DAC (out_level).  bytes_remaining doubles as the "DMC active" status bit. */
+    uint8_t  enabled;
+    uint8_t  irq_flag;                      /* sample finished with IRQ enabled */
+    uint16_t cur_address;                   /* CPU address of the next fetch */
+    uint16_t bytes_remaining;
+    uint16_t timer_period;                  /* CPU cycles per output bit */
+    uint8_t  sample_buffer;                 /* byte waiting to be shifted out */
+    uint8_t  shift_reg;                     /* 8 sample bits, LSB first */
+    uint8_t  bits_remaining;
+    uint8_t  silence;                       /* no sample playing: hold the DAC level */
+    uint8_t  out_level;                     /* 0-127 DAC */
+    uint32_t timer_acc;                     /* fixed point (1/256 CPU cycle) timer */
 } dmc_t;
 
 // https://www.nesdev.org/wiki/APU#Registers
@@ -209,6 +225,10 @@ typedef struct nes_apu{
     };
 
     uint64_t clock_count;
+    /* The APU drives its own IRQ line: it must not be folded into nes_cpu.irq_pending,
+     * because the mappers acknowledge *their* IRQ by clearing that flag and a $4015 read
+     * would then silently swallow a mapper interrupt (and vice versa). */
+    uint8_t irq_line;
     // sample_buffer: pulse1 pulse2 triangle noise dmc output
     uint8_t sample_buffer[NES_APU_SAMPLE_PER_SYNC_MAX];
     uint16_t sample_index;
@@ -218,6 +238,8 @@ void nes_apu_init(nes_t *nes);
 void nes_apu_frame(nes_t *nes);
 uint8_t nes_read_apu_register(nes_t *nes,uint16_t address);
 void nes_write_apu_register(nes_t* nes,uint16_t address,uint8_t data);
+/* APU IRQ line (frame counter or DMC), sampled by the CPU before every instruction. */
+uint8_t nes_apu_irq_pending(const nes_t* nes);
 
 #ifdef __cplusplus          
     }

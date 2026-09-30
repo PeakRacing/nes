@@ -201,6 +201,15 @@ static inline uint8_t nes_read_cpu_inner(nes_t* nes,uint16_t address){
     }
 }
 
+#if (NES_ENABLE_SOUND == 1)
+uint8_t nes_cpu_dma_read(nes_t* nes, uint16_t address) {
+    /* The DMC fetcher reads the CPU bus (mapper-mapped PRG and SRAM included).  Going
+     * through nes_read_cpu_inner skips the test-mode read log, which would otherwise be
+     * flooded with sample fetches. */
+    return nes_read_cpu_inner(nes, address);
+}
+#endif
+
 static inline uint16_t nes_readw_cpu(nes_t* nes,uint16_t address){
     return nes_read_cpu(nes,address) | (uint16_t)(nes_read_cpu(nes,address + 1)) << 8;
 }
@@ -1890,7 +1899,12 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
         // Don't clear irq_pending after servicing: IRQ is level-triggered,
         // the line stays asserted until the source is acknowledged
         // (e.g., read $4015 for APU, write $E000 for MMC3).
+        // The APU keeps its own line: acknowledging one source must not hide the other.
+#if (NES_ENABLE_SOUND == 1)
+        if (prev_I == 0 && (nes->nes_cpu.irq_pending || nes_apu_irq_pending(nes))) {
+#else
         if (prev_I == 0 && nes->nes_cpu.irq_pending) {
+#endif
             NES_PUSHW(nes, nes->nes_cpu.PC);
             NES_U_SET;
             NES_B_CLR;

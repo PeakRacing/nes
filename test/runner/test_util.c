@@ -38,6 +38,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"ppu", "ntsc/pal scanline timing", test_ppu_timing_regions},
         {"apu", "length counters and 4015", test_apu_length_counters},
         {"apu", "frame counter irq", test_apu_frame_irq},
+        {"apu", "dmc sample playback", test_apu_dmc},
         {"apu", "samples", test_apu_samples},
         {"rom", "layout and CRC", test_rom_layout},
         {"rom", "invalid images", test_rom_errors},
