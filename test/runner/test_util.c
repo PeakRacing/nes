@@ -51,6 +51,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "69 5b audio write", test_mapper69_5b_audio_write},
         {"mapper", "17 power-on slots", test_mapper17_power_on_slots},
         {"mapper", "11 chr bank select", test_mapper11_chr_bank_select},
+        {"mapper", "231 bmc 20in1", test_mapper231_bmc_20in1},
         {"mapper", "57 dendy registers", test_mapper57_dendy_registers},
         {"mapper", "32 irem g101 prg mode", test_mapper32_irem_g101_prg_mode},
         {"mapper", "3 cnrom chr bank", test_mapper3_cnrom_chr_bank},

@@ -881,6 +881,73 @@ int test_mapper226_bank_formula(void) {
  * A previous implementation read a single write value as "outer game select + PRG mode + inner
  * bank", which left the 6-in-1 image stuck on a blank screen.
  */
+/*
+ * Mapper 231 (BMC 20-in-1): the *address* of the write is the register and the data byte is
+ * ignored.  The bank is ((address >> 5) & 1) | (address & 0x1E) - five bits, with address bit 5
+ * acting as bank bit 0 - $8000-$BFFF takes the 32KB-aligned even bank (bank & 0x1E) while
+ * $C000-$FFFF takes the bank itself, and the mirroring comes from address bit 7.  The previous
+ * implementation read address bit 4 as a "32KB mode" flag, used only four bank bits and took the
+ * mirroring from bit 5, which left the 20-in-1 image on a blank screen.
+ */
+int test_mapper231_bmc_20in1(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 231, 32, 0);         /* 512KB PRG (32 x 16KB) + CHR-RAM, like the ROM */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the slots can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* prg_banks[] are 8KB windows: 0 = $8000, 2 = $C000 - the two 16KB halves. */
+    /* Power-on: both halves on bank 0, vertical wiring. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* Address bit 5 is bank bit 0: $8020 selects bank 1, so $8000-$BFFF stays on the even bank 0. */
+    nes_test_cpu_write(nes, 0x8020, 0x00u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* Address bits 1-4 are the upper bank bits: $8002 selects bank 2 in both halves. */
+    nes_test_cpu_write(nes, 0x8002, 0x00u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* The top of the 512KB ROM: bit 5 + bits 1-4 set -> bank 31, so $8000-$BFFF holds bank 30
+       (this is the pair the reset vector lives in). */
+    nes_test_cpu_write(nes, 0x803E, 0x00u);
+    TEST_EQ_U32(30u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(31u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* Mirroring comes from address bit 7, not bit 5. */
+    nes_test_cpu_write(nes, 0x8082, 0x00u);      /* bit 7 set -> horizontal */
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 231 mirroring comes from address bit 7", 231,
+                             "horizontal wiring when bit 7 is set", "wrong nametable wiring");
+    }
+    nes_test_cpu_write(nes, 0x8002, 0x00u);      /* bit 7 clear -> vertical */
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[2] ||
+        nes->nes_ppu.name_table[1] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[1]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 231 mirroring returns to vertical", 231,
+                             "vertical wiring when bit 7 is clear", "wrong nametable wiring");
+    }
+
+    /* This is a CHR-RAM board, so the pattern window must be mapped even with no CHR ROM. */
+    if (nes->nes_ppu.pattern_table[0] == NULL) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 231 maps its CHR-RAM window", 231,
+                             "pattern table mapped", "CHR window lost");
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper57_dendy_registers(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 57, 8, 16);          /* 128KB PRG (8 x 16KB) + 128KB CHR (16 x 8KB) */
