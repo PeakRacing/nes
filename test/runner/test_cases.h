@@ -67,6 +67,7 @@ int test_mapper32_irem_g101_prg_mode(void);
 int test_mapper57_dendy_registers(void);
 int test_mapper231_bmc_20in1(void);
 int test_mapper230_contra_mode(void);
+int test_mapper229_bmc_31in1(void);
 int test_mapper226_bank_formula(void);
 int test_mapper78_jf16_mirroring(void);
 int test_mapper99_vs_latch(void);

@@ -897,6 +897,61 @@ int test_mapper226_bank_formula(void) {
  * kernel slot on bank 39, so the reset vector came from the wrong bank and the screen stayed
  * black (verdict ok but every pixel the backdrop colour).
  */
+/*
+ * Mapper 229 (BMC 31-in-1): the write *address* is the register (the data byte is ignored).
+ * Mesen's Mapper229.h decodes it as: CHR 8KB bank = address & 0xFF; if (address & 0x1E) == 0 the
+ * whole 32KB page 0 fills $8000-$FFFF, otherwise address & 0x1F goes into *both* 16KB halves;
+ * mirroring is address bit 5.  The previous implementation used a five-bit CHR bank, treated
+ * address bit 0 as a "32KB mode" flag and put bank+1 into the second half, so the 31-in-1 never
+ * left its boot screen.
+ */
+int test_mapper229_bmc_31in1(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 229, 32, 32);        /* 512KB PRG (32 x 16KB) + 256KB CHR (32 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the slots can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on goes through the same register write with $8000: CHR bank 0, and because
+       $8000 & 0x1E == 0 the whole 32KB page 0 fills the address space (8KB banks 0-3). */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+    for (uint8_t slot = 0; slot < 4; slot++) {
+        TEST_EQ_U32((uint32_t)slot, (uint32_t)(nes->nes_cpu.prg_banks[slot] - prg) / 8192u);
+    }
+    /* ...with vertical wiring (address bit 5 clear). */
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[2] ||
+        nes->nes_ppu.name_table[1] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[1]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 229 powers up on the 32KB page 0", 229,
+                             "vertical wiring, 8KB banks 0-3", "wrong power-on state");
+    }
+
+    /* $8002: bits 1-4 non-zero -> 16KB mode, and *both* halves take bank 2 (the same bank twice).
+       The CHR bank comes from the low 8 address bits, so it is 2 as well. */
+    nes_test_cpu_write(nes, 0x8002, 0x00u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* $8020: bit 5 sets only the mirroring - PRG stays on the 32KB page 0. */
+    nes_test_cpu_write(nes, 0x8020, 0x00u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 229 mirroring comes from address bit 5", 229,
+                             "horizontal wiring when bit 5 is set", "wrong nametable wiring");
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper230_contra_mode(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 230, 40, 0);         /* 640KB PRG (40 x 16KB) + CHR-RAM, like the ROM */
