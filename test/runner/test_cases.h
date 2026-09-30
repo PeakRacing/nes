@@ -120,6 +120,7 @@ int test_mapper132_txc(void);
 int test_mapper85_vrc7_decode(void);
 int test_mapper86_jf13(void);
 int test_mapper12_outer_chr(void);
+int test_mapper79_nina(void);
 int test_mapper_synthetic_smoke(void);
 int test_mapper_write_storm(void);
 int test_mapper_bank_stress(void);

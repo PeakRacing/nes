@@ -112,6 +112,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "85 vrc7 decode", test_mapper85_vrc7_decode},
         {"mapper", "86 jf13", test_mapper86_jf13},
         {"mapper", "12 outer chr", test_mapper12_outer_chr},
+        {"mapper", "79 nina", test_mapper79_nina},
         {"mapper", "synthetic smoke", test_mapper_synthetic_smoke},
         {"mapper", "write storm", test_mapper_write_storm},
         {"mapper", "bank stress", test_mapper_bank_stress},

@@ -20,12 +20,8 @@
 /* https://www.nesdev.org/wiki/INES_Mapper_079 */
 
 static void nes_mapper_init(nes_t* nes) {
-    uint16_t prg32_count = (uint16_t)(nes->nes_rom.prg_rom_size / 2u);
-    uint16_t last_prg32 = prg32_count ? (uint16_t)(prg32_count - 1u) : 0u;
-
-    // CPU $8000-$FFFF: 32 KB switchable PRG ROM bank.
-    nes_load_prgrom_32k(nes, 0, last_prg32);
-    // CHR $0000-$1FFF: 8 KB switchable CHR ROM bank.
+    /* Mesen2 maps 79 to Nina03_06(false): power-on is PRG 32KB page 0 / CHR 8KB page 0. */
+    nes_load_prgrom_32k(nes, 0, 0);
     nes_load_chrrom_8k(nes, 0, 0);
 }
 
@@ -39,9 +35,11 @@ static void nes_mapper_init(nes_t* nes) {
          +---- Select 32 KB PRG ROM bank at $8000-$FFFF (only exact $4100)
 */
 static void mapper79_write(nes_t* nes, uint16_t address, uint8_t data) {
-    if (address == 0x4100u) {
-        nes_load_prgrom_32k(nes, 0, (uint16_t)((data >> 3u) & 0x01u));
-    }
+    /* Register window is (addr & 0xE100) == 0x4100 - the old code only took the exact address
+       $4100 AND wrote the CHR bank on every unrelated write as well. */
+    if ((address & 0xE100u) != 0x4100u) return;
+
+    nes_load_prgrom_32k(nes, 0, (uint16_t)((data >> 3u) & 0x01u));
     nes_load_chrrom_8k(nes, 0, (uint16_t)(data & 0x07u));
 }
 

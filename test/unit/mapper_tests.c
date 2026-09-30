@@ -2283,6 +2283,35 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
+/* Mapper 79 (AVE NINA-003/006, non-multicart).  Authority: Mesen2 AVE/Nina03_06.h */
+int test_mapper79_nina(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 79, 4, 8);           /* 64KB PRG (2 x 32KB) + 64KB CHR (8 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: PRG 32KB page 0, CHR 8KB page 0 (the old code used the LAST PRG page). */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* The register window is (addr & 0xE100) == 0x4100, so $4300 is the same register. */
+    nes_test_cpu_write(nes, 0x4300u, 0x0Bu);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* Any other address must NOT touch the banks (the old code rewrote CHR on every write). */
+    nes_test_cpu_write(nes, 0x6000u, 0x07u);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 /* Mapper 12 (MMC3 + one outer CHR bit taken from any write in $4020-$5FFF).
    Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_12.h */
 int test_mapper12_outer_chr(void) {
