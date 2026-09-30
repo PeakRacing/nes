@@ -905,6 +905,58 @@ int test_mapper226_bank_formula(void) {
  * address bit 0 as a "32KB mode" flag and put bank+1 into the second half, so the 31-in-1 never
  * left its boot screen.
  */
+/*
+ * Mapper 249 (Waixing MMC3 board): a $5000 register turns on a bank-number permutation, and the
+ * board is permuted from power-on.  Chinese Waixing games such as `三十六计 [外星科技]` verify the
+ * mapping by setting R6/R7 and comparing the byte at $BFFF with the low byte of their return
+ * address; without the permutation only the value 0 can ever match, so the game spun forever in
+ * that check loop ($F08F) and never enabled rendering.  The same ROM also showed the classic
+ * uint8_t overflow: 256KB of CHR is 256 1KB pages, which truncated to 0 and skipped the CHR
+ * mapping entirely.
+ */
+int test_mapper249_waixing_permute(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 249, 16, 32);        /* 256KB PRG (32 x 8KB) + 256KB CHR (256 x 1KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the slots can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* 256KB of CHR is 256 1KB pages; a uint8_t page count wrapped that to 0 and skipped the whole
+       CHR mapping, which is what broke `三十六计 [外星科技]` (and, on the PRG side, left its
+       bank-switch self check spinning at $F08F forever).  The window must be mapped... */
+    if (nes->nes_ppu.pattern_table[0] == NULL) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 249 maps its 256 CHR pages", 249,
+                             "pattern table mapped", "CHR window lost (uint8_t overflow?)");
+    }
+
+    /* ...and R0 must actually move it: with the permutation the board applies from power-on,
+       R0 = 0 -> page 0 while R0 = 2 -> page 27, and both are inside the 256-page ROM. */
+    nes_test_cpu_write(nes, 0x8000, 0x00u);      /* select R0 */
+    nes_test_cpu_write(nes, 0x8001, 0x00u);
+    const uint8_t* const page0 = nes->nes_ppu.pattern_table[0];
+    nes_test_cpu_write(nes, 0x8001, 0x02u);
+    const uint8_t* const page2 = nes->nes_ppu.pattern_table[0];
+    if (page0 == page2) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 249 rebanks its 256 CHR pages", 249,
+                             "R0 moves the 1KB window", "CHR window never changes");
+    }
+    /* The board's permutation is what makes R0 = 2 land back on page 2 (its formula maps 2 -> 2
+       while sending e.g. 1 -> 5); both pages must come out of the 256-page CHR ROM. */
+    if (page0 != chr || page2 != chr + 2 * 1024) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 249 applies the Waixing page permutation", 249,
+                             "R0 = 0 -> page 0, R0 = 2 -> page 2",
+                             "wrong CHR page");
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper229_bmc_31in1(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 229, 32, 32);        /* 512KB PRG (32 x 16KB) + 256KB CHR (32 x 8KB) */
