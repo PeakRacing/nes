@@ -2,6 +2,33 @@
 
 # Changelog 
 
+## v0.3.0
+
+Release highlights:
+
+- **Mapper audit and completion** — every mapper outside the previously verified list was audited
+  against the Mesen2 reference (`Core/NES/Mappers/…`) and the local corpus. Sixteen boards were
+  rewritten or corrected — 51 (BMC 11-in-1), 114 (scrambled MMC3), 117, 142 (Kaiser 202),
+  149, 150 (Sachen 74LS374N), 171 (Kaiser 7058), 176 (**Waixing FK23C**: 12 MMC3 registers,
+  `$5010-$501F` extensions, 32 KB of board WRAM, delayed scanline IRQ), 178, 207 (Taito X1-005
+  alternate mirroring), 227, 240, 244, 245, 250 (MMC3 with the register index on address bit 10) —
+  and eleven `romdb` overrides route dumps whose header lies to the board Mesen's database names
+  (e.g. 四人街霸 → 189, 泰坦尼克号 → 241, 妖怪俱乐部 → 140, 星河战士 → 176). 40+ games now render
+  that previously stayed blank, failed to load, or ran on the wrong board. Every fix carries a
+  unit test that fails on the old implementation plus the authority it was checked against.
+- **APU** — the **DMC channel** is implemented (rate table, `$4010-$4013`, 7-bit DAC, sample fetch
+  through the CPU bus, loop/IRQ); the APU now drives its **own IRQ line** so a `$4015` read can no
+  longer acknowledge a mapper interrupt; `$4015` bits 6/7 report the live interrupt flags and a
+  `$4017` write resets the frame counter sequence.
+- **Expansion audio** — new `NES_ENABLE_EXPANSION_AUDIO` switch (on for the SDL front ends, off and
+  therefore free for MCU/core builds) plus a per-segment mixer hook and four chips: **Namco 163**
+  (mapper 19/210/163), **VRC6** (24/26), **Sunsoft 5B** (69) and **MMC5** (5). Boards declare their
+  chip through `nes_mapper.mapper_audio`; the chip state lives in the APU so it travels with save
+  states. VRC7 (OPLL) is not implemented yet.
+- **Tests** — 88 unit/stress cases and a 567-image corpus baseline; `-Strict` stays at
+  REGRESSED 0 / HASH_DIFF 0. The expansion-audio module compiles away entirely when the macro is 0
+  (verified: 86/87 cases in the two configurations).
+
 ## v0.2.0
 
 Release highlights:

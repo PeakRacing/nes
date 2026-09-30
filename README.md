@@ -44,7 +44,10 @@ so it can run reliably on resource-constrained hardware such as MCUs.
 
 - [x] PPU (scanline-level precision)
 
-- [x] APU (Fixed-point calculation)
+- [x] APU (Fixed-point calculation, DMC channel included)
+
+- [x] Expansion audio (VRC6, Sunsoft 5B, Namco 163, MMC5) — `NES_ENABLE_EXPANSION_AUDIO`,
+  on for the SDL front ends and off (zero cost) for MCU/core builds
 
 **mapper support:**
 
@@ -57,11 +60,12 @@ so it can run reliably on resource-constrained hardware such as MCUs.
 Verified playable (at least one image in the regression corpus reaches rendering):
 
 	0, 1, 2, 3, 4, 5, 7, 10, 11, 13, 15, 16, 17, 18, 19, 21,
-	22, 23, 24, 25, 26, 31, 32, 33, 34, 37, 38, 44, 45, 47, 64, 65,
-	66, 67, 68, 69, 70, 71, 72 (audio), 73, 75, 76, 77, 78, 79, 80, 82, 83,
-	85, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 105, 113, 118, 119,
-	140, 141, 144, 146, 159, 163, 168, 180, 184, 185, 189, 193, 199, 206, 210, 228,
-	232, 234, 246, 253
+	22, 23, 24, 25, 26, 31, 32, 33, 34, 37, 38, 44, 45, 47, 51, 57,
+	58, 62, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 75, 76, 77, 78,
+	79, 80, 82, 83, 85, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97,
+	99, 105, 113, 114, 115, 117, 118, 119, 121, 140, 141, 142, 144, 146, 149, 150,
+	159, 163, 168, 171, 176, 178, 180, 184, 185, 187, 189, 193, 199, 206, 210, 225,
+	226, 227, 228, 229, 230, 231, 232, 234, 235, 240, 241, 244, 245, 246, 253, 255
 
 ## Software Architecture
 
