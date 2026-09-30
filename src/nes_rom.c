@@ -192,6 +192,10 @@ static const nes_romdb_entry_t romdb[] = {
     /* 星河战士 [恒格电子]: the header claims mapper 177, the board is FK23C as well -
        Mesen's database: 02C41438 -> mapper 176 (frame 38 once the board is right). */
     { 0x02C41438u, 176u, 0u, 0u, 0u, 0u, 0u },
+    /* 风中奇缘: the header claims mapper 182, which this core does not implement, so the
+       image would not load at all.  Mesen's database: 0D98DB53 -> mapper 114 (the scrambled
+       MMC3 used by the 狮子王 pirate), 256KB PRG + 256KB CHR. */
+    { 0x0D98DB53u, 114u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*

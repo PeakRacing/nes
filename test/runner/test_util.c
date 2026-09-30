@@ -96,6 +96,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "241 prg full byte", test_mapper241_prg_full_byte},
         {"mapper", "117 direct slots", test_mapper117_direct_slots},
         {"mapper", "176 fk23c", test_mapper176_fk23c},
+        {"mapper", "114 scrambled mmc3", test_mapper114_scrambled_mmc3},
         {"mapper", "synthetic smoke", test_mapper_synthetic_smoke},
         {"mapper", "write storm", test_mapper_write_storm},
         {"mapper", "bank stress", test_mapper_bank_stress},

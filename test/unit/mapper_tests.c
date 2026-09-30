@@ -2283,9 +2283,59 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
-/* Mapper 176 (Waixing FK23C): 8KB PRG / 1KB CHR pages, 12 MMC3 registers, extension
-   registers in $5000-$5FFF and a 32KB WRAM at $6000-$7FFF.
-   Authority: Mesen2 Core/NES/Mappers/Waixing/Fk23C.h */
+/* Mapper 114 (MMC3 behind a scrambled register interface).
+   Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_114.h */
+int test_mapper114_scrambled_mmc3(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 114, 16, 32);        /* 256KB PRG (32 x 8KB) + 256KB CHR (256 x 1KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on MMC3 layout: R6 = 0, R7 = 1, the two fixed slots on the last pages. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+    TEST_EQ_U32(30u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    TEST_EQ_U32(31u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+    /* CHR mode 0 with R0 = 0 -> 1KB pages 0/1. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_ppu.pattern_table[1] - chr) / 1024u);
+
+    /* $A000 is the register SELECT passed through the scramble table: value 2 -> MMC3
+       register security[2] = 1, i.e. CHR R1.  A plain MMC3 would treat $A000 as mirroring. */
+    nes_test_cpu_write(nes, 0xA000u, 0x02u);
+    nes_test_cpu_write(nes, 0xC000u, 0x0Au);     /* bank data, once */
+    TEST_EQ_U32(10u, (uint32_t)(nes->nes_ppu.pattern_table[2] - chr) / 1024u);
+    TEST_EQ_U32(11u, (uint32_t)(nes->nes_ppu.pattern_table[3] - chr) / 1024u);
+
+    /* The data latch is one-shot: a second $C000 without a new select is ignored. */
+    nes_test_cpu_write(nes, 0xC000u, 0x0Cu);
+    TEST_EQ_U32(10u, (uint32_t)(nes->nes_ppu.pattern_table[2] - chr) / 1024u);
+
+    /* $8001 goes to MMC3's $A000 -> mirroring. */
+    nes_test_cpu_write(nes, 0x8001u, 0x01u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 114 mirroring via $8001", 114,
+                             "horizontal wiring", "wrong nametable");
+    }
+
+    /* $5000-$7FFF: extra PRG register.  Bit 7 set -> both 16KB halves show bank 2
+       (8KB pages 4-7); clearing it returns to the MMC3 mapping. */
+    nes_test_cpu_write(nes, 0x6000u, 0x82u);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    nes_test_cpu_write(nes, 0x6000u, 0x00u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
 int test_mapper176_fk23c(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 176, 64, 64);        /* 1MB PRG (128 x 8KB) + 512KB CHR (512 x 1KB) */
