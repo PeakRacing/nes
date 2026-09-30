@@ -957,6 +957,54 @@ int test_mapper226_bank_formula(void) {
  * The previous implementation read `address >> 6` as the PRG page, data bit 7 as the mode and a
  * different CHR formula, and never set the mirroring - the 700-in-1 stayed blank.
  */
+/*
+ * Mapper 242 (Waixing, "1200-in-1"): Mesen's Core/NES/Mappers/Waixing/Mapper242.h - the write
+ * address is the register (data ignored), the PRG window is ONE 32KB page selected by address
+ * bits 6:3 (4 bits = 16 pages = 512KB, exactly this image) and the mirroring comes from address
+ * bit 1.  There is no fixed bank at $C000.  The previous implementation used (data >> 1) & 7 as a
+ * 16KB bank, kept the last 16KB fixed and read the mirroring from data bit 0.
+ *
+ * NOTE: 1200合1 itself still renders nothing in this core *and* in Mesen (plain green screen), so
+ * this decoder is verified against Mesen's source rather than against a running title.
+ */
+int test_mapper242_waixing_1200in1(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 242, 32, 0);         /* 512KB PRG (32 x 16KB) + 8KB CHR-RAM */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on: 32KB page 0 => 16KB banks 0 and 1 (8KB slots 0 and 2). */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* $8008: page = (0x8008 >> 3) & 0xF = 1 => 16KB banks 2 and 3; bit 1 clear -> vertical. */
+    nes_test_cpu_write(nes, 0x8008, 0x00u);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* $807A: page = (0x807A >> 3) & 0xF = 15 => the last 32KB; bit 1 set -> horizontal. */
+    nes_test_cpu_write(nes, 0x807A, 0x00u);
+    TEST_EQ_U32(30u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(31u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 242 mirroring comes from address bit 1", 242,
+                             "horizontal wiring when bit 1 is set", "wrong nametable wiring");
+    }
+
+    /* The data byte is ignored: a different value must not change the mapping. */
+    nes_test_cpu_write(nes, 0x8008, 0xFFu);
+    TEST_EQ_U32(2u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper62_super_700in1(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 62, 128, 128);       /* 2MB PRG (128 x 16KB) + 1MB CHR (128 x 8KB) */

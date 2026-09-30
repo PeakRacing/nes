@@ -161,6 +161,9 @@ static const nes_romdb_entry_t romdb[] = {
        image would not load at all.  The board is mapper 235's 2MB multicart (128 x 16KB PRG plus
        8KB CHR-RAM) - Mesen's database: 6175B9A0,Famicom,,,,235,2048,0,8,0,0,0,h. */
     { 0x6175B9A0u, 235u, 0u, 0u, 0u, 0u, 0u },
+    /* 1200合1: the header claims mapper 227, the board is mapper 242's (Waixing) 512KB multicart
+       with 8KB CHR-RAM - Mesen's database: 4962C024,Famicom,,,,242,512,0,8,0,0,0,h,1. */
+    { 0x4962C024u, 242u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*
