@@ -17,37 +17,114 @@
 #include "nes.h"
 
 /* https://www.nesdev.org/wiki/INES_Mapper_235
- * Golden Game 150-in-1 — large multicart with address-based bank selection.
- * Write $8000-$FFFF:
- *   address[8]  = PRG mode (0=32KB, 1=16KB)
- *   address[9]  = mirroring (0=V, 1=H)
- *   address[7:0]= PRG bank (8 bits, 16KB granularity)
+ * Mapper 235 - "Golden Game 150-in-1" (the 260合1(150合1) image).  The write address is the
+ * register; this follows FCEUX's src/boards/235.cpp:
+ *
+ *   bank   = ((address & 0x300) >> 3) | (address & 0x1F)      (7 bits: address bits 8-9 and 0-4)
+ *   address bit 11 set: 16KB mode, $8000-$FFFF takes 16KB bank (bank << 1) | (address bit 12)
+ *                       (the same bank in both halves)
+ *   address bit 11 clear: 32KB mode, the whole 32KB page `bank`
+ *   address bit 10 set: one-screen mirroring, else horizontal when address bit 13 is set
+ *   a bank past the end of PRG answers with the data bus latch (open bus)
+ *
+ * The board also has a second, reset-selected "UNROM" personality for 128KB-multiple images
+ * (FCEUX flips its `unrom` flag in M235Reset, i.e. on the reset button, not on power-up), which
+ * is the other half of the 260-in-1 menu.
+ *
+ * The previous implementation here used `address & 0xFF` as the bank, bit 8 as the mode and bit 9
+ * as the mirroring, so `260合1` only ever drew its title and the green border - the game list came
+ * out blank.
  */
 
-static void nes_mapper_init(nes_t* nes) {
-    nes_load_prgrom_32k(nes, 0, 0);
-    if (nes->nes_rom.chr_rom_size > 0) {
-        nes_load_chrrom_8k(nes, 0, 0);
+typedef struct {
+    uint16_t cmd;
+    uint8_t  unrom_data;
+    uint8_t  unrom;
+    uint8_t  open_bus;
+    uint8_t  last_data;
+} mapper235_t;
+
+static void nes_mapper_deinit(nes_t* nes) {
+    nes_free(nes->nes_mapper.mapper_register);
+    nes->nes_mapper.mapper_register = NULL;
+}
+
+static void mapper235_sync(nes_t* nes) {
+    mapper235_t* m = (mapper235_t*)nes->nes_mapper.mapper_register;
+    if (m == NULL) return;
+
+    const uint16_t prg_16k_pages = (uint16_t)(nes->nes_rom.prg_rom_size);   /* 16KB units */
+
+    if (m->unrom) {
+        /* Reset-selected UNROM personality: fixed last 8KB-page group above, 16KB window below. */
+        nes_load_prgrom_16k(nes, 0, (uint16_t)(((prg_16k_pages - 1u) & 0xF8u) | (m->unrom_data & 0x07u)));
+        nes_load_prgrom_16k(nes, 1, (uint16_t)((prg_16k_pages - 1u) & 0xF8u | 0x07u));
+        if (nes->nes_rom.four_screen == 0) {
+            nes_ppu_screen_mirrors(nes, NES_MIRROR_VERTICAL);
+        }
+        m->open_bus = 0;
+        return;
     }
+
+    const uint16_t bank = (uint16_t)(((m->cmd & 0x300u) >> 3) | (m->cmd & 0x1Fu));
+    if (bank >= (uint16_t)(nes->nes_rom.prg_rom_size >> 1)) {   /* 32KB pages */
+        m->open_bus = 1;
+        return;
+    }
+    m->open_bus = 0;
+
+    if (m->cmd & 0x800u) {
+        const uint16_t page = (uint16_t)((bank << 1) | ((m->cmd >> 12) & 0x01u));
+        nes_load_prgrom_16k(nes, 0, page);
+        nes_load_prgrom_16k(nes, 1, page);
+    } else {
+        nes_load_prgrom_32k(nes, 0, bank);
+    }
+
+    if (nes->nes_rom.four_screen == 0) {
+        if (m->cmd & 0x400u) {
+            nes_ppu_screen_mirrors(nes, NES_MIRROR_ONE_SCREEN0);
+        } else {
+            nes_ppu_screen_mirrors(nes, ((m->cmd >> 13) & 0x01u) ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
+        }
+    }
+}
+
+static void nes_mapper_init(nes_t* nes) {
+    if (nes->nes_mapper.mapper_register == NULL) {
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper235_t));
+        if (nes->nes_mapper.mapper_register == NULL) return;
+    }
+    mapper235_t* m = (mapper235_t*)nes->nes_mapper.mapper_register;
+    nes_memset(m, 0, sizeof(mapper235_t));
+
+    /* CHR-RAM board: attach the 8KB pattern window unconditionally. */
+    nes_load_chrrom_8k(nes, 0, 0);
+    mapper235_sync(nes);
 }
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
-    (void)data;
-    uint16_t prg = (uint16_t)(address & 0xFFu);
-    if (nes->nes_rom.four_screen == 0) {
-        nes_ppu_screen_mirrors(nes, (address & 0x200u) ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
-    }
-    if (address & 0x100u) {
-        /* 16KB mode: both halves same bank */
-        nes_load_prgrom_16k(nes, 0, prg);
-        nes_load_prgrom_16k(nes, 1, prg);
-    } else {
-        nes_load_prgrom_32k(nes, 0, (uint16_t)(prg >> 1));
-    }
+    mapper235_t* m = (mapper235_t*)nes->nes_mapper.mapper_register;
+    if (m == NULL) return;
+    m->cmd = address;                            /* the address is the register */
+    m->unrom_data = data;
+    m->last_data = data;
+    mapper235_sync(nes);
+}
+
+/* NOTE: FCEUX also models the board's open bus (a bank past the end of PRG answers with the data
+ * bus latch).  This core's mapper_read_prg hook *replaces* the normal PRG read outright
+ * (src/nes_cpu.c:163), so installing one here would blank every fetch; the out-of-range case is
+ * therefore left to the ordinary mapping. */
+
+static void nes_mapper_state_reapply(nes_t* nes) {
+    mapper235_sync(nes);
 }
 
 int nes_mapper235_init(nes_t* nes) {
-    nes->nes_mapper.mapper_init  = nes_mapper_init;
-    nes->nes_mapper.mapper_write = nes_mapper_write;
+    nes->nes_mapper.mapper_init          = nes_mapper_init;
+    nes->nes_mapper.mapper_deinit        = nes_mapper_deinit;
+    nes->nes_mapper.mapper_write         = nes_mapper_write;
+    nes->nes_mapper.mapper_state_reapply = nes_mapper_state_reapply;
     return NES_OK;
 }

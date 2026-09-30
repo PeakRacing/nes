@@ -932,6 +932,68 @@ int test_mapper226_bank_formula(void) {
  * 14/13 as mirroring/mode, dropped the extra bank bit and used another PRG formula, so both
  * multicarts mapped onto the same wrong 32KB page and showed one identical screen.
  */
+/*
+ * Mapper 235 ("Golden Game" 150-in-1 / 260合1): 2MB of PRG in 32KB pages plus 8KB of CHR-RAM.
+ * Follows FCEUX's src/boards/235.cpp - the write address is the register, bank = ((A & 0x300) >> 3)
+ * | (A & 0x1F), bit 11 selects 16KB mode (16KB page (bank << 1) | (A >> 12 bit 0) in both halves)
+ * versus the 32KB page `bank`, bit 10 forces one-screen mirroring and otherwise bit 13 picks
+ * horizontal.  The previous implementation used A & 0xFF as the bank, bit 8 as the mode and bit 9
+ * as the mirroring, so 260合1 only drew its title over a blank list.
+ */
+int test_mapper235_golden_game(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 235, 128, 0);        /* 2MB PRG (128 x 16KB) + 8KB CHR-RAM */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the slots can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on: the 32KB page 0 (8KB banks 0-3) and a mapped CHR-RAM window. */
+    for (uint8_t slot = 0; slot < 4; slot++) {
+        TEST_EQ_U32((uint32_t)slot, (uint32_t)(nes->nes_cpu.prg_banks[slot] - prg) / 8192u);
+    }
+    if (nes->nes_ppu.pattern_table[0] == NULL) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 235 maps its CHR-RAM window", 235,
+                             "pattern table mapped", "CHR window lost");
+    }
+
+    /* $8805: bit 11 set -> 16KB mode, bank = ((0x800 >> 3) | 5) = 5, so page (5 << 1) | 0 = 10
+       fills both halves. */
+    nes_test_cpu_write(nes, 0x8805, 0x00u);
+    TEST_EQ_U32(10u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(10u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* $8105: bit 11 clear -> 32KB page ((0x100 >> 3) | 5) = 37, i.e. the 16KB pair 74/75. */
+    nes_test_cpu_write(nes, 0x8105, 0x00u);
+    TEST_EQ_U32(74u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(75u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* Bit 10 forces one-screen mirroring: all four nametables land on the same page. */
+    nes_test_cpu_write(nes, 0x8505, 0x00u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[2] ||
+        nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[3]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 235 one-screen mode comes from address bit 10", 235,
+                             "all four nametables on one screen", "H/V wiring");
+    }
+
+    /* Clearing bit 10 with bit 13 set gives horizontal wiring ($A005: bit 13 = 0x2000 only). */
+    nes_test_cpu_write(nes, 0xA005, 0x00u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 235 mirroring comes from address bit 13", 235,
+                             "horizontal wiring when bit 13 is set", "wrong nametable wiring");
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper255_bmc_pcb018(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 255, 128, 128);      /* 2MB PRG (128 x 16KB) + 1MB CHR (128 x 8KB) */

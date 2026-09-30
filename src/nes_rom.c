@@ -157,6 +157,10 @@ static const nes_romdb_entry_t romdb[] = {
        plain Irem G-101 (mapper 32) - Mesen's database: 283AD224,Famicorn,,,,32,256,128,0,0,0,0,h.
        H-3001 banks PRG in 8KB halves, so with the wrong board the reset code jumped into data. */
     { 0x283AD224u, 32u, 0u, 0u, 0u, 0u, 0u },
+    /* 260合1(150合1): the header claims mapper 43, which this core does not implement, so the
+       image would not load at all.  The board is mapper 235's 2MB multicart (128 x 16KB PRG plus
+       8KB CHR-RAM) - Mesen's database: 6175B9A0,Famicom,,,,235,2048,0,8,0,0,0,h. */
+    { 0x6175B9A0u, 235u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*
