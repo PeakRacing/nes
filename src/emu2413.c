@@ -1,3 +1,11 @@
+/* Vendored from Mesen2 Core/Shared/Utilities/emu2413.cpp (YM2413/OPLL by Mitsutaka Okazaki),
+   used by the VRC7 expansion audio.  Kept byte-for-byte apart from this guard: with
+   NES_ENABLE_EXPANSION_AUDIO == 0 this file compiles to nothing, so the MCU/core build pays
+   no code size or RAM for it (the same rule as the rest of src/nes_expansion_audio.c). */
+#include "nes_default.h"
+
+#if (NES_ENABLE_EXPANSION_AUDIO == 1)
+
 //Disable warnings
 #if defined(_MSC_VER)
 	#pragma warning(push, 0)
@@ -1525,3 +1533,8 @@ uint32_t OPLL_toggleMask(OPLL *opll, uint32_t mask) {
   } else
     return 0;
 }
+
+#else
+/* Keep the translation unit non-empty, as C requires. */
+typedef int emu2413_disabled_without_expansion_audio;
+#endif /* NES_ENABLE_EXPANSION_AUDIO */
