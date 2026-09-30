@@ -201,6 +201,49 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
             }
         }
     }
+    /* OAM-DUMP: with NES_DBG_OAMDUMP=<n>, dump the whole sprite setup on the n-th $4014 (OAM DMA)
+       write.  A game that DMAs once per frame reaches n-th at about frame n, so this is a frame
+       probe that needs no frame counter.  It prints each sprite's Y/tile/attr/X plus the pattern
+       bytes of every distinct tile OAM references, read through the *live* chr_banks mapping, so
+       "are there sprites at all, and do their tiles hold anything" is answered directly.
+       沙罗曼蛇2 (Gradius II) draws its whole intro with sprites over an empty background, so this
+       is where its black screen has to show up. */
+    if (address == 0x4014u && getenv("NES_DBG_OAMDUMP") != NULL) {
+        static long dma_n;
+        const long want = strtol(getenv("NES_DBG_OAMDUMP"), NULL, 10);
+        dma_n++;
+        if (dma_n == want) {
+            const unsigned page = ((unsigned)data << 8) & 0x07FFu;   /* 2KB RAM mirroring */
+            const uint8_t* oam = &nes->nes_cpu.cpu_ram[page];
+            const unsigned base = (nes->nes_ppu.CTRL_S != 0u) ? 0x1000u : 0x0000u;
+            unsigned i, shown = 0, on_screen = 0;
+            fprintf(stderr, "[OAM] 第 %ld 次 $4014，源页=$%02X，精灵表=$%04X 背景表=$%04X 8x16=%u NT=%u\n",
+                    (long)dma_n, (unsigned)data, base,
+                    (nes->nes_ppu.CTRL_B != 0u) ? 0x1000u : 0x0000u,
+                    (unsigned)nes->nes_ppu.CTRL_H, (unsigned)nes->nes_ppu.CTRL_N);
+            for (i = 0; i < 64u; i++) {
+                const unsigned y = oam[i * 4u], tile = oam[i * 4u + 1u];
+                const unsigned attr = oam[i * 4u + 2u], x = oam[i * 4u + 3u];
+                if (y < 0xEFu) on_screen++;
+                if (shown < 16u && (y < 0xEFu || tile != 0u)) {
+                    fprintf(stderr, "[OAM]   #%2u Y=%02X tile=%02X attr=%02X X=%02X\n",
+                            i, y, tile, attr, x);
+                    shown++;
+                }
+            }
+            fprintf(stderr, "[OAM] 屏幕内精灵数(Y<$EF) = %u / 64\n", on_screen);
+            for (i = 0; i < 64u && i < 8u; i++) {   /* 前 8 个精灵的图块内容 */
+                const unsigned tile = oam[i * 4u + 1u];
+                const unsigned off = base + tile * 16u;
+                const unsigned slot = off >> 10, in_slot = off & 0x3FFu;
+                const uint8_t* p = nes->nes_ppu.chr_banks[slot] + in_slot;
+                unsigned k;
+                fprintf(stderr, "[OAM] tile $%02X @%04X:", tile, base + tile * 16u);
+                for (k = 0; k < 16u; k++) { fprintf(stderr, " %02X", (unsigned)p[k]); }
+                fprintf(stderr, "\n");
+            }
+        }
+    }
     {
         static long cap;
         if (cap == 0) { const char* e = getenv("NES_DBG_WLOG_MAX"); cap = e ? strtol(e, NULL, 10) : 200000; }
