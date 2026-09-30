@@ -88,12 +88,16 @@ static void nes_mapper_init(nes_t* nes) {
         }
     }
 
-    if (nes->nes_rom.save_ram && nes->nes_rom.sram == NULL) {
+    /* VRC4 always wires an 8KB work RAM at $6000-$7FFF, battery or not (Mesen VRC2_4 uses
+     * _prgRamSize = 0x2000 unconditionally).  Gradius II relies on it: it composes its tile
+     * upload data at $6360 and reads it back through the pointer pair $08/$09, so leaving the
+     * window unmapped makes the buffer read back as zero and the intro draws nothing. */
+    if (nes->nes_rom.sram == NULL) {
         nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
         if (nes->nes_rom.sram != NULL) {
             nes_memset(nes->nes_rom.sram, 0, SRAM_SIZE);
         } else {
-            NES_LOG_ERROR("mapper25: failed to allocate SRAM\n");
+            NES_LOG_ERROR("mapper25: failed to allocate work RAM\n");
         }
     }
 }

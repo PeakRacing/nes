@@ -85,6 +85,7 @@ int test_vs_system_protection(void);
 #endif
 int test_mapper4_waixing_window(void);
 int test_mapper4_wram(void);
+int test_mapper25_wram(void);
 int test_mapper_synthetic_smoke(void);
 int test_mapper_write_storm(void);
 int test_mapper_bank_stress(void);

@@ -208,6 +208,44 @@ int test_mapper4_waixing_window(void) {
 }
 
 /*
+ * VRC4 boards wire 8KB of work RAM at $6000-$7FFF whether or not the cart has a battery
+ * (Mesen's VRC2_4 sets _prgRamSize = 0x2000 unconditionally).  Gradius II (沙罗曼蛇2) depends
+ * on it: it composes the intro's tile upload data at $6360 and reads it back through the
+ * pointer pair $08/$09, so an unmapped window uploads an all-zero buffer and the whole
+ * opening animation renders as a black screen.
+ */
+int test_mapper25_wram(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 25, 16, 16);    /* 128KB PRG + 128KB CHR, like 沙罗曼蛇2.nes */
+    spec.save = 0;                          /* no battery bit in the iNES header */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+
+    /* Both the core (NES_USE_SRAM=1) and the board may have allocated it; drop the core's
+     * buffer and re-run the board init to model a NES_USE_SRAM=0 build. */
+    if (nes->nes_rom.sram != NULL) {
+        nes_free(nes->nes_rom.sram);
+        nes->nes_rom.sram = NULL;
+    }
+    (void)nes->nes_mapper.mapper_init(nes);
+    TEST_CHECK(nes->nes_rom.sram != NULL);
+
+    /* The window the intro uploads from must behave like work RAM through the CPU bus. */
+    nes_test_cpu_write(nes, 0x6360, 0x35);
+    nes_test_cpu_write(nes, 0x6361, 0x36);
+    nes_test_cpu_write(nes, 0x7FFF, 0x4D);
+    TEST_EQ_U32(0x35, nes_test_cpu_read(nes, 0x6360));
+    TEST_EQ_U32(0x36, nes_test_cpu_read(nes, 0x6361));
+    TEST_EQ_U32(0x4D, nes_test_cpu_read(nes, 0x7FFF));
+    /* Work RAM, not a battery save: the header bit stays clear. */
+    TEST_EQ_U32(0, nes->nes_rom.save_ram);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * MMC3 boards carry 8KB of PRG-RAM at $6000-$7FFF even when the iNES header has no
  * battery bit (TSROM: Super Mario Bros. 2/USA and friends use it as plain work RAM).
  * Builds with NES_USE_SRAM=0 leave nes_rom.sram NULL, so the board itself has to
