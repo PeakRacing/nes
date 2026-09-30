@@ -22,6 +22,7 @@
 #endif
 
 #define NES_APU_SAMPLE_RATE         (44100)
+#define VRC7_CHANNELS               (6)   /* melodic FM channels (VRC7 has no rhythm mode) */
 #define NES_APU_SAMPLE_PER_SYNC     (NES_APU_SAMPLE_RATE/60)
 /* PAL runs at 50Hz: 882 samples per frame.  Buffers are sized for the larger value; the
  * per frame count comes from nes->timing.samples_per_frame. */
@@ -29,6 +30,35 @@
 
 struct nes;
 typedef struct nes nes_t;
+
+/* --- VRC7 (mapper 85) -------------------------------------------------------------------
+ * Operator state of our own compact FM model.  One instrument dump is 8 bytes: two operators of
+ * AM/VIB/EG-type/KSR/MUL, KSL/TL, AR/DR, SL/RR.  No pointer and no allocation - the whole chip
+ * state is by value here, so it is saved together with nes_apu_t. */
+typedef struct {
+    uint32_t phase;                 /* sine index in Q16 (one cycle = 1024 steps) */
+    uint32_t inc;                   /* phase increment per output sample (Q16) */
+    uint16_t eg;                    /* envelope amplitude, 0x3FF = full */
+    uint8_t  eg_state;              /* VRC7_EG_* */
+    uint8_t  key;                   /* key-on flag */
+    uint8_t  mul;                   /* patch MUL (0 means 0.5) */
+    uint8_t  tl;                    /* patch TL 0..63 (0 = loudest) */
+    uint8_t  ar, dr, sl, rr;        /* patch envelope rates 0..15 */
+    uint8_t  am, vib;               /* patch LFO enables */
+} vrc7_slot_t;
+
+typedef struct {
+    uint8_t     reg[0x40];                  /* $00-$3F register file */
+    uint8_t     inst_dump[8];               /* $00-$07 user instrument */
+    vrc7_slot_t slot[VRC7_CHANNELS * 2];    /* [ch*2] modulator, [ch*2+1] carrier */
+    uint8_t     volume[VRC7_CHANNELS];      /* $3x low nibble */
+    uint8_t     key_status;                 /* bit per keyed channel */
+    uint8_t     active;                     /* 0 => the render call is one test */
+    uint8_t     muted;                      /* $E000 bit6 */
+    uint8_t     current_reg;                /* $9010 latch */
+    uint32_t    eg_acc;                     /* envelope tick accumulator */
+    int16_t     out;                        /* last produced level */
+} vrc7_t;
 
 /* ==== cartridge expansion audio (moved here from the old nes_expansion_audio module) ==== */
 
@@ -122,14 +152,7 @@ typedef struct {
     uint8_t  mmc5_pcm_read_mode;
     uint8_t  mmc5_pcm_irq_enabled;
 
-    /* --- VRC7 (mapper 85): YM2413/OPLL, driven by the vendored emu2413 core ---
-       `vrc7_opll` stays NULL until the first $9010 write, so boards without the chip
-       (and every non-VRC7 game) never allocate it. */
-    void*    vrc7_opll;
-    uint8_t  vrc7_current_reg;
-    uint8_t  vrc7_muted;
-    int16_t  vrc7_last_output;
-    uint32_t vrc7_acc;              /* CPU cycles owed to the next OPLL sample (432 per sample) */
+    vrc7_t   vrc7;                  /* our own compact FM model; see src/nes_apu.c */
 } nes_exp_audio_t;
 
 void nes_exp_audio_init(nes_t* nes);

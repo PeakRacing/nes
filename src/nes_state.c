@@ -45,7 +45,7 @@
 #define NES_STATE_VER_BUS           (1)
 #define NES_STATE_VER_CPU           (1)
 #define NES_STATE_VER_PPU           (1)
-#define NES_STATE_VER_APU           (1)
+#define NES_STATE_VER_APU           (2)
 #define NES_STATE_VER_MAP           (1)
 #define NES_STATE_VER_SRAM          (1)
 #define NES_STATE_VER_CRAM          (1)

@@ -467,7 +467,7 @@ int test_apu_vrc7_audio(void) {
 
     TEST_EQ_U32(NES_EXP_AUDIO_VRC7, nes->nes_mapper.mapper_audio);
     /* The OPLL core is created lazily, so a game that never touches the chip allocates nothing. */
-    TEST_CHECK(a->vrc7_opll == NULL);
+    TEST_CHECK(a->vrc7.active == 0u);
 
     /* Instrument 1 at full volume, then key on channel 0 (block 1, F-num high 5, F-num low 0x80). */
     nes_test_cpu_write(nes, 0x9010u, 0x30u);
@@ -476,8 +476,8 @@ int test_apu_vrc7_audio(void) {
     nes_test_cpu_write(nes, 0x9030u, 0x15u);
     nes_test_cpu_write(nes, 0x9010u, 0x10u);
     nes_test_cpu_write(nes, 0x9030u, 0x80u);
-    TEST_CHECK(a->vrc7_opll != NULL);
-    TEST_EQ_U32(0x10u, a->vrc7_current_reg);
+    TEST_CHECK(a->vrc7.key_status != 0u);
+    TEST_EQ_U32(0x10u, a->vrc7.current_reg);
 
     /* Render a segment: the FM level has to move the buffer off its DC baseline.  A silent or
        mis-clocked chip would leave every sample at 128 - that is the assertion that matters. */
@@ -491,7 +491,7 @@ int test_apu_vrc7_audio(void) {
 
     /* $E000 bit6 mutes the chip. */
     nes_test_cpu_write(nes, 0xE000u, 0x40u);
-    TEST_EQ_U32(1u, a->vrc7_muted);
+    TEST_EQ_U32(1u, a->vrc7.muted);
 
     test_fixture_free(&f);
     return TEST_PASS;

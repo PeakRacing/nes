@@ -615,8 +615,7 @@ void nes_write_apu_register(nes_t* nes,uint16_t address,uint8_t data){
 /* ==== cartridge expansion audio (moved here from the old nes_expansion_audio module) ==== */
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
 
-#include "emu2413.h"   /* vendored YM2413/OPLL core (VRC7) */
-
+   
 /*
  * VRC6 (Konami, mapper 24/26) - Authority: Mesen2 Core/NES/Mappers/Audio/Vrc6Audio.h,
  * Vrc6Pulse.h and Vrc6Saw.h.  Three channels clocked once per CPU cycle:
@@ -979,34 +978,9 @@ static void mmc5_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t co
 
 /* ------------------------------------------------------------------- API ---- */
 
-/* VRC7 (mapper 85): YM2413/OPLL.  One chip sample every 432 CPU cycles
-   (21477272 Hz master / 49716 Hz).  The core is created lazily on the first $9030 write, so
-   boards without the chip - and every non-VRC7 game - never allocate it. */
-#define VRC7_CYCLES_PER_SAMPLE (432u)
-
-static void vrc7_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t count, uint32_t step_q8) {
-    nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
-    OPLL* opll = (OPLL*)a->vrc7_opll;
-    if (opll == NULL) return;
-
-    const uint32_t need = VRC7_CYCLES_PER_SAMPLE * 256u;
-    int16_t level = a->vrc7_last_output;
-
-    for (uint16_t i = 0; i < count; i++) {
-        a->vrc7_acc += step_q8;
-        if (a->vrc7_acc >= need) {
-            a->vrc7_acc -= need;
-            level = OPLL_calc(opll);
-        }
-        int32_t mixed = (int32_t)buffer[start + i] + ((int32_t)level >> 8);
-        if (mixed > 255) mixed = 255;
-        else if (mixed < 0) mixed = 0;
-        buffer[start + i] = (uint8_t)mixed;
-    }
-    a->vrc7_last_output = level;
-}
 
 void nes_exp_audio_init(nes_t* nes) {
+    nes_memset(&nes->nes_apu.exp_audio.vrc7, 0, sizeof(vrc7_t));
     nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
     nes_memset(a, 0, sizeof(nes_exp_audio_t));
     a->vrc6_pulse[0].frequency = 1;
@@ -1019,6 +993,257 @@ void nes_exp_audio_init(nes_t* nes) {
     s5b_build_volume_lut(a);
 }
 
+/* Quarter sine, Q15: sine[i] = sin((i + 0.5) * pi / 512).  One cycle is 1024 steps. */
+static const int16_t vrc7_sine[256] = {
+       101,    302,    503,    704,    905,   1106,   1307,   1507,
+      1708,   1909,   2110,   2310,   2511,   2711,   2911,   3112,
+      3312,   3512,   3712,   3911,   4111,   4310,   4509,   4708,
+      4907,   5106,   5305,   5503,   5701,   5899,   6096,   6294,
+      6491,   6688,   6885,   7081,   7277,   7473,   7669,   7864,
+      8059,   8254,   8448,   8642,   8836,   9030,   9223,   9416,
+      9608,   9800,   9992,  10183,  10374,  10564,  10754,  10944,
+     11133,  11322,  11511,  11699,  11886,  12074,  12260,  12446,
+     12632,  12817,  13002,  13187,  13370,  13554,  13736,  13919,
+     14101,  14282,  14462,  14643,  14822,  15001,  15180,  15358,
+     15535,  15712,  15888,  16063,  16238,  16413,  16586,  16759,
+     16932,  17104,  17275,  17445,  17615,  17784,  17953,  18121,
+     18288,  18454,  18620,  18785,  18950,  19113,  19276,  19438,
+     19600,  19761,  19921,  20080,  20238,  20396,  20553,  20709,
+     20865,  21019,  21173,  21326,  21479,  21630,  21781,  21930,
+     22079,  22227,  22375,  22521,  22667,  22812,  22956,  23099,
+     23241,  23382,  23522,  23662,  23801,  23938,  24075,  24211,
+     24346,  24480,  24613,  24746,  24877,  25007,  25137,  25265,
+     25393,  25519,  25645,  25770,  25893,  26016,  26138,  26259,
+     26378,  26497,  26615,  26732,  26848,  26962,  27076,  27189,
+     27300,  27411,  27521,  27629,  27737,  27843,  27949,  28053,
+     28157,  28259,  28360,  28460,  28560,  28658,  28755,  28850,
+     28945,  29039,  29131,  29223,  29313,  29403,  29491,  29578,
+     29664,  29749,  29832,  29915,  29997,  30077,  30156,  30234,
+     30311,  30387,  30462,  30535,  30607,  30679,  30749,  30818,
+     30885,  30952,  31017,  31082,  31145,  31206,  31267,  31327,
+     31385,  31442,  31498,  31553,  31607,  31659,  31710,  31760,
+     31809,  31857,  31903,  31949,  31993,  32036,  32077,  32118,
+     32157,  32195,  32232,  32267,  32302,  32335,  32367,  32397,
+     32427,  32455,  32482,  32508,  32533,  32556,  32578,  32599,
+     32619,  32637,  32655,  32671,  32685,  32699,  32711,  32722,
+     32732,  32741,  32748,  32755,  32759,  32763,  32766,  32767,
+};
+
+/* The chip's built-in instrument ROM: 15 instruments x 8 bytes (hardware data).  Each is two
+ * operators of AM/VIB/EG-type/KSR/MUL, KSL/TL, AR/DR, SL/RR. */
+static const uint8_t vrc7_patch_rom[15][8] = {
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+    { 0x03, 0x21, 0x05, 0x06, 0xE8, 0x81, 0x42, 0x27 },
+    { 0x13, 0x41, 0x14, 0x0D, 0xD8, 0xF6, 0x23, 0x12 },
+    { 0x11, 0x11, 0x08, 0x08, 0xFA, 0xB2, 0x20, 0x12 },
+    { 0x31, 0x61, 0x0C, 0x07, 0xA8, 0x64, 0x61, 0x27 },
+    { 0x32, 0x21, 0x1E, 0x06, 0xE1, 0x76, 0x01, 0x28 },
+    { 0x02, 0x01, 0x06, 0x00, 0xA3, 0xE2, 0xF4, 0xF4 },
+    { 0x21, 0x61, 0x1D, 0x07, 0x82, 0x81, 0x11, 0x07 },
+    { 0x23, 0x21, 0x22, 0x17, 0xA2, 0x72, 0x01, 0x17 },
+    { 0x35, 0x11, 0x25, 0x00, 0x40, 0x73, 0x72, 0x01 },
+    { 0xB5, 0x01, 0x0F, 0x0F, 0xA8, 0xA5, 0x51, 0x02 },
+    { 0x17, 0xC1, 0x24, 0x07, 0xF8, 0xF8, 0x22, 0x12 },
+    { 0x71, 0x23, 0x11, 0x06, 0x65, 0x74, 0x18, 0x16 },
+    { 0x01, 0x02, 0xD3, 0x05, 0xC9, 0x95, 0x03, 0x02 },
+    { 0x61, 0x63, 0x0C, 0x00, 0x94, 0xC0, 0x33, 0xF6 },
+};
+
+/* ---- VRC7 (mapper 85): compact 6-channel 2-operator FM -----------------------------------
+ * Our own model.  The register map and the 8-byte instrument-dump layout follow the YM2413/OPLL
+ * documentation (nesdev wiki; Mesen2 Core/NES/Mappers/Konami/VRC7.h shows how the VRC7 wires the
+ * chip).  The implementation, the sine table and all arithmetic are ours.
+ *
+ * Left out on purpose, to stay cheap on MCU targets:
+ *   - rhythm mode (the VRC7 ignores register $0E),
+ *   - the chip's internal 49716 Hz rate and its resampler: we synthesise at the APU sample rate
+ *     and rescale the envelope, so the timing still sounds right,
+ *   - feedback and KSL: an OPLL instrument dump carries neither.
+ * TL is applied as a linear attenuation instead of the exact 0.75 dB/step table.
+ */
+#define VRC7_EG_OFF        (0)
+#define VRC7_EG_ATTACK     (1)
+#define VRC7_EG_DECAY      (2)
+#define VRC7_EG_SUSTAIN    (3)
+#define VRC7_EG_RELEASE    (4)
+/* envelope rate 0..15 -> shift (0 = slowest) */
+static const uint8_t vrc7_eg_shift[16] = { 14, 13, 12, 11, 10, 9, 9, 8, 8, 7, 6, 5, 4, 3, 2, 1 };
+/* patch MUL 0..15 -> phase multiplier, doubled (MUL 0 means 0.5) */
+static const uint8_t vrc7_mul_x2[16] = { 1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20, 24, 24, 30, 30 };
+
+static inline int16_t vrc7_sine_at(uint32_t index) {
+    const uint8_t quad = (uint8_t)((index >> 8) & 3u);
+    const uint8_t pos = (uint8_t)(index & 0xFFu);
+    const int16_t s = vrc7_sine[(quad & 1u) ? (uint8_t)(0xFFu - pos) : pos];
+    return (quad & 2u) ? (int16_t)(-s) : s;
+}
+
+static void vrc7_decode(const uint8_t *dump, vrc7_slot_t *s) {
+    s->mul = (uint8_t)(dump[0] & 0x0Fu);
+    s->tl = (uint8_t)(dump[1] & 0x3Fu);
+    s->ar = (uint8_t)((dump[2] >> 4) & 0x0Fu);
+    s->dr = (uint8_t)(dump[2] & 0x0Fu);
+    s->sl = (uint8_t)((dump[3] >> 4) & 0x0Fu);
+    s->rr = (uint8_t)(dump[3] & 0x0Fu);
+    s->am = (uint8_t)((dump[0] & 0x80u) != 0u);
+    s->vib = (uint8_t)((dump[0] & 0x40u) != 0u);
+}
+
+/* instrument 0 = the $00-$07 user dump, 1..15 = the chip's built-in ROM */
+static void vrc7_set_instrument(vrc7_t *v, uint8_t ch, uint8_t inst) {
+    const uint8_t *d = (inst == 0u) ? v->inst_dump : vrc7_patch_rom[inst - 1u];
+    vrc7_decode(&d[0], &v->slot[ch * 2u]);
+    vrc7_decode(&d[4], &v->slot[ch * 2u + 1u]);
+}
+
+/* f = fnum * 2^(block-1) * 49716 / 2^19 Hz as Q16 sine steps per output sample:
+ * inc = fnum * 2^block * 73871 / 1024.  (64-bit product: it exceeds 32 bits.) */
+static void vrc7_update_inc(vrc7_t *v, uint8_t ch) {
+    const uint8_t  ctl = v->reg[0x20u + ch];
+    const uint16_t fnum = (uint16_t)(((uint16_t)(ctl & 0x01u) << 8) | v->reg[0x10u + ch]);
+    const uint8_t  blk = (uint8_t)((ctl >> 1) & 0x07u);
+    const uint32_t steps = (uint32_t)(((uint64_t)fnum << blk) * 73871u >> 10);
+    v->slot[ch * 2u].inc = steps;
+    v->slot[ch * 2u + 1u].inc = steps;
+}
+
+static void vrc7_key_on(vrc7_t *v, uint8_t ch, uint8_t on) {
+    vrc7_slot_t *m = &v->slot[ch * 2u];
+    vrc7_slot_t *c = &v->slot[ch * 2u + 1u];
+    if (on) {
+        m->key = c->key = 1u;
+        m->eg_state = c->eg_state = VRC7_EG_ATTACK;
+        if (m->eg == 0u) m->eg = 1u;
+        if (c->eg == 0u) c->eg = 1u;
+        v->key_status |= (uint8_t)(1u << ch);
+    } else {
+        m->key = c->key = 0u;
+        m->eg_state = c->eg_state = VRC7_EG_RELEASE;
+        v->key_status &= (uint8_t)~(1u << ch);
+    }
+    v->active = (uint8_t)(v->key_status != 0u);
+}
+
+static uint16_t vrc7_sustain_level(uint8_t sl) {
+    return (uint16_t)(0x3FFu - (uint16_t)(((uint32_t)sl * 0x3FFu / 15u) * 3u / 4u));
+}
+
+static void vrc7_eg_tick(vrc7_slot_t *s) {
+    switch (s->eg_state) {
+    case VRC7_EG_ATTACK:
+        if (s->ar == 0u) {          /* rate 0: no attack ramp, the note starts at peak */
+            s->eg = 0x3FFu;
+            s->eg_state = VRC7_EG_DECAY;
+            break;
+        }
+        s->eg = (uint16_t)(s->eg + (((0x3FFu - s->eg) >> vrc7_eg_shift[s->ar]) + 1u));
+        if (s->eg >= 0x3FFu) { s->eg = 0x3FFu; s->eg_state = VRC7_EG_DECAY; }
+        break;
+    case VRC7_EG_DECAY: {
+        const uint16_t target = vrc7_sustain_level(s->sl);
+        if (s->eg > target) {
+            s->eg = (uint16_t)(s->eg - (((s->eg - target) >> vrc7_eg_shift[s->dr]) + 1u));
+        }
+        if (s->eg <= target) { s->eg = target; s->eg_state = VRC7_EG_SUSTAIN; }
+        break;
+    }
+    case VRC7_EG_SUSTAIN:
+        if (!s->key) s->eg_state = VRC7_EG_RELEASE;
+        break;
+    case VRC7_EG_RELEASE:
+    default:
+        if (s->eg > 1u) {
+            s->eg = (uint16_t)(s->eg - ((s->eg >> vrc7_eg_shift[s->rr]) + 1u));
+        } else {
+            s->eg = 0u;
+            s->eg_state = VRC7_EG_OFF;
+        }
+        break;
+    }
+}
+
+/* one output sample: the modulator phase-modulates the carrier (no feedback path) */
+static int16_t vrc7_sample(vrc7_t *v) {
+    int32_t acc = 0;
+    for (uint8_t ch = 0u; ch < VRC7_CHANNELS; ch++) {
+        if ((v->key_status & (uint8_t)(1u << ch)) == 0u) continue;
+        vrc7_slot_t *m = &v->slot[ch * 2u];
+        vrc7_slot_t *c = &v->slot[ch * 2u + 1u];
+        int32_t mod = vrc7_sine_at((m->phase >> 16) & 0x3FFu);
+        int32_t gain = (int32_t)(m->eg >> 2);
+        gain = (gain * (int32_t)(64u - m->tl)) >> 6;
+        mod = (mod * gain) >> 8;
+        int32_t idx = (int32_t)((c->phase >> 16) & 0x3FFu) + (mod >> 6);
+        int32_t car = vrc7_sine_at((uint32_t)idx & 0x3FFu);
+        gain = (int32_t)(c->eg >> 2);
+        gain = (gain * (int32_t)(64u - c->tl)) >> 6;
+        car = (car * gain) >> 8;
+        /* $3x low nibble is an attenuation: 0 = loudest, 15 = quietest. */
+        acc += (car * (int32_t)(16u - v->volume[ch])) >> 4;
+        m->phase += (m->inc * vrc7_mul_x2[m->mul]) >> 1;
+        c->phase += (c->inc * vrc7_mul_x2[c->mul]) >> 1;
+    }
+    return (int16_t)(acc >> 6);
+}
+
+static void nes_exp_vrc7_write(nes_t *nes, uint16_t address, uint8_t data) {
+    vrc7_t *v = &nes->nes_apu.exp_audio.vrc7;
+    switch (address & 0xF030u) {
+    case 0x9010u:                                   /* register latch */
+        v->current_reg = data;
+        return;
+    case 0x9030u:                                   /* data port */
+        break;
+    case 0xE000u:                                   /* bit6 mutes the chip */
+        v->muted = (uint8_t)((data & 0x40u) != 0u);
+        return;
+    default:
+        return;
+    }
+    if (v->muted) return;
+
+    const uint8_t reg = (uint8_t)(v->current_reg & 0x3Fu);
+    v->reg[reg] = data;
+    if (reg <= 0x07u) {                             /* user instrument dump */
+        v->inst_dump[reg] = data;
+        for (uint8_t ch = 0u; ch < VRC7_CHANNELS; ch++) {
+            if (((v->reg[0x30u + ch] >> 4) & 0x0Fu) == 0u) vrc7_set_instrument(v, ch, 0u);
+        }
+    } else if (reg >= 0x30u && reg <= 0x38u) {      /* instrument + volume */
+        const uint8_t ch = (uint8_t)(reg - 0x30u);
+        v->volume[ch] = (uint8_t)(data & 0x0Fu);
+        vrc7_set_instrument(v, ch, (uint8_t)((data >> 4) & 0x0Fu));
+    } else if (reg >= 0x10u && reg <= 0x18u) {      /* F-number low */
+        vrc7_update_inc(v, (uint8_t)(reg - 0x10u));
+    } else if (reg >= 0x20u && reg <= 0x28u) {      /* block / F-number high / key on-off */
+        const uint8_t ch = (uint8_t)(reg - 0x20u);
+        vrc7_update_inc(v, ch);
+        vrc7_key_on(v, ch, (uint8_t)((data & 0x10u) != 0u));
+    }
+}
+
+static void nes_exp_vrc7_render(nes_t *nes, uint8_t *buffer, uint16_t start, uint16_t count, uint32_t step_q8) {
+    vrc7_t *v = &nes->nes_apu.exp_audio.vrc7;
+    if (v->active == 0u) return;        /* nothing keyed on: one test per segment */
+    const uint32_t eg_need = 256u * 4u * 44100u / 49716u;
+    for (uint16_t i = 0u; i < count; i++) {
+        const int16_t level = vrc7_sample(v);
+        int32_t mixed = (int32_t)buffer[start + i] + (level >> 4);
+        if (mixed > 255) mixed = 255;
+        else if (mixed < 0) mixed = 0;
+        buffer[start + i] = (uint8_t)mixed;
+        v->eg_acc += 256u;
+        if (v->eg_acc >= eg_need) {
+            v->eg_acc -= eg_need;
+            for (uint8_t ch = 0u; ch < VRC7_CHANNELS; ch++) {
+                if ((v->key_status & (uint8_t)(1u << ch)) == 0u) continue;
+                vrc7_eg_tick(&v->slot[ch * 2u]);
+                vrc7_eg_tick(&v->slot[ch * 2u + 1u]);
+            }
+        }
+    }
+    (void)step_q8;
+}
 void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
     nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
 
@@ -1080,28 +1305,8 @@ void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
         break;
 
     case NES_EXP_AUDIO_VRC7:
-        /* $9010 latches the OPLL register address, $9030 is its data port; $E000 bit6 mutes. */
-        if ((address & 0xF030u) == 0x9010u) {
-            a->vrc7_current_reg = data;
-        } else if ((address & 0xF030u) == 0x9030u) {
-            if (!a->vrc7_muted) {
-                OPLL* opll = (OPLL*)a->vrc7_opll;
-                if (opll == NULL) {
-                    opll = OPLL_new(49716 * 72, 49716);
-                    if (opll != NULL) {
-                        OPLL_setChipType(opll, 1);      /* 1 = VRC7 mode (built-in patch set) */
-                        OPLL_resetPatch(opll, 1);
-                        OPLL_reset(opll);
-                    }
-                    a->vrc7_opll = opll;
-                }
-                if (opll != NULL) OPLL_writeReg(opll, a->vrc7_current_reg, data);
-            }
-        } else if (address == 0xE000u) {
-            a->vrc7_muted = (uint8_t)((data & 0x40u) != 0u);
-        }
+        nes_exp_vrc7_write(nes, address, data);
         break;
-
     case NES_EXP_AUDIO_MMC5:
         switch (address) {
         case 0x5000u: case 0x5001u: case 0x5002u: case 0x5003u:
@@ -1220,7 +1425,7 @@ void nes_exp_audio_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t 
         break;
 
     case NES_EXP_AUDIO_VRC7:
-        vrc7_render(nes, buffer, start, count, step_q8);
+        nes_exp_vrc7_render(nes, buffer, start, count, step_q8);
         break;
 
     default:

@@ -24,7 +24,7 @@ Release highlights:
   therefore free for MCU/core builds) plus a per-segment mixer hook and four chips: **Namco 163**
   (mapper 19/210/163), **VRC6** (24/26), **Sunsoft 5B** (69) and **MMC5** (5). Boards declare their
   chip through `nes_mapper.mapper_audio`; the chip state lives in the APU so it travels with save
-  states. VRC7 (OPLL) is not implemented yet.
+  states. VRC7 (OPLL) is provided by the project's own compact FM model in src/nes_apu.c.
 - **NES 2.0 plane 1/2 audit** — the four boards named in the plan were checked against Mesen2 before
   any code was written. 268 has an authority (`Mmc3Variants/MMC3_Coolboy`) and is a candidate for later;
   **256/512/558 have none** (Mesen2 itself only has `case 256: break;` and no case at all for 512/558),
