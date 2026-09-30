@@ -267,7 +267,7 @@ static inline void nes_apu_play(nes_t* nes){
 
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
 /* Cartridge expansion audio is mixed in per segment: one indirect call per 1/4 frame, and
- * only for the boards that actually carry a chip (mapper_audio == NES_EXP_AUDIO_NONE is the
+ * only for the boards that actually carry a chip (mapper_audio == NES_APU_EXP_NONE is the
  * common case and returns immediately). */
 static inline void nes_apu_render_expansion(nes_t* nes) {
     nes_apu_t* apu = &nes->nes_apu;
@@ -275,7 +275,7 @@ static inline void nes_apu_render_expansion(nes_t* nes) {
     const uint16_t sample_start = (uint16_t)(seg * nes->timing.samples_per_frame / 4);
     const uint16_t sample_end = (uint16_t)((seg + 1) * nes->timing.samples_per_frame / 4);
     const uint32_t seg_cycles = (uint32_t)(nes->timing.cpu_clock / ((uint32_t)4u * nes->timing.frame_rate));
-    nes_exp_audio_render(nes, apu->sample_buffer, sample_start,
+    nes_apu_expansion_render(nes, apu->sample_buffer, sample_start,
                          (uint16_t)(sample_end - sample_start), seg_cycles);
 }
 #endif
@@ -430,7 +430,7 @@ void nes_apu_init(nes_t *nes){
     nes->nes_apu.dmc.timer_acc = 0;
     nes->nes_apu.irq_line = 0;
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
-    nes_exp_audio_init(nes);
+    nes_apu_expansion_init(nes);
 #endif
 }
 
@@ -642,25 +642,25 @@ void nes_write_apu_register(nes_t* nes,uint16_t address,uint8_t data){
 
 /* ------------------------------------------------------------------ N163 ---- */
 
-static uint32_t n163_frequency(nes_exp_audio_t* a, uint8_t channel) {
+static uint32_t n163_frequency(nes_apu_exp_t* a, uint8_t channel) {
     const uint8_t base = (uint8_t)(0x40u + channel * 8u);
     return ((uint32_t)(a->n163_ram[base + 4] & 0x03u) << 16) |
            ((uint32_t)a->n163_ram[base + 2] << 8) |
            (uint32_t)a->n163_ram[base + 0];
 }
 
-static void n163_set_phase(nes_exp_audio_t* a, uint8_t channel, uint32_t phase) {
+static void n163_set_phase(nes_apu_exp_t* a, uint8_t channel, uint32_t phase) {
     const uint8_t base = (uint8_t)(0x40u + channel * 8u);
     a->n163_ram[base + 5] = (uint8_t)((phase >> 16) & 0xFFu);
     a->n163_ram[base + 3] = (uint8_t)((phase >> 8) & 0xFFu);
     a->n163_ram[base + 1] = (uint8_t)(phase & 0xFFu);
 }
 
-static uint8_t n163_channel_count(nes_exp_audio_t* a) {
+static uint8_t n163_channel_count(nes_apu_exp_t* a) {
     return (uint8_t)((a->n163_ram[0x7F] >> 4) & 0x07u);
 }
 
-static int16_t n163_output_level(nes_exp_audio_t* a) {
+static int16_t n163_output_level(nes_apu_exp_t* a) {
     const uint8_t count = n163_channel_count(a);
     int16_t summed = 0;
     for (int i = 7, min = 7 - count; i >= min; i--) {
@@ -669,7 +669,7 @@ static int16_t n163_output_level(nes_exp_audio_t* a) {
     return (int16_t)(summed / (int16_t)(count + 1u));
 }
 
-static void n163_update_channel(nes_exp_audio_t* a, uint8_t channel) {
+static void n163_update_channel(nes_apu_exp_t* a, uint8_t channel) {
     const uint8_t base = (uint8_t)(0x40u + channel * 8u);
     const uint32_t freq = n163_frequency(a, channel);
     const uint16_t length = (uint16_t)(256u - (a->n163_ram[base + 4] & 0xFCu));
@@ -696,7 +696,7 @@ static void n163_update_channel(nes_exp_audio_t* a, uint8_t channel) {
 }
 
 /* Advance the N163 by `cycles_q8` (1/256 CPU cycle units) and return its level. */
-static int16_t n163_advance(nes_exp_audio_t* a, uint32_t cycles_q8) {
+static int16_t n163_advance(nes_apu_exp_t* a, uint32_t cycles_q8) {
     if (a->n163_disable) return 0;
 
     a->n163_acc += cycles_q8;
@@ -714,7 +714,7 @@ static int16_t n163_advance(nes_exp_audio_t* a, uint32_t cycles_q8) {
 
 /* ------------------------------------------------------------------ VRC6 ---- */
 
-static void vrc6_pulse_write(nes_exp_audio_t* a, uint8_t index, uint16_t address, uint8_t value) {
+static void vrc6_pulse_write(nes_apu_exp_t* a, uint8_t index, uint16_t address, uint8_t value) {
     switch (address & 0x03u) {
     case 0:
         a->vrc6_pulse[index].volume = (uint8_t)(value & 0x0Fu);
@@ -736,7 +736,7 @@ static void vrc6_pulse_write(nes_exp_audio_t* a, uint8_t index, uint16_t address
     }
 }
 
-static void vrc6_saw_write(nes_exp_audio_t* a, uint16_t address, uint8_t value) {
+static void vrc6_saw_write(nes_apu_exp_t* a, uint16_t address, uint8_t value) {
     switch (address & 0x03u) {
     case 0:
         a->vrc6_saw.acc_rate = (uint8_t)(value & 0x3Fu);
@@ -756,7 +756,7 @@ static void vrc6_saw_write(nes_exp_audio_t* a, uint16_t address, uint8_t value) 
     }
 }
 
-static uint8_t vrc6_pulse_volume(const nes_exp_audio_t* a, uint8_t index) {
+static uint8_t vrc6_pulse_volume(const nes_apu_exp_t* a, uint8_t index) {
     const uint8_t volume = a->vrc6_pulse[index].volume;
     if (!a->vrc6_pulse[index].enabled) return 0;
     if (a->vrc6_pulse[index].ignore_duty) return volume;
@@ -764,7 +764,7 @@ static uint8_t vrc6_pulse_volume(const nes_exp_audio_t* a, uint8_t index) {
 }
 
 /* Clock the three VRC6 channels once per CPU cycle and return the summed level. */
-static void vrc6_clock(nes_exp_audio_t* a) {
+static void vrc6_clock(nes_apu_exp_t* a) {
     if (a->vrc6_halt) return;
 
     for (uint8_t i = 0; i < 2u; i++) {
@@ -793,7 +793,7 @@ static void vrc6_clock(nes_exp_audio_t* a) {
     }
 }
 
-static uint8_t vrc6_level(const nes_exp_audio_t* a) {
+static uint8_t vrc6_level(const nes_apu_exp_t* a) {
     const uint8_t pulses = (uint8_t)(vrc6_pulse_volume(a, 0) + vrc6_pulse_volume(a, 1));
     const uint8_t saw = a->vrc6_saw.enabled ? (uint8_t)(a->vrc6_saw.accumulator >> 3) : 0u;
     return (uint8_t)(pulses + saw);
@@ -812,7 +812,7 @@ static uint8_t vrc6_level(const nes_exp_audio_t* a) {
  * Mesen (and this implementation) sum the tone channels only: the envelope generator and
  * the noise channel are not synthesised, which matches the reference implementation.
  */
-static void s5b_build_volume_lut(nes_exp_audio_t* a) {
+static void s5b_build_volume_lut(nes_apu_exp_t* a) {
     /* output *= 1.1885022^2 per step, kept in Q16 and truncated like Mesen's double. */
     uint32_t output_q16 = 65536u;                     /* 1.0 */
     a->s5b_volume_lut[0] = 0;
@@ -822,7 +822,7 @@ static void s5b_build_volume_lut(nes_exp_audio_t* a) {
     }
 }
 
-static void s5b_clock(nes_exp_audio_t* a) {
+static void s5b_clock(nes_apu_exp_t* a) {
     for (int ch = 0; ch < 3; ch++) {
         a->s5b_timer[ch]--;
         if (a->s5b_timer[ch] <= 0) {
@@ -834,7 +834,7 @@ static void s5b_clock(nes_exp_audio_t* a) {
     }
 }
 
-static uint16_t s5b_level(const nes_exp_audio_t* a) {
+static uint16_t s5b_level(const nes_apu_exp_t* a) {
     uint16_t summed = 0;
     for (int ch = 0; ch < 3; ch++) {
         const uint8_t tone_enabled = (uint8_t)(((a->s5b_regs[7] >> ch) & 0x01u) == 0u);
@@ -876,7 +876,7 @@ static const uint8_t mmc5_length_table[32] = {
     12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30
 };
 
-static void mmc5_square_write(nes_exp_audio_t* a, uint8_t index, uint16_t address, uint8_t value) {
+static void mmc5_square_write(nes_apu_exp_t* a, uint8_t index, uint16_t address, uint8_t value) {
     switch (address & 0x03u) {
     case 0:
         a->mmc5_square[index].duty = (uint8_t)((value >> 6) & 0x03u);
@@ -907,8 +907,8 @@ static void mmc5_square_write(nes_exp_audio_t* a, uint8_t index, uint16_t addres
 }
 
 /* Envelope + length counter tick (~240 Hz). */
-static void mmc5_square_tick(nes_exp_audio_t* a, uint8_t index) {
-    nes_mmc5_square_t* sq = &a->mmc5_square[index];    /* ~240 Hz envelope / length counter tick. */
+static void mmc5_square_tick(nes_apu_exp_t* a, uint8_t index) {
+    nes_apu_mmc5_square_t* sq = &a->mmc5_square[index];    /* ~240 Hz envelope / length counter tick. */
     if (sq->env_start) {
         sq->env_start = 0;
         sq->env_decay = 0x0Fu;
@@ -931,8 +931,8 @@ static void mmc5_square_tick(nes_exp_audio_t* a, uint8_t index) {
     }
 }
 
-static uint8_t mmc5_square_output(const nes_exp_audio_t* a, uint8_t index) {
-    const nes_mmc5_square_t* sq = &a->mmc5_square[index];
+static uint8_t mmc5_square_output(const nes_apu_exp_t* a, uint8_t index) {
+    const nes_apu_mmc5_square_t* sq = &a->mmc5_square[index];
     if (!sq->enabled || sq->length_counter == 0u) return 0;
     return mmc5_duty_table[sq->duty][sq->duty_pos];
 }
@@ -940,13 +940,13 @@ static uint8_t mmc5_square_output(const nes_exp_audio_t* a, uint8_t index) {
 /* Mix one segment's worth of MMC5 audio.  `step_q8` is CPU cycles per sample in 1/256. */
 static void mmc5_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t count,
                         uint32_t step_q8) {
-    nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
+    nes_apu_exp_t* a = &nes->nes_apu.exp_audio;
     /* One tick every 240th of a second: 1.789773 MHz / 240 = 7457 CPU cycles. */
     const uint32_t tick_q8 = 7457u << 8;
 
     for (uint16_t i = 0; i < count; i++) {
         for (uint8_t ch = 0; ch < 2u; ch++) {
-            nes_mmc5_square_t* sq = &a->mmc5_square[ch];
+            nes_apu_mmc5_square_t* sq = &a->mmc5_square[ch];
             /* The duty timer is a countdown in 1/256 CPU cycles, so the channel keeps the
                APU pulse pitch: one duty step per 2 * (period + 1) CPU cycles. */
             sq->timer -= (int32_t)step_q8;
@@ -979,10 +979,10 @@ static void mmc5_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t co
 /* ------------------------------------------------------------------- API ---- */
 
 
-void nes_exp_audio_init(nes_t* nes) {
+void nes_apu_expansion_init(nes_t* nes) {
     nes_memset(&nes->nes_apu.exp_audio.vrc7, 0, sizeof(vrc7_t));
-    nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
-    nes_memset(a, 0, sizeof(nes_exp_audio_t));
+    nes_apu_exp_t* a = &nes->nes_apu.exp_audio;
+    nes_memset(a, 0, sizeof(nes_apu_exp_t));
     a->vrc6_pulse[0].frequency = 1;
     a->vrc6_pulse[1].frequency = 1;
     a->vrc6_saw.frequency = 1;
@@ -1244,11 +1244,11 @@ static void nes_exp_vrc7_render(nes_t *nes, uint8_t *buffer, uint16_t start, uin
     }
     (void)step_q8;
 }
-void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
-    nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
+void nes_apu_expansion_write(nes_t* nes, uint16_t address, uint8_t data) {
+    nes_apu_exp_t* a = &nes->nes_apu.exp_audio;
 
     switch (nes->nes_mapper.mapper_audio) {
-    case NES_EXP_AUDIO_VRC6:
+    case NES_APU_EXP_VRC6:
         switch (address & 0xF003u) {
         case 0x9000u: case 0x9001u: case 0x9002u:
             vrc6_pulse_write(a, 0, address, data);
@@ -1269,7 +1269,7 @@ void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
         }
         break;
 
-    case NES_EXP_AUDIO_N163:
+    case NES_APU_EXP_N163:
         switch (address & 0xF800u) {
         case 0x4800u:
             a->n163_ram[a->n163_ram_position & 0x7Fu] = data;
@@ -1289,7 +1289,7 @@ void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
         }
         break;
 
-    case NES_EXP_AUDIO_S5B:
+    case NES_APU_EXP_S5B:
         switch (address & 0xE000u) {
         case 0xC000u:
             a->s5b_current_register = data;
@@ -1304,10 +1304,10 @@ void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
         }
         break;
 
-    case NES_EXP_AUDIO_VRC7:
+    case NES_APU_EXP_VRC7:
         nes_exp_vrc7_write(nes, address, data);
         break;
-    case NES_EXP_AUDIO_MMC5:
+    case NES_APU_EXP_MMC5:
         switch (address) {
         case 0x5000u: case 0x5001u: case 0x5002u: case 0x5003u:
             mmc5_square_write(a, 0, address, data);
@@ -1342,10 +1342,10 @@ void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data) {
     }
 }
 
-uint8_t nes_exp_audio_read(nes_t* nes, uint16_t address) {
-    nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
+uint8_t nes_apu_expansion_read(nes_t* nes, uint16_t address) {
+    nes_apu_exp_t* a = &nes->nes_apu.exp_audio;
 
-    if (nes->nes_mapper.mapper_audio == NES_EXP_AUDIO_N163 && (address & 0xF800u) == 0x4800u) {
+    if (nes->nes_mapper.mapper_audio == NES_APU_EXP_N163 && (address & 0xF800u) == 0x4800u) {
         const uint8_t value = a->n163_ram[a->n163_ram_position & 0x7Fu];
         if (a->n163_auto_increment) {
             a->n163_ram_position = (uint8_t)((a->n163_ram_position + 1u) & 0x7Fu);
@@ -1353,7 +1353,7 @@ uint8_t nes_exp_audio_read(nes_t* nes, uint16_t address) {
         return value;
     }
 
-    if (nes->nes_mapper.mapper_audio == NES_EXP_AUDIO_MMC5) {
+    if (nes->nes_mapper.mapper_audio == NES_APU_EXP_MMC5) {
         switch (address) {
         case 0x5010u:
             return 0;                       /* PCM IRQ status (not implemented, as in Mesen) */
@@ -1370,14 +1370,14 @@ uint8_t nes_exp_audio_read(nes_t* nes, uint16_t address) {
     return 0;
 }
 
-void nes_exp_audio_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t count, uint32_t cycles) {
-    nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
-    if (count == 0u || nes->nes_mapper.mapper_audio == NES_EXP_AUDIO_NONE) return;
+void nes_apu_expansion_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t count, uint32_t cycles) {
+    nes_apu_exp_t* a = &nes->nes_apu.exp_audio;
+    if (count == 0u || nes->nes_mapper.mapper_audio == NES_APU_EXP_NONE) return;
 
     const uint32_t step_q8 = (uint32_t)(((uint64_t)cycles << 8) / count);
 
     switch (nes->nes_mapper.mapper_audio) {
-    case NES_EXP_AUDIO_N163: {
+    case NES_APU_EXP_N163: {
         /* The chip's level is a signed average; scale it into the 8-bit mix and clamp. */
         for (uint16_t i = 0; i < count; i++) {
             const int16_t level = n163_advance(a, step_q8);
@@ -1387,7 +1387,7 @@ void nes_exp_audio_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t 
         break;
     }
 
-    case NES_EXP_AUDIO_VRC6: {
+    case NES_APU_EXP_VRC6: {
         /* VRC6 is clocked per CPU cycle; accumulate the fractional per-sample count. */
         uint32_t acc_q8 = a->n163_acc;             /* reused as a generic sub-cycle accumulator */
         for (uint16_t i = 0; i < count; i++) {
@@ -1403,7 +1403,7 @@ void nes_exp_audio_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t 
         break;
     }
 
-    case NES_EXP_AUDIO_S5B: {
+    case NES_APU_EXP_S5B: {
         /* The channels tick every second CPU cycle, so accumulate cycles and consume them
            two at a time. */
         uint32_t acc_q8 = a->s5b_acc;
@@ -1420,11 +1420,11 @@ void nes_exp_audio_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t 
         break;
     }
 
-    case NES_EXP_AUDIO_MMC5:
+    case NES_APU_EXP_MMC5:
         mmc5_render(nes, buffer, start, count, step_q8);
         break;
 
-    case NES_EXP_AUDIO_VRC7:
+    case NES_APU_EXP_VRC7:
         nes_exp_vrc7_render(nes, buffer, start, count, step_q8);
         break;
 

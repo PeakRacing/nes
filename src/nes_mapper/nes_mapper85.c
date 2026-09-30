@@ -152,10 +152,10 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
        A4->A3 normalisation (those two addresses are the documented exception). */
     case 0x9010u:
     case 0x9030u:
-        nes_exp_audio_write(nes, address, data);
+        nes_apu_expansion_write(nes, address, data);
         break;
     case 0xE000u:
-        nes_exp_audio_write(nes, address, data);   /* bit6 mutes the FM chip */
+        nes_apu_expansion_write(nes, address, data);   /* bit6 mutes the FM chip */
         r->mirror = data & 0x03u;
         if (nes->nes_rom.four_screen == 0) {
             nes_ppu_screen_mirrors(nes, vrc7_mirror_table[r->mirror]);
@@ -211,7 +211,7 @@ static void nes_mapper_cpu_clock(nes_t* nes, uint16_t cycles) {
 }
 
 int nes_mapper85_init(nes_t* nes) {
-    nes->nes_mapper.mapper_audio     = NES_EXP_AUDIO_VRC7;
+    nes->nes_mapper.mapper_audio     = NES_APU_EXP_VRC7;
     nes->nes_mapper.mapper_init      = nes_mapper_init;
     nes->nes_mapper.mapper_deinit    = nes_mapper_deinit;
     nes->nes_mapper.mapper_write     = nes_mapper_write;

@@ -64,7 +64,7 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     mapper210_t* m = (mapper210_t*)nes->nes_mapper.mapper_register;
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
     /* Namco 163 audio: $E000 (sound disable) and $F800 (wave RAM port) also live here. */
-    nes_exp_audio_write(nes, address, data);
+    nes_apu_expansion_write(nes, address, data);
 #endif
     if (address < 0xC000u) {
         /* $8000-$BFFF: CHR 1KB banks 0-7, one register per $800 bytes */
@@ -84,11 +84,11 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
 /* $4800-$4FFF is the Namco 163 wave RAM port (read and write). */
 static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
-    nes_exp_audio_write(nes, address, data);
+    nes_apu_expansion_write(nes, address, data);
 }
 
 static uint8_t nes_mapper_read_apu(nes_t* nes, uint16_t address) {
-    return nes_exp_audio_read(nes, address);
+    return nes_apu_expansion_read(nes, address);
 }
 #endif
 
@@ -99,7 +99,7 @@ int nes_mapper210_init(nes_t* nes) {
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
     nes->nes_mapper.mapper_apu      = nes_mapper_apu;
     nes->nes_mapper.mapper_read_apu = nes_mapper_read_apu;
-    nes->nes_mapper.mapper_audio    = NES_EXP_AUDIO_N163;
+    nes->nes_mapper.mapper_audio    = NES_APU_EXP_N163;
 #endif
     return NES_OK;
 }

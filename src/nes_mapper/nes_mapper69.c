@@ -97,7 +97,7 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
     /* FME-7 shares the $C000/$E000 addresses with the board's Sunsoft 5B sound chip:
      * $C000 selects a register, $E000 writes it (registers 0-15). */
-    nes_exp_audio_write(nes, address, data);
+    nes_apu_expansion_write(nes, address, data);
 #endif
 
     if (address < 0xA000) {
@@ -208,7 +208,7 @@ int nes_mapper69_init(nes_t* nes) {
     nes->nes_mapper.mapper_read_sram   = nes_mapper_read_sram;
     nes->nes_mapper.mapper_cpu_clock   = nes_mapper_cpu_clock;
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
-    nes->nes_mapper.mapper_audio = NES_EXP_AUDIO_S5B;
+    nes->nes_mapper.mapper_audio = NES_APU_EXP_S5B;
 #endif
     return NES_OK;
 }

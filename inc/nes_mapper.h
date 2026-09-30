@@ -72,9 +72,9 @@ typedef struct {
     int  (*mapper_state_save)(nes_t* nes, nes_state_writer_t* writer);
     int  (*mapper_state_load)(nes_t* nes, nes_state_reader_t* reader);
     void (*mapper_state_reapply)(nes_t* nes);
-    /* Which cartridge expansion-audio chip this board carries (NES_EXP_AUDIO_*).  Boards with
-     * such a chip forward their register-window writes to nes_exp_audio_write() and the APU
-     * mixer calls nes_exp_audio_render() once per segment; NES_EXP_AUDIO_NONE costs nothing. */
+    /* Which cartridge expansion-audio chip this board carries (NES_APU_EXP_*).  Boards with
+     * such a chip forward their register-window writes to nes_apu_expansion_write() and the APU
+     * mixer calls nes_apu_expansion_render() once per segment; NES_APU_EXP_NONE costs nothing. */
     uint8_t mapper_audio;
 } nes_mapper_t;
 

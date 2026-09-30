@@ -269,7 +269,7 @@ static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
     /* MMC5 audio shares this window: $5000-$5007 (two pulses), $5010/$5011 (PCM) and
      * $5015 (channel enable) belong to the sound hardware. */
     if (address <= 0x5015u) {
-        nes_exp_audio_write(nes, address, data);
+        nes_apu_expansion_write(nes, address, data);
     }
 #endif
     if (address >= 0x5C00 && address <= 0x5FFF) {
@@ -372,7 +372,7 @@ static uint8_t nes_mapper_read_apu(nes_t* nes, uint16_t address) {
     mapper5_register_t* mapper_reg = (mapper5_register_t*)nes->nes_mapper.mapper_register;
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
     if (address == 0x5010u || address == 0x5015u) {
-        return nes_exp_audio_read(nes, address);
+        return nes_apu_expansion_read(nes, address);
     }
 #endif
     if (address >= 0x5C00 && address <= 0x5FFF) {
@@ -469,7 +469,7 @@ int nes_mapper5_init(nes_t* nes) {
     nes->nes_mapper.mapper_render_screen = nes_mapper_render_screen;
     nes->nes_mapper.mapper_state_reapply = mapper5_state_reapply;
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
-    nes->nes_mapper.mapper_audio = NES_EXP_AUDIO_MMC5;
+    nes->nes_mapper.mapper_audio = NES_APU_EXP_MMC5;
 #endif
     return NES_OK;
 }

@@ -183,7 +183,7 @@ int test_apu_dmc(void) {
 int test_apu_expansion_audio(void) {
     test_rom_spec_t spec;
     uint8_t* buf;
-    nes_exp_audio_t* a;
+    nes_apu_exp_t* a;
 
     /* --- Namco 163 through a real mapper 19 board (registers via the CPU bus) --- */
     memset(&spec, 0, sizeof(spec));
@@ -196,7 +196,7 @@ int test_apu_expansion_audio(void) {
     nes_t* nes = f.nes;
     a = &nes->nes_apu.exp_audio;
     buf = nes->nes_apu.sample_buffer;
-    TEST_EQ_U32(NES_EXP_AUDIO_N163, nes->nes_mapper.mapper_audio);
+    TEST_EQ_U32(NES_APU_EXP_N163, nes->nes_mapper.mapper_audio);
 
     /* $F800 sets the position + auto-increment, $4800 is the wave RAM port. */
     nes_test_cpu_write(nes, 0x4800u, 0x11u);            /* no $F800 yet -> position 0 */
@@ -226,7 +226,7 @@ int test_apu_expansion_audio(void) {
     a->n163_ram[0x40 + 7 * 8 + 7] = 0x0F;               /* volume 15 */
     a->n163_ram[0x00] = 0x0F;                           /* wave nibbles (low nibble first) */
     a->n163_last_output = 0;
-    nes_exp_audio_render(nes, buf, 0, 64, 64u * 15u);
+    nes_apu_expansion_render(nes, buf, 0, 64, 64u * 15u);
     /* Advance lands the phase on sample 15 -> (15 - 8) * 15 = 105. */
     TEST_EQ_U32(105, (uint32_t)a->n163_channel_out[7]);
     /* The chip level is that single channel divided by (count + 1) = 105. */
@@ -249,7 +249,7 @@ int test_apu_expansion_audio(void) {
     nes = f.nes;
     a = &nes->nes_apu.exp_audio;
     buf = nes->nes_apu.sample_buffer;
-    TEST_EQ_U32(NES_EXP_AUDIO_VRC6, nes->nes_mapper.mapper_audio);
+    TEST_EQ_U32(NES_APU_EXP_VRC6, nes->nes_mapper.mapper_audio);
 
     nes_test_cpu_write(nes, 0x9000u, 0x8Fu);            /* pulse1: volume 15, ignore duty */
     nes_test_cpu_write(nes, 0x9001u, 0x10u);            /* frequency low */
@@ -260,7 +260,7 @@ int test_apu_expansion_audio(void) {
     TEST_EQ_U32(0x010, a->vrc6_pulse[0].frequency);
 
     /* One frame's worth of clocks: the timer walks but ignore-duty holds the level at 15. */
-    nes_exp_audio_render(nes, buf, 0, 128, 128u * 40u);
+    nes_apu_expansion_render(nes, buf, 0, 128, 128u * 40u);
     TEST_EQ_U32(15, (uint32_t)a->vrc6_pulse[0].volume);
     TEST_CHECK(buf[0] >= 7);                            /* level / 2 got mixed in */
 
@@ -268,7 +268,7 @@ int test_apu_expansion_audio(void) {
     nes_test_cpu_write(nes, 0x9003u, 0x01u);
     TEST_EQ_U32(1, a->vrc6_halt);
     const int32_t frozen = a->vrc6_pulse[0].timer;
-    nes_exp_audio_render(nes, buf, 0, 32, 32u * 40u);
+    nes_apu_expansion_render(nes, buf, 0, 32, 32u * 40u);
     TEST_EQ_U32((uint32_t)frozen, (uint32_t)a->vrc6_pulse[0].timer);
     /* $9003 bits 1/2 select the frequency shift (4 / 8). */
     nes_test_cpu_write(nes, 0x9003u, 0x04u);
@@ -284,16 +284,16 @@ int test_apu_expansion_audio(void) {
     nes_test_cpu_write(nes, 0xB002u, 0x80u);            /* enable */
     TEST_EQ_U32(1, a->vrc6_saw.enabled);
     TEST_EQ_U32(0x20, a->vrc6_saw.acc_rate);
-    nes_exp_audio_render(nes, buf, 0, 64, 64u * 8u);
+    nes_apu_expansion_render(nes, buf, 0, 64, 64u * 8u);
     TEST_CHECK(a->vrc6_saw.accumulator > 0);
     /* Clearing the enable bit clears the accumulator. */
     nes_test_cpu_write(nes, 0xB002u, 0x00u);
     TEST_EQ_U32(0, a->vrc6_saw.accumulator);
 
     /* A board without a chip must leave the buffer untouched. */
-    nes->nes_mapper.mapper_audio = NES_EXP_AUDIO_NONE;
+    nes->nes_mapper.mapper_audio = NES_APU_EXP_NONE;
     buf[0] = 0x40;
-    nes_exp_audio_render(nes, buf, 0, 8, 64u);
+    nes_apu_expansion_render(nes, buf, 0, 8, 64u);
     TEST_EQ_U32(0x40, buf[0]);
 
     test_fixture_free(&f);
@@ -308,7 +308,7 @@ int test_apu_expansion_audio(void) {
     nes = f.nes;
     a = &nes->nes_apu.exp_audio;
     buf = nes->nes_apu.sample_buffer;
-    TEST_EQ_U32(NES_EXP_AUDIO_S5B, nes->nes_mapper.mapper_audio);
+    TEST_EQ_U32(NES_APU_EXP_S5B, nes->nes_mapper.mapper_audio);
 
     /* The volume table grows by 1.5 dB per step (Mesen's double ramp, truncated). */
     TEST_EQ_U32(0, a->s5b_volume_lut[0]);
@@ -331,14 +331,14 @@ int test_apu_expansion_audio(void) {
     for (uint16_t i = 0; i < 256u; i++) buf[i] = 0x00;
     a->s5b_timer[0] = 0;                                /* force a step on the first tick */
     a->s5b_step[0] = 0;
-    nes_exp_audio_render(nes, buf, 0, 256, 256u * 40u);
+    nes_apu_expansion_render(nes, buf, 0, 256, 256u * 40u);
     TEST_CHECK(buf[255] == (uint8_t)(a->s5b_volume_lut[0x0F] / 3));
 
     /* Disabling the tone bit (regs[7] bit 0) silences the channel. */
     nes_test_cpu_write(nes, 0xC000u, 0x07u);
     nes_test_cpu_write(nes, 0xE000u, 0x01u);
     for (uint16_t i = 0; i < 256u; i++) buf[i] = 0x00;
-    nes_exp_audio_render(nes, buf, 0, 256, 256u * 40u);
+    nes_apu_expansion_render(nes, buf, 0, 256, 256u * 40u);
     TEST_EQ_U32(0x00, buf[255]);
 
     test_fixture_free(&f);
@@ -353,7 +353,7 @@ int test_apu_expansion_audio(void) {
     nes = f.nes;
     a = &nes->nes_apu.exp_audio;
     buf = nes->nes_apu.sample_buffer;
-    TEST_EQ_U32(NES_EXP_AUDIO_MMC5, nes->nes_mapper.mapper_audio);
+    TEST_EQ_U32(NES_APU_EXP_MMC5, nes->nes_mapper.mapper_audio);
 
     /* Square 1: constant volume 15, duty 2, period 0x40, length counter index 1. */
     nes_test_cpu_write(nes, 0x5000u, 0x9Fu);            /* duty 2, halt, constant, volume 15 */
@@ -377,7 +377,7 @@ int test_apu_expansion_audio(void) {
        (MMC5 polarity is reversed compared to the APU). */
     for (uint16_t i = 0; i < 256u; i++) buf[i] = 0x80;
     a->mmc5_square[0].duty_pos = 1;
-    nes_exp_audio_render(nes, buf, 0, 256, 256u * 40u);
+    nes_apu_expansion_render(nes, buf, 0, 256, 256u * 40u);
     uint8_t lowest = 0xFFu;
     for (uint16_t i = 0; i < 256u; i++) {
         if (buf[i] < lowest) lowest = buf[i];
@@ -389,7 +389,7 @@ int test_apu_expansion_audio(void) {
     nes_test_cpu_write(nes, 0x5003u, 0x08u);
     nes_test_cpu_write(nes, 0x5015u, 0x00u);            /* ...and disabled again */
     for (uint16_t i = 0; i < 64u; i++) buf[i] = 0x80;
-    nes_exp_audio_render(nes, buf, 0, 64, 64u * 40u);
+    nes_apu_expansion_render(nes, buf, 0, 64, 64u * 40u);
     TEST_EQ_U32(0x80, buf[0]);
 
     /* PCM: $5011 sets the DAC, a written 0 keeps the previous level, and read mode
@@ -462,10 +462,10 @@ int test_apu_vrc7_audio(void) {
     test_fixture_t f;
     TEST_CHECK(test_fixture_make(&f, &spec));
     nes_t* nes = f.nes;
-    nes_exp_audio_t* a = &nes->nes_apu.exp_audio;
+    nes_apu_exp_t* a = &nes->nes_apu.exp_audio;
     uint8_t* buf = nes->nes_apu.sample_buffer;
 
-    TEST_EQ_U32(NES_EXP_AUDIO_VRC7, nes->nes_mapper.mapper_audio);
+    TEST_EQ_U32(NES_APU_EXP_VRC7, nes->nes_mapper.mapper_audio);
     /* The OPLL core is created lazily, so a game that never touches the chip allocates nothing. */
     TEST_CHECK(a->vrc7.active == 0u);
 
@@ -482,7 +482,7 @@ int test_apu_vrc7_audio(void) {
     /* Render a segment: the FM level has to move the buffer off its DC baseline.  A silent or
        mis-clocked chip would leave every sample at 128 - that is the assertion that matters. */
     for (uint16_t i = 0; i < 512u; i++) buf[i] = 128u;
-    nes_exp_audio_render(nes, buf, 0, 512u, 512u * 40u);
+    nes_apu_expansion_render(nes, buf, 0, 512u, 512u * 40u);
     uint32_t moved = 0;
     for (uint16_t i = 0; i < 512u; i++) {
         if (buf[i] != 128u) moved++;

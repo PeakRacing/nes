@@ -73,17 +73,17 @@ typedef struct {
  * module compiles away and the APU mixer keeps its original shape.
  *
  * A board declares which chip it carries by setting nes->nes_mapper.mapper_audio to one of
- * the NES_EXP_AUDIO_* ids and forwards its register window writes to nes_exp_audio_write().
- * Once per APU segment the mixer calls nes_exp_audio_render(), which advances the chip by
+ * the NES_APU_EXP_* ids and forwards its register window writes to nes_apu_expansion_write().
+ * Once per APU segment the mixer calls nes_apu_expansion_render(), which advances the chip by
  * that segment's CPU cycles and mixes its output into the sample buffer.
  */
 
-#define NES_EXP_AUDIO_NONE      (0)
-#define NES_EXP_AUDIO_VRC6      (1)
-#define NES_EXP_AUDIO_S5B       (2)
-#define NES_EXP_AUDIO_N163      (3)
-#define NES_EXP_AUDIO_MMC5      (4)
-#define NES_EXP_AUDIO_VRC7      (5)
+#define NES_APU_EXP_NONE      (0)
+#define NES_APU_EXP_VRC6      (1)
+#define NES_APU_EXP_S5B       (2)
+#define NES_APU_EXP_N163      (3)
+#define NES_APU_EXP_MMC5      (4)
+#define NES_APU_EXP_VRC7      (5)
 
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
 
@@ -103,7 +103,7 @@ typedef struct {
     uint8_t  env_divider;
     uint8_t  env_decay;
     uint32_t tick_acc;          /* 1/256 CPU cycle accumulator for the 240 Hz tick */
-} nes_mmc5_square_t;
+} nes_apu_mmc5_square_t;
 
 typedef struct {
     /* --- VRC6 (mapper 24/26): two pulses + saw, all clocked once per CPU cycle --- */
@@ -147,21 +147,21 @@ typedef struct {
     uint32_t s5b_acc;               /* 1/256 CPU cycle accumulator (channels tick at CPU/2) */
 
     /* --- MMC5 (mapper 5): two pulse channels plus an 8-bit PCM DAC --- */
-    nes_mmc5_square_t mmc5_square[2];
+    nes_apu_mmc5_square_t mmc5_square[2];
     uint8_t  mmc5_pcm_output;
     uint8_t  mmc5_pcm_read_mode;
     uint8_t  mmc5_pcm_irq_enabled;
 
     vrc7_t   vrc7;                  /* our own compact FM model; see src/nes_apu.c */
-} nes_exp_audio_t;
+} nes_apu_exp_t;
 
-void nes_exp_audio_init(nes_t* nes);
+void nes_apu_expansion_init(nes_t* nes);
 /* Register write.  `address` is the CPU address the board saw. */
-void nes_exp_audio_write(nes_t* nes, uint16_t address, uint8_t data);
+void nes_apu_expansion_write(nes_t* nes, uint16_t address, uint8_t data);
 /* Register read (Namco 163 wave RAM port). */
-uint8_t nes_exp_audio_read(nes_t* nes, uint16_t address);
+uint8_t nes_apu_expansion_read(nes_t* nes, uint16_t address);
 /* Advance the declared chip by `cycles` CPU clocks and mix it into buffer[start..start+count). */
-void nes_exp_audio_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t count, uint32_t cycles);
+void nes_apu_expansion_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint16_t count, uint32_t cycles);
 
 #endif /* NES_ENABLE_EXPANSION_AUDIO */
 
@@ -369,7 +369,7 @@ typedef struct nes_apu{
     uint8_t irq_line;
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
     /* Cartridge expansion audio lives here so it is saved together with the APU state. */
-    nes_exp_audio_t exp_audio;
+    nes_apu_exp_t exp_audio;
 #endif
     // sample_buffer: pulse1 pulse2 triangle noise dmc output
     uint8_t sample_buffer[NES_APU_SAMPLE_PER_SYNC_MAX];
