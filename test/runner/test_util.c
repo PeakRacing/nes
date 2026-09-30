@@ -102,6 +102,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "176 fk23c", test_mapper176_fk23c},
         {"mapper", "114 scrambled mmc3", test_mapper114_scrambled_mmc3},
         {"mapper", "178 waixing", test_mapper178_waixing},
+        {"mapper", "250 mmc3 a10", test_mapper250_mmc3_a10},
         {"mapper", "synthetic smoke", test_mapper_synthetic_smoke},
         {"mapper", "write storm", test_mapper_write_storm},
         {"mapper", "bank stress", test_mapper_bank_stress},

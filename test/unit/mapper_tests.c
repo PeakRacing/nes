@@ -2283,8 +2283,66 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
-/* Mapper 178 (Waixing): 16KB PRG pages, registers at $4800-$4FFF and 32KB of board WRAM.
-   Authority: Mesen2 Core/NES/Mappers/Waixing/Waixing178.h */
+/* Mapper 250 (MMC3 with the register index on address bit 10).
+   Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_250.h */
+int test_mapper250_mmc3_a10(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 250, 16, 8);         /* 256KB PRG (32 x 8KB) + 64KB CHR (64 x 1KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on MMC3 layout. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+    TEST_EQ_U32(30u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    TEST_EQ_U32(31u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* $8400 is the bank DATA register on this board ($8000 selects, bit 10 picks data). */
+    nes_test_cpu_write(nes, 0x8000u, 0x06u);     /* select R6 */
+    nes_test_cpu_write(nes, 0x8400u, 0x05u);     /* R6 = 5 */
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    nes_test_cpu_write(nes, 0x8000u, 0x07u);     /* select R7 */
+    nes_test_cpu_write(nes, 0x8400u, 0x09u);     /* R7 = 9 */
+    TEST_EQ_U32(9u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+
+    /* CHR R0 through the same pair: pages 6/7 in MMC3 CHR mode 0. */
+    nes_test_cpu_write(nes, 0x8000u, 0x00u);
+    nes_test_cpu_write(nes, 0x8400u, 0x06u);
+    TEST_EQ_U32(6u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_ppu.pattern_table[1] - chr) / 1024u);
+
+    /* Mirroring lives at $A000/$A400. */
+    nes_test_cpu_write(nes, 0xA400u, 0x01u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 250 mirroring via $A400", 250,
+                             "horizontal wiring", "wrong nametable");
+    }
+
+    /* IRQ: $C000 = latch, $C400 = reload, $E000/$E400 = disable/enable. */
+    nes->nes_ppu.MASK_b = 1;
+    nes->nes_cpu.irq_pending = 0;
+    nes_test_cpu_write(nes, 0xC000u, 0x02u);     /* latch = 2 */
+    nes_test_cpu_write(nes, 0xC400u, 0x00u);     /* reload flag */
+    nes_test_cpu_write(nes, 0xE400u, 0x00u);     /* enable */
+    nes->nes_mapper.mapper_hsync(nes);           /* counter = 2 */
+    nes->nes_mapper.mapper_hsync(nes);           /* counter = 1 */
+    TEST_EQ_U32(0u, nes->nes_cpu.irq_pending);
+    nes->nes_mapper.mapper_hsync(nes);           /* counter = 0 -> IRQ */
+    TEST_EQ_U32(1u, nes->nes_cpu.irq_pending);
+    nes_test_cpu_write(nes, 0xE000u, 0x00u);     /* acknowledge */
+    TEST_EQ_U32(0u, nes->nes_cpu.irq_pending);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+/* Mapper 178 (Waixing): 16KB PRG pages */
 int test_mapper178_waixing(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 178, 32, 1);         /* 512KB PRG (32 x 16KB) + 8KB CHR */

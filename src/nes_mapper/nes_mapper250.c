@@ -17,9 +17,14 @@
 #include "nes.h"
 
 /* https://www.nesdev.org/wiki/INES_Mapper_250
- * Mapper 250 — Nitra (pirate MMC3 with address bus scramble).
- * Like MMC3 but the register address bits A0 and A1 are swapped.
- * The data is written to (A6<<1 | A7>>1) instead of the normal A0 select.
+ * Mapper 250 — MMC3 with the register index taken from address bit 10 instead of bit 0.
+ * Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_250.h, which forwards
+ *   MMC3::WriteRegister((addr & 0xE000) | ((addr & 0x0400) >> 10), addr & 0xFF)
+ * so $8000/$8400 are select/data, $A000/$A400 mirroring, $C000/$C400 the IRQ latch and
+ * reload, and $E000/$E400 IRQ disable/enable.
+ *
+ * The previous implementation decoded a different pirate board (Nitra, A6 -> A0), which is
+ * why 时间旅行者 stayed blank.
  */
 
 typedef struct {
@@ -100,9 +105,8 @@ static void nes_mapper_init(nes_t* nes) {
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     mapper250_t* m = (mapper250_t*)nes->nes_mapper.mapper_register;
-    /* Nitra address scramble: bit6 carries A0, bit1 carries the "odd" bit */
-    uint8_t is_odd = (uint8_t)((address >> 6) & 1u);
-    uint16_t norm = (uint16_t)((address & 0xE000u) | is_odd);
+    /* The register index comes from address bit 10 (Mesen2 MMC3_250). */
+    uint16_t norm = (uint16_t)((address & 0xE000u) | ((address & 0x0400u) >> 10));
 
     switch (norm) {
     case 0x8000: m->bank_select = data; mapper250_update_banks(nes); break;

@@ -110,6 +110,7 @@ int test_mapper117_direct_slots(void);
 int test_mapper176_fk23c(void);
 int test_mapper114_scrambled_mmc3(void);
 int test_mapper178_waixing(void);
+int test_mapper250_mmc3_a10(void);
 int test_mapper_synthetic_smoke(void);
 int test_mapper_write_storm(void);
 int test_mapper_bank_stress(void);
