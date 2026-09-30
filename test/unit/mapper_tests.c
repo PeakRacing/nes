@@ -992,21 +992,23 @@ int test_mapper25_vrc4_irq(void) {
     /* $F002: enable + scanline mode (bit 1 and bit 0 clear -> no "enable after ack"). */
     nes_test_cpu_write(nes, 0xF002, 0x02u);
 
-    /* 113 CPU clocks: the prescaler, primed to 341, has not reached zero yet - no tick, no IRQ.
-       (The pre-fix code accumulated upwards from 0 and would already have ticked here.) */
-    nes->nes_mapper.mapper_cpu_clock(nes, 113u);
+    /* Walk to one CPU clock *before* the first IRQ must appear.  Counter 2 has to reach $FF, i.e.
+       253 ticks, and with the prescaler primed to 341 a tick happens every 114 CPU clocks: the
+       253rd tick lands on clock 28872.  Asserting the exact boundary is what catches a prescaler
+       that starts at 0 instead of 341 (that variant fires one full scanline earlier). */
+    nes->nes_mapper.mapper_cpu_clock(nes, 28871u);
     if (nes->nes_cpu.irq_pending) {
         test_fixture_free(&f);
         return mapper_report("mapper 25 IRQ prescaler starts at 341", 25,
-                             "no IRQ one scanline after enabling", "IRQ fired immediately");
+                             "no IRQ before CPU clock 28872", "IRQ fired one scanline early");
     }
 
-    /* Give it plenty of CPU clocks: the counter walks 2 -> $FF and the IRQ must be pending. */
-    nes->nes_mapper.mapper_cpu_clock(nes, 30000u);
+    /* One more CPU clock: the counter reaches $FF and the IRQ must be pending. */
+    nes->nes_mapper.mapper_cpu_clock(nes, 1u);
     if (!nes->nes_cpu.irq_pending) {
         test_fixture_free(&f);
-        return mapper_report("mapper 25 VRC4 IRQ eventually fires", 25,
-                             "IRQ pending after the counter reaches $FF", "counter never reached $FF");
+        return mapper_report("mapper 25 VRC4 IRQ fires on clock 28872", 25,
+                             "IRQ pending at CPU clock 28872", "IRQ did not fire");
     }
 
     /* Writing the control register clears the IRQ source (Mesen's SetControlValue). */
