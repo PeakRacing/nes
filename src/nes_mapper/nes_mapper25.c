@@ -34,7 +34,7 @@ typedef struct {
     uint8_t irq_latch;
     uint8_t irq_counter;
     uint8_t irq_cycle_mode;
-    int16_t irq_prescaler;
+    uint16_t irq_cycle_accum;
 } mapper25_register_t;
 
 static void nes_mapper_deinit(nes_t* nes) {
@@ -43,13 +43,9 @@ static void nes_mapper_deinit(nes_t* nes) {
 }
 
 static uint16_t mapper25_decode_addr(uint16_t address) {
-    /* Mapper 25 hosts VRC4b/VRC4d/VRC2c; Mesen's default (and NESdev's VRC4b wiring) takes the
-       register bit 0 from CPU A0 and bit 1 from CPU A1.  The previous decode OR-ed A0|A2 and A1|A3
-       together, which routed the game's writes to the wrong registers: Gradius II (沙罗曼蛇2)
-       only ever drew a few stray tiles. */
     uint16_t reg = address & 0xF000u;
-    if (address & 0x0001u) reg |= 0x0001u;
-    if (address & 0x0002u) reg |= 0x0002u;
+    if (address & 0x0005u) reg |= 0x0002u;
+    if (address & 0x000Au) reg |= 0x0001u;
     return reg;
 }
 
@@ -207,15 +203,11 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
         break;
     case 0xF002u:
         nes->nes_cpu.irq_pending = 0;
-        r->irq_cycle_mode = (data & 0x04u) ? 1u : 0u;
+        r->irq_cycle_accum = 0;
+        r->irq_counter = r->irq_latch;
+        r->irq_cycle_mode = data & 0x04u;
         r->irq_enable = data & 0x02u;
         r->irq_enable_ack = data & 0x01u;
-        /* Mesen's VrcIrq::SetControlValue: enabling reloads the counter *and* primes the scanline
-           prescaler to 341, so the first tick lands a full scanline later rather than immediately. */
-        if (r->irq_enable) {
-            r->irq_counter = r->irq_latch;
-            r->irq_prescaler = 341;
-        }
         break;
     case 0xF003u:
         nes->nes_cpu.irq_pending = 0;
@@ -236,24 +228,20 @@ static void mapper25_irq_tick(nes_t* nes) {
     }
 }
 
-/* Mirrors Mesen's VrcIrq::ProcessCpuClock(): the prescaler counts *down* by 3 per CPU clock and a
- * tick happens when it reaches zero, after which 341 is added back.  The old code accumulated
- * upwards and compared >= 341, which fired one scanline early, and it started the accumulator at 0
- * instead of 341 - Gradius II's IRQ-driven intro never got past its first split. */
 static void nes_mapper_cpu_clock(nes_t* nes, uint16_t cycles) {
     mapper25_register_t* r = (mapper25_register_t*)nes->nes_mapper.mapper_register;
     if (!r->irq_enable) return;
-    while (cycles--) {
-        if (r->irq_cycle_mode) {
+    if (r->irq_cycle_mode) {
+        while (cycles--) {
             mapper25_irq_tick(nes);
-            r->irq_prescaler = (int16_t)(r->irq_prescaler + 341);
-        } else {
-            r->irq_prescaler = (int16_t)(r->irq_prescaler - 3);
-            if (r->irq_prescaler <= 0) {
-                mapper25_irq_tick(nes);
-                r->irq_prescaler = (int16_t)(r->irq_prescaler + 341);
-            }
         }
+        return;
+    }
+
+    r->irq_cycle_accum = (uint16_t)(r->irq_cycle_accum + cycles * 3u);
+    while (r->irq_cycle_accum >= 341u) {
+        r->irq_cycle_accum = (uint16_t)(r->irq_cycle_accum - 341u);
+        mapper25_irq_tick(nes);
     }
 }
 

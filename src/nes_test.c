@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
 /* NES_DBG_WLOG=<file>: append "PC ADDR DATA" for every mapper write.  Opened lazily, hard capped
  * so a runaway log cannot fill the disk.  Called from the CPU write path (test builds only). */
 /* NES_DBG_RLOG=<file>: "ADDR PC" for every CPU read.  Address+PC only (cheap, no value plumbing);
@@ -193,8 +194,10 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
             }
         }
     }
-    if (wlog == NULL || lines >= 200000) {
-        return;
+    {
+        static long cap;
+        if (cap == 0) { const char* e = getenv("NES_DBG_WLOG_MAX"); cap = e ? strtol(e, NULL, 10) : 200000; }
+        if (wlog == NULL || lines >= cap) { return; }
     }
     /* $2007 writes carry their destination in the PPU address register; logging it shows which
      * part of pattern/name space a game uploads to (e.g. whether it needs the full 8KB CHR-RAM). */

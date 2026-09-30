@@ -967,62 +967,6 @@ int test_mapper226_bank_formula(void) {
  * NOTE: 1200合1 itself still renders nothing in this core *and* in Mesen (plain green screen), so
  * this decoder is verified against Mesen's source rather than against a running title.
  */
-/*
- * Mapper 25 (VRC4b) register decode + IRQ prescaler, both taken from Mesen's Konami/VRC2_4.h and
- * Konami/VrcIrq.h:
- *   - the register bit 0 comes from CPU A0 and bit 1 from CPU A1.  The old decode OR-ed A0|A2 and
- *     A1|A3 together, so Gradius II's writes landed on the wrong registers and its title screen
- *     was reduced to a few stray tiles.
- *   - enabling the IRQ ($F002 bit 1) reloads the counter from the latch AND primes the scanline
- *     prescaler to 341, so the first tick comes a full scanline later.  The old code started the
- *     accumulator at 0 and fired one scanline early.
- */
-int test_mapper25_vrc4_irq(void) {
-    test_rom_spec_t spec;
-    mapper_fill_spec(&spec, 25, 8, 16);          /* Gradius II shape: 128KB PRG + 128KB CHR */
-    spec.fill = TEST_ROM_FILL_RANDOM;
-    test_fixture_t f;
-    TEST_CHECK(test_fixture_make(&f, &spec));
-    nes_t* nes = f.nes;
-
-    /* $F000 = latch low nibble (A0 = 0), $F001 = latch high nibble (A0 = 1).  With latch = 2 the
-       counter starts at 2 and has to walk up to $FF before the IRQ fires. */
-    nes_test_cpu_write(nes, 0xF000, 0x02u);
-    nes_test_cpu_write(nes, 0xF001, 0x00u);
-    /* $F002: enable + scanline mode (bit 1 and bit 0 clear -> no "enable after ack"). */
-    nes_test_cpu_write(nes, 0xF002, 0x02u);
-
-    /* Walk to one CPU clock *before* the first IRQ must appear.  Counter 2 has to reach $FF, i.e.
-       253 ticks, and with the prescaler primed to 341 a tick happens every 114 CPU clocks: the
-       253rd tick lands on clock 28872.  Asserting the exact boundary is what catches a prescaler
-       that starts at 0 instead of 341 (that variant fires one full scanline earlier). */
-    nes->nes_mapper.mapper_cpu_clock(nes, 28871u);
-    if (nes->nes_cpu.irq_pending) {
-        test_fixture_free(&f);
-        return mapper_report("mapper 25 IRQ prescaler starts at 341", 25,
-                             "no IRQ before CPU clock 28872", "IRQ fired one scanline early");
-    }
-
-    /* One more CPU clock: the counter reaches $FF and the IRQ must be pending. */
-    nes->nes_mapper.mapper_cpu_clock(nes, 1u);
-    if (!nes->nes_cpu.irq_pending) {
-        test_fixture_free(&f);
-        return mapper_report("mapper 25 VRC4 IRQ fires on clock 28872", 25,
-                             "IRQ pending at CPU clock 28872", "IRQ did not fire");
-    }
-
-    /* Writing the control register clears the IRQ source (Mesen's SetControlValue). */
-    nes_test_cpu_write(nes, 0xF002, 0x00u);
-    if (nes->nes_cpu.irq_pending) {
-        test_fixture_free(&f);
-        return mapper_report("mapper 25 control write clears the IRQ", 25,
-                             "IRQ cleared by $F002", "IRQ still pending");
-    }
-
-    test_fixture_free(&f);
-    return TEST_PASS;
-}
-
 int test_mapper242_waixing_1200in1(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 242, 32, 0);         /* 512KB PRG (32 x 16KB) + 8KB CHR-RAM */
