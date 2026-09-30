@@ -232,6 +232,21 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
                 }
             }
             fprintf(stderr, "[OAM] 屏幕内精灵数(Y<$EF) = %u / 64\n", on_screen);
+            {
+                /* What the PPU would actually fetch for the first few background tiles: reads
+                   through the live chr_banks[] mapping, so a wrong bank shows up as zeros/dirt. */
+                const unsigned bb = (nes->nes_ppu.CTRL_B != 0u) ? 0x1000u : 0x0000u;
+                unsigned t;
+                for (t = 0; t < 4u; t++) {
+                    const unsigned off = bb + t * 16u;
+                    const unsigned slot = off >> 10, in_slot = off & 0x3FFu;
+                    const uint8_t* q = nes->nes_ppu.chr_banks[slot] + in_slot;
+                    unsigned k;
+                    fprintf(stderr, "[OAM] 背景 tile $%02X @%04X:", t, bb + t * 16u);
+                    for (k = 0; k < 16u; k++) { fprintf(stderr, " %02X", (unsigned)q[k]); }
+                    fprintf(stderr, "\n");
+                }
+            }
             for (i = 0; i < 64u && i < 8u; i++) {   /* 前 8 个精灵的图块内容 */
                 const unsigned tile = oam[i * 4u + 1u];
                 const unsigned off = base + tile * 16u;
@@ -243,6 +258,69 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
                 fprintf(stderr, "\n");
             }
         }
+    }
+    /* PRG-MAP: with NES_DBG_PRGMAP=<n>, on the n-th $4014 print what the four 8KB PRG windows
+       ($8000/$A000/$C000/$E000) actually point at inside prg_rom, plus the bytes at $8192 in the
+       $8000 window.  Bank numbers alone are not enough: Gradius II asks for 8KB bank $16 on a
+       128KB ROM, so what matters is which bank the wrapping really selected and therefore which
+       code is executing.  Needs NES_DBG_WLOG_ALL=1 for the same reason OAMDUMP does. */
+    if (address == 0x4014u && getenv("NES_DBG_PRGMAP") != NULL) {
+        static long pm_n;
+        const long pm_want = strtol(getenv("NES_DBG_PRGMAP"), NULL, 10);
+        pm_n++;
+        if (pm_n == pm_want) {
+            const uint8_t* base = nes->nes_rom.prg_rom;
+            unsigned s;
+            fprintf(stderr, "[PRGMAP] 第 %ld 次 $4014（源页=$%02X）时的 PRG 窗口：\n", (long)pm_n, (unsigned)data);
+            for (s = 0; s < 4u; s++) {
+                const uint8_t* p = nes->nes_cpu.prg_banks[s];
+                long off = (base != NULL && p != NULL) ? (long)(p - base) : -1;
+                fprintf(stderr, "[PRGMAP]   $%04X 窗口 -> prg_rom 偏移 %ld",
+                        0x8000u + s * 0x2000u, off);
+                if (off >= 0) { fprintf(stderr, " = 8KB bank %ld", off / 8192); }
+                fprintf(stderr, "\n");
+            }
+            {
+                const uint8_t* w = nes->nes_cpu.prg_banks[0];
+                unsigned k;
+                fprintf(stderr, "[PRGMAP]   $8000 窗口里 $8180-$81A0:");
+                for (k = 0x180u; k < 0x1A0u; k++) { fprintf(stderr, " %02X", (unsigned)w[k]); }
+                fprintf(stderr, "\n");
+            }
+            {
+                /* The game both DMAs OAM from $0200 and dispatches with JMP ($0200): $E4D0 ends in
+                   `6C 00 02` and the "park all sprites" routine writes STA $0200,X.  Print the low
+                   page plus the dispatch index $51 so it is clear which of the two is really live. */
+                const uint8_t* r = nes->nes_cpu.cpu_ram;
+                fprintf(stderr, "[PRGMAP]   RAM $0200-$0207: %02X %02X %02X %02X %02X %02X %02X %02X\n",
+                        r[0x200], r[0x201], r[0x202], r[0x203], r[0x204], r[0x205], r[0x206], r[0x207]);
+                fprintf(stderr, "[PRGMAP]   $51=%02X  $18=%02X  $F5=%02X  $1B=%02X  $23=%02X  $00=%02X  $01=%02X  $03=%02X\n",
+                        r[0x51], r[0x18], r[0xF5], r[0x1B], r[0x23], r[0x00], r[0x01], r[0x03]);
+                fprintf(stderr, "[PRGMAP]   非零字节数 $0200-$02FF = ");
+                {
+                    unsigned nz = 0, i2;
+                    for (i2 = 0x200; i2 < 0x300; i2++) { if (r[i2]) nz++; }
+                    fprintf(stderr, "%u / 256\n", nz);
+                }
+            }
+        }
+    }
+    /* DISPATCH: with NES_DBG_DISP=1, print every trip through the game's table-driven dispatcher.
+       Gradius II calls `JSR $E4D0`; that helper reads a 2-byte target address from the table right
+       after the call site, stores it in $02/$03 and finishes with `JMP ($0002)` ($E4E5: 85 03).
+       Logging that one store therefore records the whole state machine in order: the dispatch
+       index $51, the target, and the state bytes that decide whether the animation thread runs. */
+    if (address == 0x0003u && pc == 0xE4E6u && getenv("NES_DBG_DISP") != NULL) {
+        static long disp_n;
+        const long disp_max = 500;
+        const uint8_t* r = nes->nes_cpu.cpu_ram;
+        if (disp_n < disp_max) {
+            fprintf(stderr, "[DISP] #%ld 索引$51=%02X 目标=$%02X%02X  状态: $18=%02X $19=%02X $F5=%02X $1B=%02X $23=%02X $50=%02X\n",
+                    disp_n, (unsigned)r[0x51], (unsigned)r[0x03], (unsigned)r[0x02],
+                    (unsigned)r[0x18], (unsigned)r[0x19], (unsigned)r[0xF5],
+                    (unsigned)r[0x1B], (unsigned)r[0x23], (unsigned)r[0x50]);
+        }
+        disp_n++;
     }
     {
         static long cap;
