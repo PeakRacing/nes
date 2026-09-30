@@ -92,7 +92,10 @@ static void nes_mapper_init(nes_t* nes) {
         }
     }
 
-    if (nes->nes_rom.save_ram && nes->nes_rom.sram == NULL) {
+    /* 8KB work RAM at $6000-$7FFF is wired whether or not the cart has a battery, exactly
+     * like Konami VRC4 boards (see nes_mapper25.c / nes_mapper73.c).  Gating the allocation
+     * on save_ram leaves the window reading 0 and breaks games that use it as scratch. */
+    if (nes->nes_rom.sram == NULL) {
         nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
         if (nes->nes_rom.sram != NULL) {
             nes_memset(nes->nes_rom.sram, 0, SRAM_SIZE);

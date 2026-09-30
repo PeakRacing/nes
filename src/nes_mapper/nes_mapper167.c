@@ -56,6 +56,20 @@ static void nes_mapper_init(nes_t* nes) {
     m->chr_bank_count = (uint8_t)(nes->nes_rom.chr_rom_size * 8u);
     if (m->chr_bank_count == 0u) nes_load_chrrom_8k(nes, 0, 0);
     mapper167_update_banks(nes);
+
+    /* 8KB work RAM at $6000-$7FFF.  The Mesen database lists work/save RAM for these boards
+     * (mapper 167: workRAM=0/saveRAM=8 KB) and the iNES header often has no battery bit, so
+     * gating this on save_ram would leave the window reading 0 - the same failure that hid the
+     * intros of 沙罗曼蛇2/沙罗曼蛇3.  The core maps nes_rom.sram at $6000-$7FFF; boards that use
+     * the window for registers install mapper_sram/mapper_read_sram, which take priority. */
+    if (nes->nes_rom.sram == NULL) {
+        nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
+        if (nes->nes_rom.sram != NULL) {
+            nes_memset(nes->nes_rom.sram, 0, SRAM_SIZE);
+        } else {
+            NES_LOG_ERROR("mapper167: failed to allocate work RAM\n");
+        }
+    }
 }
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
