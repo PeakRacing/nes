@@ -17,51 +17,55 @@
 #include "nes.h"
 
 /*
- * Mapper 149 - Sachen SA-0036 (台湾麻雀 等).
- * Authority: Mesen2 Core/NES/Mappers/Sachen/Sachen_149.h.
+ * Mapper 171 - Kaiser 7058 (推倒胡麻将 等).
+ * Authority: Mesen2 Core/NES/Mappers/Kaiser/Kaiser7058.h.
  *
- * 32KB of PRG is fixed at $8000 and only the two 8KB CHR banks switch - the bank
- * number is bit 7 of the written byte (NOT the low bits, which the earlier
- * implementation used: those images have 16KB of CHR = 2 banks, so bit 7 is the only
- * bit the board actually wires up).
+ * 32KB of PRG is fixed at $8000; the board only switches two 4KB CHR pages, and the
+ * register is picked out of the address (the data byte is the page number):
+ *   $F000-$F07F -> CHR 4KB page 0
+ *   $F080-$F0FF -> CHR 4KB page 1
  */
 
 typedef struct {
-    uint8_t chr;
-} mapper149_register_t;
+    uint8_t chr[2];
+} mapper171_t;
 
-static void mapper149_update(nes_t* nes) {
-    mapper149_register_t* r = (mapper149_register_t*)nes->nes_mapper.mapper_register;
-    if (nes->nes_rom.chr_rom_size > 0) {
-        nes_load_chrrom_8k(nes, 0, r->chr);
-    }
+static void mapper171_apply(nes_t* nes) {
+    mapper171_t* m = (mapper171_t*)nes->nes_mapper.mapper_register;
+    nes_load_chrrom_4k(nes, 0, m->chr[0]);
+    nes_load_chrrom_4k(nes, 1, m->chr[1]);
 }
 
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper149_register_t));
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper171_t));
         if (nes->nes_mapper.mapper_register == NULL) return;
     }
-    mapper149_register_t* r = (mapper149_register_t*)nes->nes_mapper.mapper_register;
-    nes_memset(r, 0, sizeof(mapper149_register_t));
+    mapper171_t* m = (mapper171_t*)nes->nes_mapper.mapper_register;
+    nes_memset(m, 0, sizeof(mapper171_t));
 
     nes_load_prgrom_32k(nes, 0, 0);
     nes_load_chrrom_8k(nes, 0, 0);
-    mapper149_update(nes);
+    mapper171_apply(nes);
 }
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
-    mapper149_register_t* r = (mapper149_register_t*)nes->nes_mapper.mapper_register;
-    (void)address;
-    r->chr = (uint8_t)((data >> 7) & 0x01u);
-    mapper149_update(nes);
+    mapper171_t* m = (mapper171_t*)nes->nes_mapper.mapper_register;
+    if (address < 0xF000u) return;
+
+    if ((address & 0xF080u) == 0xF000u) {
+        m->chr[0] = data;
+    } else {
+        m->chr[1] = data;
+    }
+    mapper171_apply(nes);
 }
 
 static void nes_mapper_state_reapply(nes_t* nes) {
-    mapper149_update(nes);
+    mapper171_apply(nes);
 }
 
-int nes_mapper149_init(nes_t* nes) {
+int nes_mapper171_init(nes_t* nes) {
     nes->nes_mapper.mapper_init          = nes_mapper_init;
     nes->nes_mapper.mapper_write         = nes_mapper_write;
     nes->nes_mapper.mapper_state_reapply = nes_mapper_state_reapply;

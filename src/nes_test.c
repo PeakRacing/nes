@@ -143,11 +143,21 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
     }
     /* CHR-DUMP: the first non-zero $2007 upload is when real tile data arrives.  It also fires on
        every non-zero write to $3F00, which is where a game installs its backdrop - that catches
-       the palette state as the menu is actually running instead of the power-on zeros. */
+       the palette state as the menu is actually running instead of the power-on zeros.
+       Opt-in (NES_DBG_PALDUMP=1): a palette write happens several times per frame, so leaving this
+       unconditional buries the verdict line and any other probe output under thousands of lines of
+       stderr (the corpus/audit runners read stdout only, but the noise costs real time). */
     {
         static int dumped;
+        static int dump_enabled;
+        static int dump_probed;
+        if (!dump_probed) {
+            dump_enabled = (getenv("NES_DBG_PALDUMP") != NULL);
+            dump_probed = 1;
+        }
         const int is_pal_write = (address == 0x2007u && nes->nes_ppu.v_reg >= 0x3F00u);
-        if (address == 0x2007u && (data != 0x00u || is_pal_write) && (!dumped || is_pal_write)) {
+        if (dump_enabled && address == 0x2007u && (data != 0x00u || is_pal_write) &&
+            (!dumped || is_pal_write)) {
             const uint8_t* chr = nes->nes_rom.chr_rom;
             long nz_chr = 0, nz_nt = 0;
             unsigned i;

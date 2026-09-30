@@ -947,6 +947,7 @@ int nes_load_mapper(nes_t* nes){
         NES_CASE_LOAD_MAPPER(48);
         NES_CASE_LOAD_MAPPER(49);
         NES_CASE_LOAD_MAPPER(50);
+        NES_CASE_LOAD_MAPPER(51);
         NES_CASE_LOAD_MAPPER(52);
         NES_CASE_LOAD_MAPPER(57);
         NES_CASE_LOAD_MAPPER(58);
@@ -1010,12 +1011,14 @@ int nes_load_mapper(nes_t* nes){
         NES_CASE_LOAD_MAPPER(139);
         NES_CASE_LOAD_MAPPER(140);
         NES_CASE_LOAD_MAPPER(141);
+        NES_CASE_LOAD_MAPPER(142);
         NES_CASE_LOAD_MAPPER(143);
         NES_CASE_LOAD_MAPPER(144);
         NES_CASE_LOAD_MAPPER(145);
         NES_CASE_LOAD_MAPPER(146);
         NES_CASE_LOAD_MAPPER(147);
         NES_CASE_LOAD_MAPPER(148);
+        NES_CASE_LOAD_MAPPER(149);
         NES_CASE_LOAD_MAPPER(150);
         NES_CASE_LOAD_MAPPER(151);
         NES_CASE_LOAD_MAPPER(152);
@@ -1031,6 +1034,7 @@ int nes_load_mapper(nes_t* nes){
         NES_CASE_LOAD_MAPPER(166);
         NES_CASE_LOAD_MAPPER(167);
         NES_CASE_LOAD_MAPPER(168);
+        NES_CASE_LOAD_MAPPER(171);
         NES_CASE_LOAD_MAPPER(172);
         NES_CASE_LOAD_MAPPER(173);
         NES_CASE_LOAD_MAPPER(175);
@@ -1061,6 +1065,7 @@ int nes_load_mapper(nes_t* nes){
         NES_CASE_LOAD_MAPPER(204);
         NES_CASE_LOAD_MAPPER(205);
         NES_CASE_LOAD_MAPPER(206);
+        NES_CASE_LOAD_MAPPER(207);
         NES_CASE_LOAD_MAPPER(208);
         NES_CASE_LOAD_MAPPER(209);
         NES_CASE_LOAD_MAPPER(210);
@@ -1083,6 +1088,7 @@ int nes_load_mapper(nes_t* nes){
         NES_CASE_LOAD_MAPPER(241);
         NES_CASE_LOAD_MAPPER(242);
         NES_CASE_LOAD_MAPPER(243);
+        NES_CASE_LOAD_MAPPER(244);
         NES_CASE_LOAD_MAPPER(245);
         NES_CASE_LOAD_MAPPER(246);
         NES_CASE_LOAD_MAPPER(247);

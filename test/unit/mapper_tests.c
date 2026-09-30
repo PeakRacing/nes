@@ -1940,3 +1940,250 @@ int test_mapper_bank_stress(void) {
     test_fixture_free(&f);
     return TEST_PASS;
 }
+
+/* Mapper 51 (BMC 11-in-1): mode/bank come from the *address*, and $6000-$7FFF is a
+   PRG-ROM window.  Authority: Mesen2 Core/NES/Mappers/Unlicensed/Bmc51.h */
+int test_mapper51_bmc(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 51, 32, 0);          /* 512KB PRG (64 x 8KB) + CHR-RAM */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on: bank 0, mode 1 -> 32KB of bank 0 (8KB pages 0-3), vertical wiring. */
+    for (uint8_t slot = 0; slot < 4; slot++) {
+        TEST_EQ_U32((uint32_t)slot, (uint32_t)(nes->nes_cpu.prg_banks[slot] - prg) / 8192u);
+    }
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[2] ||
+        nes->nes_ppu.name_table[1] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[1]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 51 powers up on 32KB bank 0", 51,
+                             "vertical wiring, 8KB banks 0-3", "wrong power-on state");
+    }
+
+    /* $6000 write clears mode bit 0: 16KB at $8000 = 8KB pages 0/1, $C000 = pages 14/15. */
+    nes_test_cpu_write(nes, 0x6000, 0x00u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(14u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+
+    /* $C000-$DFFF: bank = value & 0x0F, keeping mode bit 0 (still 0) -> bank 5 = 8KB pages 20/21
+       and the fixed second half (5 << 1) | 7 = 15 (16KB units) -> 8KB pages 30/31. */
+    nes_test_cpu_write(nes, 0xC005, 0x05u);
+    TEST_EQ_U32(20u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(30u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    /* In 16KB mode the $6000 window is PRG page 0x2F | (bank << 2) = 0x3F. */
+    TEST_EQ_U32((uint32_t)prg[0x3Fu * 8192u], nes_test_cpu_read(nes, 0x6000u));
+
+    /* $8000-$BFFF: bank only (mode keeps bit 0). */
+    nes_test_cpu_write(nes, 0x8000, 0x08u);
+    TEST_EQ_U32(32u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* $6000 write with bit 1 set -> mode = 1 (32KB), bank stays 8 -> pages 32-35. */
+    nes_test_cpu_write(nes, 0x6000, 0x02u);
+    TEST_EQ_U32(32u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(35u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* The $6000-$7FFF window shows PRG page 0x23 | (bank << 2) = 0x23 outright. */
+    TEST_EQ_U32((uint32_t)prg[0x23u * 8192u], nes_test_cpu_read(nes, 0x6000u));
+    TEST_EQ_U32((uint32_t)prg[0x23u * 8192u + 0x1FFFu], nes_test_cpu_read(nes, 0x7FFFu));
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/* Mapper 142 (Kaiser 202): 8KB PRG pages, fixed last page, CPU-clocked IRQ and a
+   $6000-$7FFF window that is work RAM unless the use-ROM bit is set.
+   Authority: Mesen2 Core/NES/Mappers/Kaiser/Kaiser202.h */
+int test_mapper142_kaiser(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 142, 8, 0);          /* 128KB PRG (16 x 8KB) + CHR-RAM */
+    spec.save = 0;                               /* the board RAM is not a battery */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Every board with a RAM window must own that RAM even without a battery bit. */
+    TEST_CHECK(nes->nes_rom.sram != NULL);
+    if (nes->nes_rom.sram != NULL) {
+        /* The window is a full 8KB, so $6000 and $7FFF are different cells. */
+        nes_test_cpu_write(nes, 0x6000u, 0x5Au);
+        nes_test_cpu_write(nes, 0x7FFFu, 0xA5u);
+        TEST_EQ_U32(0x5Au, nes_test_cpu_read(nes, 0x6000u));
+        TEST_EQ_U32(0xA5u, nes_test_cpu_read(nes, 0x7FFFu));
+    }
+
+    /* Power-on: slots 0-2 on page 0, slot 3 hardwired to the last 8KB page (15). */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(15u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* $E000 = 1 selects PRG bank 0, $E000 = 2 selects bank 1 (register index is value-1). */
+    nes_test_cpu_write(nes, 0xE000u, 0x01u);
+    nes_test_cpu_write(nes, 0xF000u, 0x05u);
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    nes_test_cpu_write(nes, 0xE000u, 0x02u);
+    nes_test_cpu_write(nes, 0xF000u, 0x07u);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+
+    /* IRQ: reload = 4 ($8000 low nibble), $C000 bit 1 enables and reloads the counter.
+       The counter fires when it reaches $FFFF, i.e. after 65531 clocks. */
+    nes_test_cpu_write(nes, 0x8000u, 0x04u);
+    nes->nes_cpu.irq_pending = 0;
+    nes_test_cpu_write(nes, 0xC000u, 0x02u);
+    nes->nes_mapper.mapper_cpu_clock(nes, 0xFFFAu);
+    TEST_EQ_U32(0u, nes->nes_cpu.irq_pending);
+    nes->nes_mapper.mapper_cpu_clock(nes, 2u);
+    TEST_EQ_U32(1u, nes->nes_cpu.irq_pending);
+    /* Firing reloads the counter and clears its enable bit (one-shot). */
+    nes->nes_cpu.irq_pending = 0;
+    nes->nes_mapper.mapper_cpu_clock(nes, 0xFFFAu);
+    TEST_EQ_U32(0u, nes->nes_cpu.irq_pending);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/* Mapper 149 (Sachen SA-0036): the 8KB CHR bank is bit 7 of the written byte.
+   Authority: Mesen2 Core/NES/Mappers/Sachen/Sachen_149.h */
+int test_mapper149_sachen_chr(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 149, 2, 2);          /* 32KB PRG + 16KB CHR (2 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+    /* 0x80: bit 7 -> CHR bank 1.  The old implementation read the low bits and stayed on 0. */
+    nes_test_cpu_write(nes, 0x8000u, 0x80u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+    nes_test_cpu_write(nes, 0x8000u, 0x00u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/* Mapper 171 (Kaiser 7058): 32KB PRG fixed, two 4KB CHR pages picked by the address.
+   Authority: Mesen2 Core/NES/Mappers/Kaiser/Kaiser7058.h */
+int test_mapper171_kaiser_chr(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 171, 2, 4);          /* 32KB PRG + 32KB CHR (8 x 4KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* The board leaves CHR on 4KB page 0 for both slots at power-on (Mesen's Kaiser7058 only
+       selects the PRG page), so the second 4KB slot starts on 1KB page 0 as well. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[4] - chr) / 1024u);
+
+    nes_test_cpu_write(nes, 0xF000u, 0x03u);     /* $F000-$F07F -> CHR page 0 */
+    TEST_EQ_U32(12u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    nes_test_cpu_write(nes, 0xF07Fu, 0x02u);     /* still the even half */
+    TEST_EQ_U32(8u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    nes_test_cpu_write(nes, 0xF080u, 0x05u);     /* $F080-$F0FF -> CHR page 1 */
+    TEST_EQ_U32(20u, (uint32_t)(nes->nes_ppu.pattern_table[4] - chr) / 1024u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/* Mapper 207 (Taito X1-005, alternate mirroring): nametable slots come from bit 7 of the
+   two CHR bank registers, and the 128-byte $7F00 window needs the $A3 permission.
+   Authority: Mesen2 Core/NES/Mappers/Taito/TaitoX1005.h (TaitoX1005(true)) */
+int test_mapper207_taito_mirroring(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 207, 16, 16);        /* 256KB PRG (32 x 8KB) + 128KB CHR (128 x 1KB) */
+    spec.save = 0;
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    TEST_CHECK(nes->nes_rom.sram != NULL);
+    /* Power-on: three switchable pages on 0 and the last 8KB fixed in slot 3. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(31u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* $7EF0 = 0x8A: CHR pages 0/1 = 10/11 and NT slots 0/1 -> VRAM screen B (bit 7 set). */
+    nes_test_cpu_write(nes, 0x7EF0u, 0x8Au);
+    TEST_EQ_U32(10u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    TEST_EQ_U32(11u, (uint32_t)(nes->nes_ppu.pattern_table[1] - chr) / 1024u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.ppu_vram[1] ||
+        nes->nes_ppu.name_table[1] != nes->nes_ppu.ppu_vram[1]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 207 alternate mirroring (slots 0/1)", 207,
+                             "both slots on VRAM screen B", "wrong nametable");
+    }
+    /* $7EF1 = 0x0C: CHR pages 2/3 = 12/13, NT slots 2/3 -> screen A. */
+    nes_test_cpu_write(nes, 0x7EF1u, 0x0Cu);
+    TEST_EQ_U32(12u, (uint32_t)(nes->nes_ppu.pattern_table[2] - chr) / 1024u);
+    TEST_EQ_U32(13u, (uint32_t)(nes->nes_ppu.pattern_table[3] - chr) / 1024u);
+    if (nes->nes_ppu.name_table[2] != nes->nes_ppu.ppu_vram[0] ||
+        nes->nes_ppu.name_table[3] != nes->nes_ppu.ppu_vram[0]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 207 alternate mirroring (slots 2/3)", 207,
+                             "both slots on VRAM screen A", "wrong nametable");
+    }
+
+    /* $7EF8 is closed until it holds $A3; the 128 bytes then mirror across both halves of
+       $7F00-$7FFF (so $7F00 aliases $7F80, while $7F7F is a different byte). */
+    nes_test_cpu_write(nes, 0x7EF8u, 0x00u);
+    nes_test_cpu_write(nes, 0x7F00u, 0x5Au);
+    TEST_EQ_U32(0u, nes_test_cpu_read(nes, 0x7F00u));
+    nes_test_cpu_write(nes, 0x7EF8u, 0xA3u);
+    nes_test_cpu_write(nes, 0x7F00u, 0x5Au);
+    nes_test_cpu_write(nes, 0x7F7Fu, 0x3Cu);
+    TEST_EQ_U32(0x5Au, nes_test_cpu_read(nes, 0x7F00u));
+    TEST_EQ_U32(0x5Au, nes_test_cpu_read(nes, 0x7F80u));
+    TEST_EQ_U32(0x3Cu, nes_test_cpu_read(nes, 0x7F7Fu));
+    TEST_EQ_U32(0x3Cu, nes_test_cpu_read(nes, 0x7FFFu));
+
+    /* $7EFE switches the third 8KB PRG page. */
+    nes_test_cpu_write(nes, 0x7EFEu, 0x11u);
+    TEST_EQ_U32(17u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/* Mapper 244 (C&E Decathlon): the bank comes from the *data byte* through permutation
+   tables.  Authority: Mesen2 Core/NES/Mappers/Unlicensed/Mapper244.h */
+int test_mapper244_decathlon(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 244, 8, 8);          /* 128KB PRG (4 x 32KB) + 64KB CHR (8 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* value 0x09: bit 3 set -> CHR, lutChr[0][1] = 1.  An address-based decode stays on 0. */
+    nes_test_cpu_write(nes, 0x8000u, 0x09u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* value 0x23: bit 3 clear -> PRG, lutPrg[2][3] = 3 -> 32KB page 3 = 8KB pages 12-15. */
+    nes_test_cpu_write(nes, 0x8000u, 0x23u);
+    TEST_EQ_U32(12u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* value 0x38: bit 3 set -> CHR, lutChr[3][0] = 0. */
+    nes_test_cpu_write(nes, 0x8000u, 0x38u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
