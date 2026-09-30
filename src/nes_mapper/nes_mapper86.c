@@ -30,11 +30,18 @@ static void nes_mapper_init(nes_t* nes) {
     }
 }
 
+/* Jaleco JF-13 register (Mesen2 Jaleco/JalecoJf13.h):
+     only $6000-$6FFF is the register ($7000-$7FFF is the unsupported audio port);
+     PRG 32KB page = bits 4-5 of the value;
+     CHR  8KB page = bits 0-1, plus bit 6 as the third bank bit.
+   The old implementation read the PRG page from bits 0-1 and the CHR page from bits 4-6,
+   i.e. every field was in the wrong place. */
 static void nes_mapper_sram(nes_t* nes, uint16_t address, uint8_t data) {
-    (void)address;
-    nes_load_prgrom_32k(nes, 0, (uint16_t)(data & 0x03u));
+    if ((address & 0x7000u) != 0x6000u) return;
+
+    nes_load_prgrom_32k(nes, 0, (uint16_t)((data & 0x30u) >> 4));
     if (nes->nes_rom.chr_rom_size > 0) {
-        nes_load_chrrom_8k(nes, 0, (uint8_t)((data >> 4) & 0x07u));
+        nes_load_chrrom_8k(nes, 0, (uint8_t)((data & 0x03u) | ((data >> 4) & 0x04u)));
     }
 }
 

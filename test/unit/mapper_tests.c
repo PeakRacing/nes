@@ -2283,6 +2283,38 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
+/* Mapper 86 (Jaleco JF-13): register at $6000-$6FFF only, PRG page in bits 4-5,
+   CHR page in bits 0-1 plus bit 6.  Authority: Mesen2 Jaleco/JalecoJf13.h */
+int test_mapper86_jf13(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 86, 8, 16);          /* 128KB PRG (4 x 32KB) + 128KB CHR (16 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* bits 4-5 select the 32KB PRG page; bits 0-1 (+bit 6) the 8KB CHR page. */
+    nes_test_cpu_write(nes, 0x6000u, 0x30u);      /* PRG page 3 -> 8KB page 12, CHR 0 */
+    TEST_EQ_U32(12u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    nes_test_cpu_write(nes, 0x6000u, 0x73u);      /* bit 6 is CHR bit 2 -> CHR page 7 */
+    TEST_EQ_U32(12u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* $7000-$7FFF is the audio port, not the register. */
+    nes_test_cpu_write(nes, 0x7000u, 0x00u);
+    TEST_EQ_U32(12u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 /* Mapper 85 (Konami VRC7): the second register of each pair is selected by A3, not A4.
    Authority: Mesen2 Core/NES/Mappers/Konami/VRC7.h */
 int test_mapper85_vrc7_decode(void) {
