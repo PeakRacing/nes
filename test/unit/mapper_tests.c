@@ -946,6 +946,63 @@ int test_mapper226_bank_formula(void) {
  * to build - without it the game uploaded a different, incomplete tile set and ~6% of the screen
  * came out as black blocks (and it showed the 260-in-1 title instead of the 150-in-1 one).
  */
+/*
+ * Mapper 62 ("Super 700-in-1", 2MB PRG + 1MB CHR): the encoding mixes address and data bits, and
+ * Mesen's Mapper62.h and FCEUX's boards/62.cpp agree on it:
+ *   prg page  = ((A & 0x3F00) >> 8) | (A & 0x40)          (7 bits)
+ *   chr page  = ((A & 0x1F) << 2) | (data & 0x03)          (7 bits)
+ *   A bit 5 set  -> 16KB mode (that page in both halves)
+ *   A bit 5 clear -> 32KB mode (the aligned pair page & 0xFE and +1)
+ *   mirroring = A bit 7 (0 = vertical, 1 = horizontal)
+ * The previous implementation read `address >> 6` as the PRG page, data bit 7 as the mode and a
+ * different CHR formula, and never set the mirroring - the 700-in-1 stayed blank.
+ */
+int test_mapper62_super_700in1(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 62, 128, 128);       /* 2MB PRG (128 x 16KB) + 1MB CHR (128 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the slots can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: 16KB bank 0 at $8000 and bank 1 at $A000 (8KB slots 0 and 2). */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* $8045 with data 2: prg page = ((0x8045 & 0x3F00) >> 8) | 0x40 = 64, bit 5 clear -> 32KB mode
+       on the aligned pair 64/65; chr page = ((0x8045 & 0x1F) << 2) | 2 = 22. */
+    nes_test_cpu_write(nes, 0x8045, 0x02u);
+    TEST_EQ_U32(64u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(65u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+    TEST_EQ_U32(22u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* $A120: prg page = ((0xA120 & 0x3F00) >> 8) | (0xA120 & 0x40) = 0x21 | 0 = 33, bit 5 set ->
+       16KB mode, so page 33 fills both halves; the CHR page follows the low address bits again. */
+    nes_test_cpu_write(nes, 0xA120, 0x00u);
+    TEST_EQ_U32(33u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(33u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* The data bits 1-0 are the inner CHR bits: $801F gives ((0x1F) << 2) | 3 = 127. */
+    nes_test_cpu_write(nes, 0x801F, 0x03u);
+    TEST_EQ_U32(127u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* Address bit 7 is the mirroring. */
+    nes_test_cpu_write(nes, 0x8080, 0x00u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 62 mirroring comes from address bit 7", 62,
+                             "horizontal wiring when bit 7 is set", "wrong nametable wiring");
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper235_open_bus(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 235, 128, 0);        /* 2MB PRG = 64 x 32KB pages, so bank >= 64 is out */
