@@ -72,6 +72,7 @@ int test_mapper249_waixing_permute(void);
 int test_mapper58_dendy_address_register(void);
 int test_mapper255_bmc_pcb018(void);
 int test_mapper235_golden_game(void);
+int test_mapper235_open_bus(void);
 int test_mapper226_bank_formula(void);
 int test_mapper78_jf16_mirroring(void);
 int test_mapper99_vs_latch(void);

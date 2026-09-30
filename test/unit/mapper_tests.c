@@ -940,6 +940,41 @@ int test_mapper226_bank_formula(void) {
  * horizontal.  The previous implementation used A & 0xFF as the bank, bit 8 as the mode and bit 9
  * as the mirroring, so 260合1 only drew its title over a blank list.
  */
+/*
+ * Mapper 235 open bus: FCEUX's M235Read answers with the data bus latch while the selected bank is
+ * past the end of PRG, and `260合1(150合1)` uses exactly that read to decide which of its two menus
+ * to build - without it the game uploaded a different, incomplete tile set and ~6% of the screen
+ * came out as black blocks (and it showed the 260-in-1 title instead of the 150-in-1 one).
+ */
+int test_mapper235_open_bus(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 235, 128, 0);        /* 2MB PRG = 64 x 32KB pages, so bank >= 64 is out */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* An ordinary, in-range read must still come from the mapped bank (regression guard for the
+       hand-written read_prg that this board installs). */
+    TEST_EQ_U32((uint32_t)nes->nes_cpu.prg_banks[0][0x1234], (uint32_t)nes_test_cpu_read(nes, 0x9234));
+
+    /* $831F: bank = ((0x300 >> 3) | 0x1F) = 127, past the 64 pages of this image -> open bus.
+       The write stores the data byte as the bus latch... */
+    nes_test_cpu_write(nes, 0x831F, 0x5Au);
+    /* ...so the next PRG read answers with it (and clears the flag)... */
+    TEST_EQ_U32(0x5Au, (uint32_t)nes_test_cpu_read(nes, 0x8000));
+    /* ...and the one after that goes back to the normal mapping. */
+    TEST_EQ_U32((uint32_t)nes->nes_cpu.prg_banks[0][0x0000], (uint32_t)nes_test_cpu_read(nes, 0x8000));
+
+    /* The mapping itself is untouched by the out-of-range write, so the slots still hold the page
+       that was selected before it. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper235_golden_game(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 235, 128, 0);        /* 2MB PRG (128 x 16KB) + 8KB CHR-RAM */

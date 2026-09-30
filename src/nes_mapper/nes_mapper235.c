@@ -90,6 +90,20 @@ static void mapper235_sync(nes_t* nes) {
     }
 }
 
+/* FCEUX's M235Read answers with the data bus latch while the selected bank is past the end of
+ * PRG.  This core's mapper_read_prg hook *replaces* the normal PRG read outright (nes_cpu.c:163),
+ * so the in-range case below replicates that default read (prg_banks[(addr >> 13) - 4]) exactly -
+ * normal fetches are byte-for-byte unchanged - and only the out-of-range case returns the latch.
+ * Installed in init (it needs the register block to exist first). */
+static uint8_t nes_mapper_read_prg(nes_t* nes, uint16_t address) {
+    mapper235_t* m = (mapper235_t*)nes->nes_mapper.mapper_register;
+    if (m != NULL && m->open_bus) {
+        m->open_bus = 0;
+        return m->last_data;
+    }
+    return nes->nes_cpu.prg_banks[(uint8_t)((address >> 13) - 4u)][address & 0x1FFFu];
+}
+
 static void nes_mapper_init(nes_t* nes) {
     if (nes->nes_mapper.mapper_register == NULL) {
         nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper235_t));
@@ -101,6 +115,7 @@ static void nes_mapper_init(nes_t* nes) {
     /* CHR-RAM board: attach the 8KB pattern window unconditionally. */
     nes_load_chrrom_8k(nes, 0, 0);
     mapper235_sync(nes);
+    nes->nes_mapper.mapper_read_prg = nes_mapper_read_prg;
 }
 
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
@@ -112,10 +127,6 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     mapper235_sync(nes);
 }
 
-/* NOTE: FCEUX also models the board's open bus (a bank past the end of PRG answers with the data
- * bus latch).  This core's mapper_read_prg hook *replaces* the normal PRG read outright
- * (src/nes_cpu.c:163), so installing one here would blank every fetch; the out-of-range case is
- * therefore left to the ordinary mapping. */
 
 static void nes_mapper_state_reapply(nes_t* nes) {
     mapper235_sync(nes);

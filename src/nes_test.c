@@ -172,6 +172,27 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
             }
         }
     }
+    /* CHR-BYTES: with NES_DBG_CHRDUMP=1, print the pattern-table bytes of the tiles that the
+       `260合1` menu draws with palette 1 (they render as colour 0 in this core).  The trigger is a
+       write to $2001, i.e. about once per frame, so the cost is negligible and the last dump is
+       the final state.  All of this stays inside the NES_TEST_MODE block. */
+    if (address == 0x2001u && getenv("NES_DBG_CHRDUMP") != NULL) {
+        const uint8_t* chr = nes->nes_rom.chr_rom;
+        static const unsigned tiles[] = { 0x60u, 0x29u, 0xAAu, 0xA9u, 0xD8u, 0xDEu, 0xFCu };
+        unsigned i;
+        if (chr != NULL) {
+            long nz = 0;
+            for (i = 0; i < 8192u; i++) { if (chr[i]) nz++; }
+            fprintf(stderr, "[CHR-BYTES] 非零 = %ld / 8192\n", nz);
+            for (i = 0; i < (unsigned)(sizeof(tiles) / sizeof(tiles[0])); i++) {
+                const unsigned t = tiles[i];
+                unsigned k;
+                fprintf(stderr, "[CHR-BYTES] tile $%02X @ %04X:", t, t * 16u);
+                for (k = 0; k < 16u; k++) { fprintf(stderr, " %02X", (unsigned)chr[t * 16u + k]); }
+                fprintf(stderr, "\n");
+            }
+        }
+    }
     if (wlog == NULL || lines >= 200000) {
         return;
     }

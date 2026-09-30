@@ -51,6 +51,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "69 5b audio write", test_mapper69_5b_audio_write},
         {"mapper", "17 power-on slots", test_mapper17_power_on_slots},
         {"mapper", "11 chr bank select", test_mapper11_chr_bank_select},
+        {"mapper", "235 open bus", test_mapper235_open_bus},
         {"mapper", "235 golden game", test_mapper235_golden_game},
         {"mapper", "255 bmc pcb018", test_mapper255_bmc_pcb018},
         {"mapper", "58 dendy address register", test_mapper58_dendy_address_register},
