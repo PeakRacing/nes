@@ -196,6 +196,12 @@ static const nes_romdb_entry_t romdb[] = {
        image would not load at all.  Mesen's database: 0D98DB53 -> mapper 114 (the scrambled
        MMC3 used by the 狮子王 pirate), 256KB PRG + 256KB CHR. */
     { 0x0D98DB53u, 114u, 0u, 0u, 0u, 0u, 0u },
+    /* 反恐精英 [恒格电子]: the header claims mapper 178, the board is the mapper 241 one
+       (1024KB PRG + 8KB CHR-RAM) - Mesen's database: FB2B6B10 -> 241 (frame 35). */
+    { 0xFB2B6B10u, 241u, 0u, 0u, 0u, 0u, 0u },
+    /* 星际争霸 [恒格电子]: header again claims 178, Mesen's database says 177
+       (512KB PRG + 8KB CHR-RAM): B5E83C9A -> 177 (frame 25). */
+    { 0xB5E83C9Au, 177u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*

@@ -17,67 +17,126 @@
 #include "nes.h"
 
 /*
- * https://www.nesdev.org/wiki/INES_Mapper_178
- * Mapper 178 — Waixing FC-037 (大航海 / Daikoukai variant).
+ * Mapper 178 - Waixing (三国忠烈传 / 宠物大家族 / 大航海7 ...).
+ * Authority: Mesen2 Core/NES/Mappers/Waixing/Waixing178.h.
  *
- * Individual 8KB PRG banks are selected by writing to $6000-$6003
- * via the SRAM range (mapper_sram):
- *   $6000: 8KB PRG bank for slot 0 ($8000-$9FFF)
- *   $6001: 8KB PRG bank for slot 1 ($A000-$BFFF)
- *   $6002: 8KB PRG bank for slot 2 ($C000-$DFFF)
- *   $6003: 8KB PRG bank for slot 3 ($E000-$FFFF)
- * No IRQ.
+ * Four registers live at $4800-$4FFF (selected by addr & 3), the PRG page size is 16KB and
+ * CHR is one fixed 8KB page:
+ *
+ *   regs[0] bit 0 : mirroring (1 = horizontal, 0 = vertical)
+ *           bit 1 : 32KB mode - slot 0 takes the small bank, slot 1 the fixed one
+ *           bit 2 : in that mode slot 1 becomes (bbank << 3) | 6 | regs[1] bit 0,
+ *                   otherwise both halves show the same bank
+ *   regs[1] bits 0-2 : small PRG bank (sbank; bit 0 is also reused by the 32KB mode)
+ *   regs[2]          : big PRG bank (bbank, shifted left by 3)
+ *   regs[3] bits 0-1 : WRAM bank at $6000-$7FFF - the board has 32KB of work RAM
+ *
+ * Power-on runs the same path with every register zero: 32KB starting at page 0.
+ *
+ * The old implementation was a different board (four independent 8KB bank registers written
+ * at $6000-$6003), so the Waixing games never left their power-on mapping.
  */
 
 typedef struct {
-    uint8_t prg[4];
-    uint8_t prg_bank_count;
-} mapper178_register_t;
+    uint8_t  regs[4];
+    uint16_t prg_bank_count;    /* 16KB units */
+    uint8_t* wram;              /* 32KB board RAM, 4 x 8KB banks */
+} mapper178_t;
+
+#define MAPPER178_WRAM_SIZE (0x8000u)
 
 static void nes_mapper_deinit(nes_t* nes) {
+    mapper178_t* m = (mapper178_t*)nes->nes_mapper.mapper_register;
+    if (m != NULL && m->wram != NULL) {
+        nes_free(m->wram);
+        m->wram = NULL;
+    }
     nes_free(nes->nes_mapper.mapper_register);
     nes->nes_mapper.mapper_register = NULL;
 }
 
-static void nes_mapper_init(nes_t* nes) {
-    if (nes->nes_mapper.mapper_register == NULL) {
-        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper178_register_t));
-        if (nes->nes_mapper.mapper_register == NULL) return;
+static void mapper178_update(nes_t* nes) {
+    mapper178_t* m = (mapper178_t*)nes->nes_mapper.mapper_register;
+    const uint16_t sbank = (uint16_t)(m->regs[1] & 0x07u);
+    const uint16_t bbank = m->regs[2];
+
+    if (m->regs[0] & 0x02u) {
+        nes_load_prgrom_16k(nes, 0, (uint16_t)((bbank << 3) | sbank));
+        if (m->regs[0] & 0x04u) {
+            nes_load_prgrom_16k(nes, 1, (uint16_t)((bbank << 3) | 0x06u | (m->regs[1] & 0x01u)));
+        } else {
+            nes_load_prgrom_16k(nes, 1, (uint16_t)((bbank << 3) | 0x07u));
+        }
+    } else {
+        const uint16_t bank = (uint16_t)((bbank << 3) | sbank);
+        if (m->regs[0] & 0x04u) {
+            nes_load_prgrom_16k(nes, 0, bank);
+            nes_load_prgrom_16k(nes, 1, bank);
+        } else {
+            /* SelectPrgPage2x(0, bank): two consecutive 16KB pages. */
+            nes_load_prgrom_16k(nes, 0, bank);
+            nes_load_prgrom_16k(nes, 1, (uint16_t)(bank + 1u));
+        }
     }
-    mapper178_register_t* r = (mapper178_register_t*)nes->nes_mapper.mapper_register;
-    nes_memset(r, 0, sizeof(mapper178_register_t));
 
-    uint16_t prg_banks = (uint16_t)(nes->nes_rom.prg_rom_size * 2u);
-    r->prg_bank_count  = (uint8_t)prg_banks;
-
-    r->prg[0] = 0u;
-    r->prg[1] = 1u;
-    r->prg[2] = (uint8_t)(prg_banks - 2u);
-    r->prg[3] = (uint8_t)(prg_banks - 1u);
-
-    nes_load_prgrom_8k(nes, 0, r->prg[0]);
-    nes_load_prgrom_8k(nes, 1, r->prg[1]);
-    nes_load_prgrom_8k(nes, 2, r->prg[2]);
-    nes_load_prgrom_8k(nes, 3, r->prg[3]);
-
-    nes_load_chrrom_8k(nes, 0, 0);
+    if (nes->nes_rom.four_screen == 0) {
+        nes_ppu_screen_mirrors(nes, (m->regs[0] & 0x01u) ? NES_MIRROR_HORIZONTAL : NES_MIRROR_VERTICAL);
+    }
 }
 
-/*
- * $6000-$6003: 8KB PRG bank select for slots 0-3 (address bits[1:0] = slot)
- */
-static void nes_mapper_sram(nes_t* nes, uint16_t address, uint8_t data) {
-    mapper178_register_t* r = (mapper178_register_t*)nes->nes_mapper.mapper_register;
-    if (address <= 0x6003u) {
-        uint8_t slot = (uint8_t)(address & 0x03u);
-        r->prg[slot] = data & 0x0Fu;
-        nes_load_prgrom_8k(nes, slot, r->prg[slot]);
+static void nes_mapper_init(nes_t* nes) {
+    if (nes->nes_mapper.mapper_register == NULL) {
+        nes->nes_mapper.mapper_register = nes_mapper_register_alloc(nes, (uint16_t)sizeof(mapper178_t));
+        if (nes->nes_mapper.mapper_register == NULL) return;
     }
+    mapper178_t* m = (mapper178_t*)nes->nes_mapper.mapper_register;
+    nes_memset(m, 0, sizeof(mapper178_t));
+
+    m->prg_bank_count = (uint16_t)(nes->nes_rom.prg_rom_size);
+
+    m->wram = (uint8_t*)nes_malloc(MAPPER178_WRAM_SIZE);
+    if (m->wram != NULL) {
+        nes_memset(m->wram, 0, MAPPER178_WRAM_SIZE);
+    }
+
+    nes_load_chrrom_8k(nes, 0, 0);
+    mapper178_update(nes);
+}
+
+/* $4800-$4FFF: regs[(addr & 3)] = value (the core routes $4020-$5FFF here). */
+static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
+    mapper178_t* m = (mapper178_t*)nes->nes_mapper.mapper_register;
+    if (address < 0x4800u || address > 0x4FFFu) return;
+    m->regs[address & 0x03u] = data;
+    mapper178_update(nes);
+}
+
+static uint8_t mapper178_wram_bank(mapper178_t* m) {
+    return (uint8_t)(m->regs[3] & 0x03u);
+}
+
+static uint8_t nes_mapper_read_sram(nes_t* nes, uint16_t address) {
+    mapper178_t* m = (mapper178_t*)nes->nes_mapper.mapper_register;
+    if (m->wram == NULL) return 0;
+    return m->wram[(uint32_t)mapper178_wram_bank(m) * 8192u + (address & 0x1FFFu)];
+}
+
+static void nes_mapper_sram(nes_t* nes, uint16_t address, uint8_t data) {
+    mapper178_t* m = (mapper178_t*)nes->nes_mapper.mapper_register;
+    if (m->wram == NULL) return;
+    m->wram[(uint32_t)mapper178_wram_bank(m) * 8192u + (address & 0x1FFFu)] = data;
+}
+
+static void nes_mapper_state_reapply(nes_t* nes) {
+    mapper178_update(nes);
 }
 
 int nes_mapper178_init(nes_t* nes) {
-    nes->nes_mapper.mapper_init   = nes_mapper_init;
-    nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
-    nes->nes_mapper.mapper_sram   = nes_mapper_sram;
+    nes->nes_mapper.mapper_init          = nes_mapper_init;
+    nes->nes_mapper.mapper_deinit        = nes_mapper_deinit;
+    nes->nes_mapper.mapper_apu           = nes_mapper_apu;
+    nes->nes_mapper.mapper_sram          = nes_mapper_sram;
+    nes->nes_mapper.mapper_read_sram     = nes_mapper_read_sram;
+    nes->nes_mapper.mapper_state_reapply = nes_mapper_state_reapply;
     return NES_OK;
 }

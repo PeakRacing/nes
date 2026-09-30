@@ -2283,8 +2283,57 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
-/* Mapper 114 (MMC3 behind a scrambled register interface).
-   Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_114.h */
+/* Mapper 178 (Waixing): 16KB PRG pages, registers at $4800-$4FFF and 32KB of board WRAM.
+   Authority: Mesen2 Core/NES/Mappers/Waixing/Waixing178.h */
+int test_mapper178_waixing(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 178, 32, 1);         /* 512KB PRG (32 x 16KB) + 8KB CHR */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on: every register zero -> 32KB starting at page 0 (SelectPrgPage2x(0, 0)). */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* regs[0] = 0x04 (same bank in both halves), regs[2] = 1, regs[1] = 3
+       -> bank = (1 << 3) | 3 = 11 in both 16KB slots. */
+    nes_test_cpu_write(nes, 0x4800u, 0x04u);
+    nes_test_cpu_write(nes, 0x4802u, 0x01u);
+    nes_test_cpu_write(nes, 0x4801u, 0x03u);
+    TEST_EQ_U32(11u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(11u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* regs[0] = 0x02 selects the 32KB mode: slot 0 = (bbank << 3) | sbank = 11,
+       slot 1 = (bbank << 3) | 7 = 15. */
+    nes_test_cpu_write(nes, 0x4800u, 0x02u);
+    TEST_EQ_U32(11u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(15u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* Mirroring comes from regs[0] bit 0. */
+    nes_test_cpu_write(nes, 0x4800u, 0x03u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 178 mirroring from regs[0] bit 0", 178,
+                             "horizontal wiring", "wrong nametable");
+    }
+
+    /* regs[3] selects one of four 8KB banks of the 32KB WRAM at $6000-$7FFF. */
+    nes_test_cpu_write(nes, 0x6000u, 0x11u);
+    TEST_EQ_U32(0x11u, nes_test_cpu_read(nes, 0x6000u));
+    nes_test_cpu_write(nes, 0x4803u, 0x02u);     /* switch to WRAM bank 2 */
+    TEST_EQ_U32(0u, nes_test_cpu_read(nes, 0x6000u));
+    nes_test_cpu_write(nes, 0x6000u, 0x22u);
+    nes_test_cpu_write(nes, 0x4803u, 0x00u);     /* back to bank 0 */
+    TEST_EQ_U32(0x11u, nes_test_cpu_read(nes, 0x6000u));
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
 int test_mapper114_scrambled_mmc3(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 114, 16, 32);        /* 256KB PRG (32 x 8KB) + 256KB CHR (256 x 1KB) */
