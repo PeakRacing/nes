@@ -2283,6 +2283,39 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
+/* Mapper 12 (MMC3 + one outer CHR bit taken from any write in $4020-$5FFF).
+   Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_12.h */
+int test_mapper12_outer_chr(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 12, 16, 64);         /* 256KB PRG (32 x 8KB) + 512KB CHR (512 x 1KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* MMC3 R0 selects CHR slot 0/1; without the outer bit they stay in the first 256 pages. */
+    nes_test_cpu_write(nes, 0x8000u, 0x00u);
+    nes_test_cpu_write(nes, 0x8001u, 0x04u);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_ppu.pattern_table[1] - chr) / 1024u);
+
+    /* A write in the APU window sets bit0 -> slots 0-3 gain 0x100; slots 4-7 do not. */
+    nes_test_cpu_write(nes, 0x5000u, 0x01u);
+    TEST_EQ_U32(0x104u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    TEST_EQ_U32(0x105u, (uint32_t)(nes->nes_ppu.pattern_table[1] - chr) / 1024u);
+
+    /* bit4 does the same for the high 4KB (MMC3 R2 drives slots 4/5 in mode 0). */
+    nes_test_cpu_write(nes, 0x8000u, 0x02u);
+    nes_test_cpu_write(nes, 0x8001u, 0x0Au);
+    TEST_EQ_U32(0x0Au, (uint32_t)(nes->nes_ppu.pattern_table[4] - chr) / 1024u);
+    nes_test_cpu_write(nes, 0x5000u, 0x11u);
+    TEST_EQ_U32(0x10Au, (uint32_t)(nes->nes_ppu.pattern_table[4] - chr) / 1024u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 /* Mapper 86 (Jaleco JF-13): register at $6000-$6FFF only, PRG page in bits 4-5,
    CHR page in bits 0-1 plus bit 6.  Authority: Mesen2 Jaleco/JalecoJf13.h */
 int test_mapper86_jf13(void) {

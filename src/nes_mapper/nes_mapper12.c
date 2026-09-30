@@ -34,14 +34,26 @@ typedef struct {
     uint8_t irq_reload;
     uint8_t irq_enabled;
     uint8_t prg_bank_count;
-    uint8_t chr_bank_count;
-    uint8_t outer_lo;  /* extra bit for CHR R0/R1 (lower 4KB) */
-    uint8_t outer_hi;  /* extra bit for CHR R2-R5 (upper 4KB) */
+    uint16_t chr_bank_count;
+    uint8_t chr_selection;  /* MMC3_12: bit0 -> CHR slots 0-3, bit4 -> slots 4-7 */
 } mapper12_t;
 
 static void nes_mapper_deinit(nes_t* nes) {
     nes_free(nes->nes_mapper.mapper_register);
     nes->nes_mapper.mapper_register = NULL;
+}
+
+/* MMC3_12 adds one outer CHR bit.  Mesen2 does it inside SelectChrPage:
+     slot 0-3 (low 4KB)  gets page |= 0x100 when chr_selection bit0 is set;
+     slot 4-7 (high 4KB) gets page |= 0x100 when chr_selection bit4 is set. */
+static void mapper12_chr(nes_t* nes, uint8_t slot, uint16_t page) {
+    mapper12_t* m = (mapper12_t*)nes->nes_mapper.mapper_register;
+    if ((slot < 4u && (m->chr_selection & 0x01u)) ||
+        (slot >= 4u && (m->chr_selection & 0x10u))) {
+        page = (uint16_t)(page + 0x100u);
+    }
+    if (m->chr_bank_count != 0u) page %= m->chr_bank_count;
+    nes_load_chrrom_1k(nes, slot, (uint16_t)page);
 }
 
 static void mapper12_update_banks(nes_t* nes) {
@@ -68,28 +80,24 @@ static void mapper12_update_banks(nes_t* nes) {
     /* Apply outer bits: for large CHR ROMs, add 256 to bank numbers */
     /* Since nes_load_chrrom_1k takes uint8_t, the outer bit is ignored when
      * chr_bank_count <= 256, which is the common case on MCU targets. */
-    uint8_t lo_off = (uint8_t)(m->outer_lo ? 0u : 0u);  /* would be 0/256 with uint16 */
-    uint8_t hi_off = (uint8_t)(m->outer_hi ? 0u : 0u);
-    (void)lo_off; (void)hi_off;
-
     if (chr_mode == 0u) {
-        nes_load_chrrom_1k(nes, 0, (uint8_t)((m->bank_values[0] & 0xFEu) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 1, (uint8_t)((m->bank_values[0] | 0x01u) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 2, (uint8_t)((m->bank_values[1] & 0xFEu) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 3, (uint8_t)((m->bank_values[1] | 0x01u) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 4, m->bank_values[2] % m->chr_bank_count);
-        nes_load_chrrom_1k(nes, 5, m->bank_values[3] % m->chr_bank_count);
-        nes_load_chrrom_1k(nes, 6, m->bank_values[4] % m->chr_bank_count);
-        nes_load_chrrom_1k(nes, 7, m->bank_values[5] % m->chr_bank_count);
+        mapper12_chr(nes, 0, (uint16_t)(m->bank_values[0] & 0xFEu));
+        mapper12_chr(nes, 1, (uint16_t)(m->bank_values[0] | 0x01u));
+        mapper12_chr(nes, 2, (uint16_t)(m->bank_values[1] & 0xFEu));
+        mapper12_chr(nes, 3, (uint16_t)(m->bank_values[1] | 0x01u));
+        mapper12_chr(nes, 4, m->bank_values[2]);
+        mapper12_chr(nes, 5, m->bank_values[3]);
+        mapper12_chr(nes, 6, m->bank_values[4]);
+        mapper12_chr(nes, 7, m->bank_values[5]);
     } else {
-        nes_load_chrrom_1k(nes, 0, m->bank_values[2] % m->chr_bank_count);
-        nes_load_chrrom_1k(nes, 1, m->bank_values[3] % m->chr_bank_count);
-        nes_load_chrrom_1k(nes, 2, m->bank_values[4] % m->chr_bank_count);
-        nes_load_chrrom_1k(nes, 3, m->bank_values[5] % m->chr_bank_count);
-        nes_load_chrrom_1k(nes, 4, (uint8_t)((m->bank_values[0] & 0xFEu) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 5, (uint8_t)((m->bank_values[0] | 0x01u) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 6, (uint8_t)((m->bank_values[1] & 0xFEu) % m->chr_bank_count));
-        nes_load_chrrom_1k(nes, 7, (uint8_t)((m->bank_values[1] | 0x01u) % m->chr_bank_count));
+        mapper12_chr(nes, 0, m->bank_values[2]);
+        mapper12_chr(nes, 1, m->bank_values[3]);
+        mapper12_chr(nes, 2, m->bank_values[4]);
+        mapper12_chr(nes, 3, m->bank_values[5]);
+        mapper12_chr(nes, 4, (uint16_t)(m->bank_values[0] & 0xFEu));
+        mapper12_chr(nes, 5, (uint16_t)(m->bank_values[0] | 0x01u));
+        mapper12_chr(nes, 6, (uint16_t)(m->bank_values[1] & 0xFEu));
+        mapper12_chr(nes, 7, (uint16_t)(m->bank_values[1] | 0x01u));
     }
 }
 
@@ -102,7 +110,7 @@ static void nes_mapper_init(nes_t* nes) {
     nes_memset(m, 0, sizeof(mapper12_t));
 
     m->prg_bank_count = (uint8_t)(nes->nes_rom.prg_rom_size * 2u);
-    m->chr_bank_count = (uint8_t)(nes->nes_rom.chr_rom_size * 8u);
+    m->chr_bank_count = (uint16_t)(nes->nes_rom.chr_rom_size * 8u);
     m->bank_values[6] = 0;
     m->bank_values[7] = 1;
 
@@ -134,10 +142,13 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     }
 }
 
-static void nes_mapper_sram(nes_t* nes, uint16_t address, uint8_t data) {
+/* MMC3_12 takes its single register from ANY write in $4020-$5FFF (Mesen2 adds that whole
+   range as a register range), which the core routes to mapper_apu - not to $6001/$6002. */
+static void nes_mapper_apu(nes_t* nes, uint16_t address, uint8_t data) {
     mapper12_t* m = (mapper12_t*)nes->nes_mapper.mapper_register;
-    if (address == 0x6001u) { m->outer_lo = data & 1u; mapper12_update_banks(nes); }
-    else if (address == 0x6002u) { m->outer_hi = data & 1u; mapper12_update_banks(nes); }
+    (void)address;
+    m->chr_selection = data;
+    mapper12_update_banks(nes);
 }
 
 static void nes_mapper_hsync(nes_t* nes) {
@@ -156,7 +167,7 @@ int nes_mapper12_init(nes_t* nes) {
     nes->nes_mapper.mapper_init   = nes_mapper_init;
     nes->nes_mapper.mapper_deinit = nes_mapper_deinit;
     nes->nes_mapper.mapper_write  = nes_mapper_write;
-    nes->nes_mapper.mapper_sram   = nes_mapper_sram;
+    nes->nes_mapper.mapper_apu    = nes_mapper_apu;
     nes->nes_mapper.mapper_hsync  = nes_mapper_hsync;
     return NES_OK;
 }
