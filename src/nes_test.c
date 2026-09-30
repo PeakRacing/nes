@@ -67,6 +67,13 @@ void nes_test_rlog(nes_t* nes, uint16_t address, uint8_t value, uint16_t pc) {
     }
     /* $2002 is polled thousands of times per frame by every game; it drowns the log. */
     if (address == 0x2002u) {
+        /* NES_DBG_2002=1: print a line whenever a $2002 read actually sees the VBlank flag (bit 7),
+           with the PC of the polling instruction.  A game that polls $2002 and never sees bit 7
+           points straight at the VBlank flag or its timing; the PC says which loop is waiting.
+           Only about 60 lines per second, so it is cheap to leave on for a whole run. */
+        if ((value & 0x80u) != 0u && getenv("NES_DBG_2002") != NULL) {
+            fprintf(stderr, "[2002] V=1 pc=%04X\n", (unsigned)pc);
+        }
         return;
     }
     if (rlog == NULL || lines >= 200000) {
