@@ -889,6 +889,57 @@ int test_mapper226_bank_formula(void) {
  * implementation read address bit 4 as a "32KB mode" flag, used only four bank bits and took the
  * mirroring from bit 5, which left the 20-in-1 image on a blank screen.
  */
+/*
+ * Mapper 230 (BMC reset-selected multicart): the board boots into "Contra mode", where only
+ * $8000-$BFFF is switchable (value & 0x07) and $C000-$FFFF stays pinned to the kernel at bank 7 -
+ * *not* to the last bank of the image.  Mesen's Mapper230.h reaches the same state by calling
+ * Reset(true) from InitMapper.  The 22-in-1 (640KB, 40 banks) previously powered up with the
+ * kernel slot on bank 39, so the reset vector came from the wrong bank and the screen stayed
+ * black (verdict ok but every pixel the backdrop colour).
+ */
+int test_mapper230_contra_mode(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 230, 40, 0);         /* 640KB PRG (40 x 16KB) + CHR-RAM, like the ROM */
+    spec.fill = TEST_ROM_FILL_RANDOM;            /* distinct banks so the slots can be compared */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* prg_banks[] are 8KB windows: 0 = $8000, 2 = $C000 - the two 16KB halves. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* Contra mode boots with vertical wiring. */
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[2] ||
+        nes->nes_ppu.name_table[1] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[1]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 230 boots with vertical wiring", 230,
+                             "vertical nametable wiring", "wrong nametable wiring");
+    }
+
+    /* A write moves only the switchable half; the kernel stays pinned at bank 7. */
+    nes_test_cpu_write(nes, 0x8000, 0x03u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* Contra mode masks the bank to three bits (0x3F -> bank 7, still not bank 39). */
+    nes_test_cpu_write(nes, 0x8000, 0x3Fu);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 16384u);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 16384u);
+
+    /* This is a CHR-RAM board, so the pattern window must be mapped even with no CHR ROM. */
+    if (nes->nes_ppu.pattern_table[0] == NULL) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 230 maps its CHR-RAM window", 230,
+                             "pattern table mapped", "CHR window lost");
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 int test_mapper231_bmc_20in1(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 231, 32, 0);         /* 512KB PRG (32 x 16KB) + CHR-RAM, like the ROM */
