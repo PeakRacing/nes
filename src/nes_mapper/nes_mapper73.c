@@ -47,6 +47,20 @@ static void nes_mapper_init(nes_t* nes) {
     nes_load_prgrom_16k(nes, 0, 0);
     nes_load_prgrom_16k(nes, 1, (uint16_t)(nes->nes_rom.prg_rom_size - 1u));
     nes_load_chrrom_8k(nes, 0, 0); /* CHR-RAM */
+    /* $6000-$7FFF must be 8KB of RAM, not a PRG window.  "沙罗曼蛇3" is the Famicom Disk System
+     * Salamander moved onto a VRC3 cartridge, and the FDS hands the game WRAM from $6000 up: it
+     * decompresses the level/name-table source there and reads it straight back while building
+     * the screen.  With a PRG window in place those writes are dropped and the level renders as
+     * structured garbage (blue text-tile lattices) - the reported "sprites but no background".
+     * The core maps nes_rom.sram at $6000-$7FFF, so the board only has to provide the buffer. */
+    if (nes->nes_rom.sram == NULL) {
+        nes->nes_rom.sram = (uint8_t*)nes_malloc(SRAM_SIZE);
+        if (nes->nes_rom.sram != NULL) {
+            nes_memset(nes->nes_rom.sram, 0, SRAM_SIZE);
+        } else {
+            NES_LOG_ERROR("mapper73: failed to allocate work RAM\n");
+        }
+    }
 }
 
 /*

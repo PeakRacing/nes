@@ -76,6 +76,7 @@ const nes_test_case_t* test_cases(size_t* count) {
         {"mapper", "waixing chr-ram window", test_mapper4_waixing_window},
         {"mapper", "mmc3 prg-ram", test_mapper4_wram},
         {"mapper", "vrc4 prg-ram", test_mapper25_wram},
+        {"mapper", "vrc3 prg-ram", test_mapper73_wram},
         {"mapper", "synthetic smoke", test_mapper_synthetic_smoke},
         {"mapper", "write storm", test_mapper_write_storm},
         {"mapper", "bank stress", test_mapper_bank_stress},

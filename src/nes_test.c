@@ -234,7 +234,9 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
             fprintf(stderr, "[OAM] 屏幕内精灵数(Y<$EF) = %u / 64\n", on_screen);
             {
                 /* What the PPU would actually fetch for the first few background tiles: reads
-                   through the live chr_banks[] mapping, so a wrong bank shows up as zeros/dirt. */
+                   through the live chr_banks[] mapping, so a wrong bank shows up as zeros/dirt.
+                   The DMA moment usually has rendering off ($2000 written as $00), so CTRL_B here
+                   is NOT the table the visible frame used - dump both halves unconditionally. */
                 const unsigned bb = (nes->nes_ppu.CTRL_B != 0u) ? 0x1000u : 0x0000u;
                 unsigned t;
                 for (t = 0; t < 4u; t++) {
@@ -245,6 +247,38 @@ void nes_test_wlog(nes_t* nes, uint16_t address, uint8_t data, uint16_t pc) {
                     fprintf(stderr, "[OAM] 背景 tile $%02X @%04X:", t, bb + t * 16u);
                     for (k = 0; k < 16u; k++) { fprintf(stderr, " %02X", (unsigned)q[k]); }
                     fprintf(stderr, "\n");
+                }
+                for (t = 0; t < 4u; t++) {   /* $1000 表的前 4 个 tile，无论 CTRL_B 是什么 */
+                    const unsigned off = 0x1000u + t * 16u;
+                    const uint8_t* q = nes->nes_ppu.chr_banks[off >> 10] + (off & 0x3FFu);
+                    unsigned k;
+                    fprintf(stderr, "[OAM] $1000 tile $%02X:", t);
+                    for (k = 0; k < 16u; k++) { fprintf(stderr, " %02X", (unsigned)q[k]); }
+                    fprintf(stderr, "\n");
+                }
+                for (t = 0; t < 4u; t++) {   /* $0000 表的前 4 个 tile */
+                    const unsigned off = t * 16u;
+                    const uint8_t* q = nes->nes_ppu.chr_banks[0] + off;
+                    unsigned k;
+                    fprintf(stderr, "[OAM] $0000 tile $%02X:", t);
+                    for (k = 0; k < 16u; k++) { fprintf(stderr, " %02X", (unsigned)q[k]); }
+                    fprintf(stderr, "\n");
+                }
+                /* Both 4KB halves, slot by slot.  "Only sprites, no background" means the half the
+                   background table points at was never uploaded to, so report each 1KB slot's
+                   non-zero byte count and which 4KB half it belongs to. */
+                for (t = 0; t < 8u; t++) {
+                    const uint8_t* q = nes->nes_ppu.chr_banks[t];
+                    unsigned k, nz = 0, first_nz = 0xFFFFu;
+                    if (q == NULL) { fprintf(stderr, "[OAM] 段 %u: chr_banks[%u] = NULL\n", t, t); continue; }
+                    for (k = 0; k < 1024u; k++) { if (q[k] != 0u) { nz++; if (first_nz == 0xFFFFu) first_nz = k; } }
+                    fprintf(stderr, "[OAM] 段 %u ($%04X-$%04X) 非零 %4u/1024  首个非零偏移 %s\n",
+                            t, t * 1024u, t * 1024u + 1023u, nz,
+                            (first_nz == 0xFFFFu) ? "（全零）" : "");
+                    if (first_nz != 0xFFFFu) {
+                        fprintf(stderr, "[OAM]    首非零在段内偏移 $%03X ⇒ 全地址 $%04X\n",
+                                first_nz, t * 1024u + first_nz);
+                    }
                 }
             }
             for (i = 0; i < 64u && i < 8u; i++) {   /* 前 8 个精灵的图块内容 */

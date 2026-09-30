@@ -246,6 +246,41 @@ int test_mapper25_wram(void) {
 }
 
 /*
+ * Same class of bug as mapper 25: the board owns work RAM at $6000-$7FFF that the iNES header
+ * does not advertise with a battery bit.  沙罗曼蛇3 is the Famicom Disk System Salamander moved
+ * onto a VRC3 cartridge, and the FDS gives the game WRAM from $6000 up - it decompresses the
+ * level source there and reads it back while building the screen, so an unmapped window makes
+ * the level render as structured garbage over a blank background ("sprites but no background").
+ */
+int test_mapper73_wram(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 73, 8, 1);      /* 128KB PRG, no CHR-ROM (8KB CHR-RAM) */
+    spec.save = 0;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+
+    if (nes->nes_rom.sram != NULL) {
+        nes_free(nes->nes_rom.sram);
+        nes->nes_rom.sram = NULL;
+    }
+    (void)nes->nes_mapper.mapper_init(nes);
+    TEST_CHECK(nes->nes_rom.sram != NULL);
+
+    /* The window the level decompressor fills must read back what it wrote. */
+    nes_test_cpu_write(nes, 0x6000, 0xA5);
+    nes_test_cpu_write(nes, 0x6C3F, 0x3C);
+    nes_test_cpu_write(nes, 0x7FFF, 0x5A);
+    TEST_EQ_U32(0xA5, nes_test_cpu_read(nes, 0x6000));
+    TEST_EQ_U32(0x3C, nes_test_cpu_read(nes, 0x6C3F));
+    TEST_EQ_U32(0x5A, nes_test_cpu_read(nes, 0x7FFF));
+    TEST_EQ_U32(0, nes->nes_rom.save_ram);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * MMC3 boards carry 8KB of PRG-RAM at $6000-$7FFF even when the iNES header has no
  * battery bit (TSROM: Super Mario Bros. 2/USA and friends use it as plain work RAM).
  * Builds with NES_USE_SRAM=0 leave nes_rom.sram NULL, so the board itself has to
