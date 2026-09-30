@@ -2283,8 +2283,51 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
-/* Mapper 208 (MMC3 with a protection latch and a 32KB PRG block register).
-   Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_208.h */
+/* Mapper 199 (MMC3 + four extension registers + private 8KB CHR-RAM).
+   Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_199.h */
+int test_mapper199_ext_regs(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 199, 32, 8);         /* 512KB PRG (64 x 8KB) + 64KB CHR */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: slots 2/3 are the extension registers (0xFE/0xFF -> pages 62/63) and CHR
+       slots 1/3 are exRegs[2]/[3] (1 and 3), which live in the private CHR-RAM. */
+    TEST_EQ_U32(62u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    TEST_EQ_U32(63u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+    TEST_CHECK(nes->nes_ppu.pattern_table[1] < chr || nes->nes_ppu.pattern_table[1] >= chr + 65536u);
+    TEST_CHECK(nes->nes_ppu.pattern_table[3] < chr || nes->nes_ppu.pattern_table[3] >= chr + 65536u);
+    /* ...while slot 0 still follows the MMC3 register file. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* With bank select bit 3 set, $8001 writes extension registers instead. */
+    nes_test_cpu_write(nes, 0x8000u, 0x08u);     /* exRegs[0] */
+    nes_test_cpu_write(nes, 0x8001u, 0x10u);     /* -> PRG slot 2 = page 16 */
+    TEST_EQ_U32(16u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    nes_test_cpu_write(nes, 0x8000u, 0x09u);     /* exRegs[1] */
+    nes_test_cpu_write(nes, 0x8001u, 0x11u);     /* -> PRG slot 3 = page 17 */
+    TEST_EQ_U32(17u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* With bit 3 clear the same writes go to the MMC3 register file again: R0 = 0x20 must
+       land in PRG slot 0 and must NOT touch the extension registers. */
+    nes_test_cpu_write(nes, 0x8000u, 0x06u);
+    nes_test_cpu_write(nes, 0x8001u, 0x20u);
+    TEST_EQ_U32(0x20u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(16u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+
+    /* A CHR page >= 8 comes from CHR-ROM (pointer inside the image). */
+    nes_test_cpu_write(nes, 0x8000u, 0x02u);     /* R2 -> CHR slot 4 in mode 0 */
+    nes_test_cpu_write(nes, 0x8001u, 0x0Au);     /* page 10 */
+    TEST_EQ_U32(10u, (uint32_t)(nes->nes_ppu.pattern_table[4] - chr) / 1024u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+/* Mapper 208 (MMC3 with a protection latch and a 32KB PRG block register). Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_208.h */
 int test_mapper208_protection(void) {
     test_rom_spec_t spec;
     mapper_fill_spec(&spec, 208, 32, 8);         /* 512KB PRG (16 x 32KB blocks) + 64KB CHR */
