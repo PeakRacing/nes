@@ -246,6 +246,70 @@ int test_mapper25_wram(void) {
 }
 
 /*
+ * Mapper 165 (the Chinese Fire Emblem board).  Mesen2's Mmc3Variants/MMC3_165.h is the
+ * authority: standard MMC3 PRG banking plus MMC2-style CHR latches.  CHR slot 0 takes
+ * register[latch0 ? 1 : 0] and slot 1 takes register[latch1 ? 4 : 2]; page 0 means the board's
+ * own 4KB CHR-RAM, anything else a CHR-ROM 4KB page.  The latches flip when the PPU fetches
+ * from tile $FD/$FE, which the core reports through mapper_ppu.  The old implementation was a
+ * simplified MMC2 (one PRG register at $A000, CHR registers at $B000-$E000), so 圣火徽章外传
+ * never reached its title screen.
+ */
+int test_mapper165_fire_emblem(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 165, 32, 16);   /* 512KB PRG (32 x 16KB) + 128KB CHR (16 x 8KB) */
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+
+    /* Power-on: MMC3 mode 0 with bank_values 6/7 = 0/1 -> $8000 = 8KB bank 0,
+       $A000 = bank 1, and the last two banks fixed. */
+    const uint16_t pg8 = (uint16_t)(nes->nes_rom.prg_rom_size * 2u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(1u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+    TEST_EQ_U32((uint32_t)(pg8 - 2u), (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
+    TEST_EQ_U32((uint32_t)(pg8 - 1u), (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* The board owns a 4KB CHR-RAM even though the cart has CHR-ROM. */
+    TEST_CHECK(nes->nes_mapper.mapper_ppu != NULL);
+    /* CHR register R0 = 0 -> slot 0 reads the CHR-RAM, i.e. four 1KB pointers inside one buffer. */
+    nes->nes_mapper.mapper_write(nes, 0x8000, 0x00);   /* select R0 */
+    nes->nes_mapper.mapper_write(nes, 0x8001, 0x00);   /* R0 = 0 -> CHR-RAM */
+    {
+        const uint8_t* p0 = nes->nes_ppu.pattern_table[0];
+        const uint8_t* p1 = nes->nes_ppu.pattern_table[1];
+        /* Must be the board's OWN 4KB buffer: four consecutive 1KB pointers that live outside
+           the CHR-ROM image.  Consecutiveness alone also holds for CHR-ROM pages, so without the
+           "outside CHR-ROM" half this assertion could not flip when the allocation is removed -
+           the reverse-verification trap this project has hit before. */
+        const uint8_t* rom_lo = nes->nes_rom.chr_rom;
+        const uint8_t* rom_hi = rom_lo + (size_t)nes->nes_rom.chr_rom_size * 8192u;
+        const int inside_rom = (p0 >= rom_lo && p0 < rom_hi);
+        if (p0 == NULL || p1 == NULL || (p0 - p1) != -1024 || inside_rom) {
+            test_fixture_free(&f);
+            return mapper_report("mapper 165: CHR register 0 selects the 4KB CHR-RAM", 165,
+                                 "four consecutive 1KB pointers outside CHR-ROM",
+                                 "not the board's CHR-RAM buffer");
+        }
+    }
+    /* R0 = 8 -> CHR-ROM 4KB page 8 >> 2 = 2, i.e. 1KB pages 8..11 of the ROM. */
+    nes->nes_mapper.mapper_write(nes, 0x8000, 0x00);
+    nes->nes_mapper.mapper_write(nes, 0x8001, 0x08);
+    {
+        uint8_t* const chr = nes->nes_rom.chr_rom;
+        const uint32_t off = (uint32_t)(nes->nes_ppu.pattern_table[0] - chr);
+        if (off != 8u * 1024u) {
+            test_fixture_free(&f);
+            return mapper_report("mapper 165: CHR register 8 selects CHR-ROM page 2", 165,
+                                 "pattern_table[0] at CHR offset 8192", "wrong CHR offset");
+        }
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
+/*
  * Mapper 162 (Waixing).  Mesen2's Waixing162.h is the authority: 32KB PRG pages, four registers
  * at $5000-$5FFF selected by address bits 9-8, power-on regs 3/0/0/7, and a bank formula that
  * switches on bits 0 and 2 of regs[3].  The old implementation used one register at $8000, a
