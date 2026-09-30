@@ -60,6 +60,11 @@ static void nes_rom_apply_mirror_override(nes_t* nes) {
 
 /* PRG+CHR CRC32 table — corrects ROMs with wrong mapper in iNES header */
 static const nes_romdb_entry_t romdb[] = {
+          /* 英雄列传2 (Famicom Jump II) — header says mapper 16, actually Bandai FCG-3
+           * (mapper 153, BANDAI-JUMP2 in the Mesen database): 512KB PRG, 8KB CHR-RAM and
+           * 8KB of work RAM at $6000-$7FFF.  Running it as mapper 16 (Bandai FCG with a
+           * serial EEPROM) never enables rendering. */
+          { 0x3F15D20Du, 153u, 0u },
     /* Arkanoid II (J) [!] — header says mapper 70, actually Taito TC0190FMC (mapper 33) */
     { 0x0F141525u, 33u, 0u },
     /* Blackjack by Nice Code V2 (Unl) [o1] — NES 2.0 header claims mapper 4 (MMC3), but the
