@@ -202,6 +202,9 @@ static const nes_romdb_entry_t romdb[] = {
     /* 星际争霸 [恒格电子]: header again claims 178, Mesen's database says 177
        (512KB PRG + 8KB CHR-RAM): B5E83C9A -> 177 (frame 25). */
     { 0xB5E83C9Au, 177u, 0u, 0u, 0u, 0u, 0u },
+    /* 快打传说(中文) / 快打传说 [Gouder]: the header claims mapper 189, but the board is the
+       protection-latched MMC3 of mapper 208 - Mesen's database: 07EB2C12 -> 208. */
+    { 0x07EB2C12u, 208u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*

@@ -2283,6 +2283,62 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
+/* Mapper 208 (MMC3 with a protection latch and a 32KB PRG block register).
+   Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_208.h */
+int test_mapper208_protection(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 208, 32, 8);         /* 512KB PRG (16 x 32KB blocks) + 64KB CHR */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: exRegs[5] = 3 -> the fourth 32KB block (8KB pages 12-15). */
+    TEST_EQ_U32(12u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(15u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* $5000-$57FF latches the scrambler seed, $5800-$5FFF writes through the table
+       (seed 0x0A -> 0x19) and reads back what it stored. */
+    nes_test_cpu_write(nes, 0x5000u, 0x0Au);
+    nes_test_cpu_write(nes, 0x5800u, 0x00u);
+    TEST_EQ_U32(0x19u, nes_test_cpu_read(nes, 0x5800u));
+    nes_test_cpu_write(nes, 0x5801u, 0xFFu);
+    TEST_EQ_U32(0xE6u, nes_test_cpu_read(nes, 0x5801u));   /* 0xFF ^ 0x19 */
+
+    /* $6800-$6FFF and $4800-$4FFF both set the 32KB PRG block. */
+    nes_test_cpu_write(nes, 0x6800u, 0x08u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    nes_test_cpu_write(nes, 0x4800u, 0x09u);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    nes_test_cpu_write(nes, 0x4800u, 0x18u);               /* 0x18 -> block 2 */
+    TEST_EQ_U32(8u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+
+    /* The MMC3 PRG registers must NOT move the window on this board... */
+    nes_test_cpu_write(nes, 0x8000u, 0x06u);
+    nes_test_cpu_write(nes, 0x8001u, 0x20u);
+    TEST_EQ_U32(8u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    /* ...but the MMC3 CHR registers still work. */
+    nes_test_cpu_write(nes, 0x8000u, 0x00u);
+    nes_test_cpu_write(nes, 0x8001u, 0x06u);
+    TEST_EQ_U32(6u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 1024u);
+    TEST_EQ_U32(7u, (uint32_t)(nes->nes_ppu.pattern_table[1] - chr) / 1024u);
+
+    /* Mirroring is the MMC3 one. */
+    nes_test_cpu_write(nes, 0xA000u, 0x01u);
+    if (nes->nes_ppu.name_table[0] != nes->nes_ppu.name_table[1] ||
+        nes->nes_ppu.name_table[2] != nes->nes_ppu.name_table[3] ||
+        nes->nes_ppu.name_table[0] == nes->nes_ppu.name_table[2]) {
+        test_fixture_free(&f);
+        return mapper_report("mapper 208 mirroring via $A000", 208,
+                             "horizontal wiring", "wrong nametable");
+    }
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 /* Mapper 250 (MMC3 with the register index on address bit 10).
    Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_250.h */
 int test_mapper250_mmc3_a10(void) {
