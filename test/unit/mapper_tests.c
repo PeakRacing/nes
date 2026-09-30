@@ -2283,6 +2283,40 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
+/* Mapper 85 (Konami VRC7): the second register of each pair is selected by A3, not A4.
+   Authority: Mesen2 Core/NES/Mappers/Konami/VRC7.h */
+int test_mapper85_vrc7_decode(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 85, 8, 8);           /* 128KB PRG (16 x 8KB) + 64KB CHR (64 x 1KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    /* Power-on: only slot 3 is fixed to the last page. */
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(15u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
+
+    /* $8008 is PRG slot 1 (before the fix this A3 form landed in slot 0). */
+    nes_test_cpu_write(nes, 0x8008u, 0x05u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(5u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+    /* $8010 is only an alias of $8008. */
+    nes_test_cpu_write(nes, 0x8010u, 0x06u);
+    TEST_EQ_U32(6u, (uint32_t)(nes->nes_cpu.prg_banks[1] - prg) / 8192u);
+
+    /* $A008 selects CHR slot 1, $D008 selects CHR slot 7. */
+    nes_test_cpu_write(nes, 0xA008u, 0x03u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_ppu.pattern_table[1] - chr) / 1024u);
+    nes_test_cpu_write(nes, 0xD008u, 0x11u);
+    TEST_EQ_U32(0x11u, (uint32_t)(nes->nes_ppu.pattern_table[7] - chr) / 1024u);
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 /* Mapper 132 (TXC 22211A, the non-JV001 scrambler).
    Authority: Mesen2 Core/NES/Mappers/Txc/Txc22211A.h + Txc/TxcChip.h */
 int test_mapper132_txc(void) {

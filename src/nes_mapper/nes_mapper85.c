@@ -119,22 +119,28 @@ static const nes_mirror_type_t vrc7_mirror_table[4] = {
 static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     mapper85_register_t* r = (mapper85_register_t*)nes->nes_mapper.mapper_register;
 
-    /* VRC7 register decode: bit4 (A4) selects secondary register within each pair.
-     * Bit3 is ignored (masked away by & 0xF010), so $x008 aliases to $x000. */
+    /* VRC7 register decode (Mesen2 Konami/VRC7.h): the second register of each pair is
+     * selected by A3, not A4.  Addresses with A4 set are first folded onto the A3 form,
+     * except the audio port $9010/$9030 which is deliberately left alone. */
+    if ((address & 0x10u) && (address & 0xF010u) != 0x9010u) {
+        address = (uint16_t)((address | 0x08u) & ~0x10u);
+    }
+
     if (address >= 0xA000u && address <= 0xDFFFu) {
-        uint16_t reg = (uint16_t)(address & 0xF010u);
-        uint8_t idx = (uint8_t)(((reg >> 4u) & 1u) | ((reg - 0xA000u) >> 11u));
+        /* Slot: A/B/C/D select CHR pages 0/2/4/6, A3 the odd page of each pair. */
+        const uint8_t idx = (uint8_t)(((((address >> 14u) & 1u) * 2u) +
+                                       ((address >> 12u) & 1u)) * 2u + ((address >> 3u) & 1u));
         r->chr[idx] = data;
         mapper85_set_chr_bank(nes, idx, r->chr[idx]);
         return;
     }
 
-    switch (address & 0xF010u) {
+    switch (address & 0xF038u) {
     case 0x8000u:
         r->prg[0] = data;
         nes_load_prgrom_8k(nes, 0, r->prg[0]);
         break;
-    case 0x8010u:
+    case 0x8008u:
         r->prg[1] = data;
         nes_load_prgrom_8k(nes, 1, r->prg[1]);
         break;
@@ -149,7 +155,7 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
             nes_ppu_screen_mirrors(nes, vrc7_mirror_table[r->mirror]);
         }
         break;
-    case 0xE010u:
+    case 0xE008u:
         r->irq_latch = data;
         break;
     case 0xF000u:
@@ -162,7 +168,7 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
         }
         nes->nes_cpu.irq_pending = 0;
         break;
-    case 0xF010u:
+    case 0xF008u:
         nes->nes_cpu.irq_pending = 0;
         r->irq_enable = r->irq_enable_ack;
         break;
