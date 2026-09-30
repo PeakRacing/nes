@@ -207,8 +207,10 @@ static const nes_romdb_entry_t romdb[] = {
     { 0x07EB2C12u, 208u, 0u, 0u, 0u, 0u, 0u },
     /* 吞食天地2-诸葛孔明传(中文): the header claims mapper 4, but the board is the MMC3
        variant of mapper 198 (exReg PRG slots + 4KB WRAM mirrored over $5000-$7FFF) -
-       Mesen's database: AC05EBB7 -> 198 (frame 13; as mapper 4 the screen stays blank). */
-    { 0xAC05EBB7u, 198u, 0u, 0u, 0u, 0u, 0u },
+       Mesen's database: 8599D7A1 -> 198 (verified: frame 13 as 198, blank as 4).
+       NOTE: the 1MB "吞食天地2-诸葛孔明传.nes" is a different dump (CRC AC05EBB7) and is
+       deliberately NOT listed here. */
+    { 0x8599D7A1u, 198u, 0u, 0u, 0u, 0u, 0u },
 };
 
 /*

@@ -2283,6 +2283,40 @@ int test_mapper187_waixing_outer(void) {
     return TEST_PASS;
 }
 
+/* Mapper 132 (TXC 22211A, the non-JV001 scrambler).
+   Authority: Mesen2 Core/NES/Mappers/Txc/Txc22211A.h + Txc/TxcChip.h */
+int test_mapper132_txc(void) {
+    test_rom_spec_t spec;
+    mapper_fill_spec(&spec, 132, 8, 8);          /* 128KB PRG (4 x 32KB) + 64KB CHR (8 x 8KB) */
+    spec.fill = TEST_ROM_FILL_RANDOM;
+    test_fixture_t f;
+    TEST_CHECK(test_fixture_make(&f, &spec));
+    nes_t* nes = f.nes;
+    uint8_t* const prg = nes->nes_rom.prg_rom;
+    uint8_t* const chr = nes->nes_rom.chr_rom;
+
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(0u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* This chip powers on NOT inverted with mask 0x07: staging 0x07 and inverter 0x08
+       (value 0x0F at $4102) latch accumulator 0x07 at $4100. */
+    nes_test_cpu_write(nes, 0x4102u, 0x0Fu);
+    nes_test_cpu_write(nes, 0x4100u, 0x00u);
+    /* A write at $8000+ latches output = (acc & 0x0F) | ((inverter & 0x08) << 1) = 0x17
+       -> PRG 32KB page = (0x17 >> 2) & 1 = 1 (8KB page 4), CHR 8KB page = 0x17 & 3 = 3. */
+    nes_test_cpu_write(nes, 0xC100u, 0x00u);
+    TEST_EQ_U32(4u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
+    TEST_EQ_U32(3u, (uint32_t)(nes->nes_ppu.pattern_table[0] - chr) / 8192u);
+
+    /* The read port returns (open bus & 0xF0) | (txc.Read() & 0x0F); this core has no open
+       bus nibble here, so the value is the chip byte masked to the low nibble:
+       (0x07 | 0x08) & 0x0F = 0x0F. */
+    TEST_EQ_U32(0x0Fu, nes_test_cpu_read(nes, 0x4100u));
+
+    test_fixture_free(&f);
+    return TEST_PASS;
+}
+
 /* Mapper 198 (MMC3 variant: exReg PRG slots + 4KB WRAM mirrored over $5000-$7FFF).
    Authority: Mesen2 Core/NES/Mappers/Mmc3Variants/MMC3_198.h */
 int test_mapper198_mmc3_variant(void) {
