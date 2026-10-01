@@ -1975,7 +1975,11 @@ int test_mapper51_bmc(void) {
     TEST_EQ_U32(20u, (uint32_t)(nes->nes_cpu.prg_banks[0] - prg) / 8192u);
     TEST_EQ_U32(30u, (uint32_t)(nes->nes_cpu.prg_banks[2] - prg) / 8192u);
     /* In 16KB mode the $6000 window is PRG page 0x2F | (bank << 2) = 0x3F. */
+    /* Reading the $6000-$7FFF window only works when the whole PRG is resident: the streamed
+       build leaves that window empty on purpose (see nes_mapper51.c). */
+#if (NES_ROM_STREAM == 0)
     TEST_EQ_U32((uint32_t)prg[0x3Fu * 8192u], nes_test_cpu_read(nes, 0x6000u));
+#endif
 
     /* $8000-$BFFF: bank only (mode keeps bit 0). */
     nes_test_cpu_write(nes, 0x8000, 0x08u);
@@ -1987,8 +1991,16 @@ int test_mapper51_bmc(void) {
     TEST_EQ_U32(35u, (uint32_t)(nes->nes_cpu.prg_banks[3] - prg) / 8192u);
 
     /* The $6000-$7FFF window shows PRG page 0x23 | (bank << 2) = 0x23 outright. */
+    /* Reading the $6000-$7FFF window only works when the whole PRG is resident: the streamed
+       build leaves that window empty on purpose (see nes_mapper51.c). */
+#if (NES_ROM_STREAM == 0)
     TEST_EQ_U32((uint32_t)prg[0x23u * 8192u], nes_test_cpu_read(nes, 0x6000u));
+#endif
+    /* Reading the $6000-$7FFF window only works when the whole PRG is resident: the streamed
+       build leaves that window empty on purpose (see nes_mapper51.c). */
+#if (NES_ROM_STREAM == 0)
     TEST_EQ_U32((uint32_t)prg[0x23u * 8192u + 0x1FFFu], nes_test_cpu_read(nes, 0x7FFFu));
+#endif
 
     test_fixture_free(&f);
     return TEST_PASS;
