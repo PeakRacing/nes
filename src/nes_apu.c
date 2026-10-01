@@ -612,7 +612,7 @@ void nes_write_apu_register(nes_t* nes,uint16_t address,uint8_t data){
 }
 
 
-/* ==== cartridge expansion audio (moved here from the old nes_expansion_audio module) ==== */
+/* ==== cartridge expansion audio (moved here from the expansion audio module) ==== */
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
 
    

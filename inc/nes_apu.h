@@ -60,7 +60,7 @@ typedef struct {
     int16_t     out;                        /* last produced level */
 } vrc7_t;
 
-/* ==== cartridge expansion audio (moved here from the old nes_expansion_audio module) ==== */
+/* ==== cartridge expansion audio (moved here from the expansion audio module) ==== */
 
 
 

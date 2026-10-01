@@ -21,7 +21,7 @@
     extern "C" {
 #endif
 
-#include "nes_state_io.h"
+#include "nes_state.h"
 
 struct nes;
 typedef struct nes nes_t;
@@ -63,7 +63,7 @@ typedef struct {
     uint8_t* mapper_battery;
     uint32_t mapper_battery_size;
     void* mapper_data;
-    /* --- save state support (see inc/nes_state_io.h) ---
+    /* --- save state support (see inc/nes_state.h) ---
      * mapper_state_size is filled in by nes_mapper_register_alloc(); the two callbacks are
      * optional and carry board specific data (private RAM, IRQ counters, ...) that the core
      * cannot derive, while mapper_state_reapply rebuilds PRG/CHR/nametable pointers after a

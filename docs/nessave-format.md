@@ -3,7 +3,7 @@
 本文档描述本模拟器的即时存档文件格式，供第三方工具识别、检查或转换。**这不是跨模拟器通用格式**——
 即时存档天然与实现绑定；能跨模拟器互通的是电池存档（裸 SRAM，`<游戏名>.sav`）。
 
-相关实现：`inc/nes_state_io.h`（段 IO）、`inc/nes_state.h`（公共 API）、`src/nes_state.c`（读写与校验）。
+相关实现：`inc/nes_state.h`（段 IO）、`inc/nes_state.h`（公共 API）、`src/nes_state.c`（读写与校验）。
 
 ## 文件命名
 
