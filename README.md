@@ -159,6 +159,28 @@ the upper bits of the controller ports, read outside the 8-bit shift sequence:
 > game does **not** start yet - it stays in its attract loop waiting for a start condition that is
 > still being tracked down (see AGENTS.md), which is why the macro is off by default.
 
+## Runtime requirements
+
+Three configurations. Memory figures are measured (bench front end plus a Cortex-M4 `-Os` build);
+the clock figures are derived from the measured frame cost.
+
+| Goal | Macros | Clock | RAM | ROM (program flash) |
+| :-- | :-- | :-- | :-- | :-- |
+| Minimal (cheapest) | `NES_USE_FS=1`, `NES_ROM_STREAM=1`, `NES_PRG_CACHE_SLOTS=5`, `NES_CHR_CACHE_SLOTS=9`, `NES_ENABLE_SOUND=0`, `NES_RAM_LACK=1`, `NES_USE_SRAM=0`, optionally `NES_FRAME_SKIP=1` | >=100 MHz Cortex-M4 (enable frame skip below that) | **>=128 KiB** (130 KB of buffers measured; allow 160 KiB with stack/RTOS/file system) | **>=128 KiB** (113 KiB of code measured) |
+| Recommended (sound, full speed) | as above with `NES_PRG_CACHE_SLOTS=6`, `NES_CHR_CACHE_SLOTS=12`, `NES_ENABLE_SOUND=1` | >=168 MHz Cortex-M4 / >=216 MHz Cortex-M7 | **>=160 KiB** (128 KiB NROM to 136 KiB MMC3 measured, plus stack/RTOS) | **>=192 KiB** (file system and front end included) |
+| Full speed (ROM resident, no storage reads) | `NES_USE_FS=1`, `NES_ROM_STREAM=0`, `NES_ENABLE_SOUND=1`, `NES_RAM_LACK=1`, optionally `NES_USE_SRAM=1` | same as recommended (>=100 MHz Cortex-M4 with sound off) | **>=96 KiB + the largest cartridge image** (40 KB cart ~= 94.5 KiB; 512 KB cart ~= 1.09 MiB measured) | **>=192 KiB** |
+
+Three notes:
+
+- Game images need **external storage** (SD/SPI flash). The streaming tiers read on demand; the resident tier
+  stops touching storage after loading, so choose it when storage is slow or absent - while **cartridges of
+  256 KB and up require the streaming tier** (resident needs as much RAM as the image itself).
+- Streaming caches cost `NES_PRG_CACHE_SLOTS x 8 KB + NES_CHR_CACHE_SLOTS x 1 KB` (60 KB at the default 6/12,
+  49 KB at the 5/9 minimum), so **below roughly 60 KB of image the resident tier uses less RAM** (a 40 KB NROM
+  needs only 24 KB).
+- `NES_COLOR_DEPTH` supports 16 or 32 only: 16-bit with `NES_RAM_LACK=1` (half frame) gives a 61,440 byte draw
+  buffer, which is the memory floor; `NES_ENABLE_SOUND=1` adds just 882 bytes of sample buffer and about 0.7% frame time.
+
 ## Transplant instructions
 
 ​	The source code in the `inc`and `src` directories does not need to be modified, only the three files in the `port` directory `nes_conf.h` `nes_port.c` `nes_port.h`

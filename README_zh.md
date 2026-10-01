@@ -152,6 +152,22 @@ gitee: https://gitee.com/PeakRacing/nes/releases
 > **已知限制**：开启后画面侧与 Mesen 一致（街机配色），但**还不能真正开局** ——
 > 游戏仍停在演示循环里等它的开始条件（排查记录见 AGENTS.md），所以这个宏默认不开启。
 
+## 运行要求
+
+以 MCU/嵌入式移植为目标的三档配置。内存为实测值（`bench/` 基准工程 + Cortex-M4 `-Os` 编译），主频为按实测帧耗时折算的建议值：
+
+|        目标        |                                                          宏组合                                                          |             主频              |                                      RAM                                       |   ROM（程序 Flash）    |
+| :----------------: | :----------------------------------------------------------------------------------------------------------------------: | :---------------------------: | :----------------------------------------------------------------------------: | :--------------------: |
+|   能跑就行（省成本）   | `NES_USE_FS=1`、`NES_ROM_STREAM=1`、`NES_PRG_CACHE_SLOTS=5`、`NES_CHR_CACHE_SLOTS=9`、`NES_ENABLE_SOUND=0`、`NES_RAM_LACK=1`、`NES_USE_SRAM=0`，可选 `NES_FRAME_SKIP=1` | ≥100 MHz Cortex-M4（不够时开跳帧） | **≥128 KiB**（实测 130 KB 缓冲；另需栈/RTOS/文件系统，建议留 160 KiB） | **≥128 KiB**（实测 113 KiB 代码） |
+|    推荐（有声、流畅）    | 上一档并把 `NES_PRG_CACHE_SLOTS=6`、`NES_CHR_CACHE_SLOTS=12`、`NES_ENABLE_SOUND=1` | ≥168 MHz Cortex-M4 / ≥216 MHz Cortex-M7 |        **≥160 KiB**（实测 128 KiB(NROM)～136 KiB(MMC3)，另需栈/RTOS）         | **≥192 KiB**（含文件系统与前端） |
+| 全速（ROM 常驻、无读盘） | `NES_USE_FS=1`、`NES_ROM_STREAM=0`、`NES_ENABLE_SOUND=1`、`NES_RAM_LACK=1`，可选 `NES_USE_SRAM=1` | 同推荐档（关声音可降到 ≥100 MHz M4） | **≥96 KiB + 目标最大卡带镜像**（实测：40 KB 卡 ≈ 94.5 KiB；512 KB 卡 ≈ 1.09 MiB） |      **≥192 KiB**      |
+
+三点补充：
+
+- 游戏镜像需要**外部存储**（SD/SPI Flash 等）：流式档运行时按需读取；常驻档载入后不再读盘 ⇒ **存储慢或没有存储时选常驻档**，而**大卡带（≥256 KB）必须用流式档**（常驻需要与镜像等量的 RAM）。
+- 流式档的缓存固定占用 `NES_PRG_CACHE_SLOTS×8 KB + NES_CHR_CACHE_SLOTS×1 KB`（默认 6/12 ⇒ 60 KB，下限 5/9 ⇒ 49 KB）⇒ **镜像小于约 60 KB 时常驻反而更省 RAM**（40 KB 的 NROM 只需 24 KB）。
+- `NES_COLOR_DEPTH` 仅支持 16/32：16 位 + `NES_RAM_LACK=1`（半帧）的绘图缓冲为 61,440 B，是内存地板；`NES_ENABLE_SOUND=1` 只多 882 B 采样缓冲、帧耗时约 +0.7%。
+
 ## 移植说明
 
 ​	`inc` 和 `src` 目录下的源码无需修改，只需要修改`port`目录下的三个文件 `nes_conf.h` `nes_port.c` `nes_port.h`
