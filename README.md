@@ -161,17 +161,19 @@ the upper bits of the controller ports, read outside the 8-bit shift sequence:
 
 ## Runtime requirements
 
-Three configurations. Memory figures are measured (bench front end plus a Cortex-M4 `-Os` build);
-the clock figures are derived from the measured frame cost.
+Three configurations. Memory and code figures are measured (bench front end; code built with `-Os` for Thumb-2 on
+`cortex-m3`/`cortex-m4` and for ARM mode on `arm926ej-s`); the clock figures are reference values
+derived from the measured frame cost.
 
 | Goal | Macros | Clock | RAM | ROM (program flash) |
 | :-- | :-- | :-- | :-- | :-- |
-| Minimal (cheapest) | `NES_USE_FS=1`, `NES_ROM_STREAM=1`, `NES_PRG_CACHE_SLOTS=5`, `NES_CHR_CACHE_SLOTS=9`, `NES_ENABLE_SOUND=0`, `NES_RAM_LACK=1`, `NES_USE_SRAM=0`, optionally `NES_FRAME_SKIP=1` | >=100 MHz Cortex-M4 (enable frame skip below that) | **>=128 KiB** (130 KB of buffers measured; allow 160 KiB with stack/RTOS/file system) | **>=128 KiB** (113 KiB of code measured) |
-| Recommended (sound, full speed) | as above with `NES_PRG_CACHE_SLOTS=6`, `NES_CHR_CACHE_SLOTS=12`, `NES_ENABLE_SOUND=1` | >=168 MHz Cortex-M4 / >=216 MHz Cortex-M7 | **>=160 KiB** (128 KiB NROM to 136 KiB MMC3 measured, plus stack/RTOS) | **>=192 KiB** (file system and front end included) |
-| Full speed (ROM resident, no storage reads) | `NES_USE_FS=1`, `NES_ROM_STREAM=0`, `NES_ENABLE_SOUND=1`, `NES_RAM_LACK=1`, optionally `NES_USE_SRAM=1` | same as recommended (>=100 MHz Cortex-M4 with sound off) | **>=96 KiB + the largest cartridge image** (40 KB cart ~= 94.5 KiB; 512 KB cart ~= 1.09 MiB measured) | **>=192 KiB** |
+| Minimal (cheapest) | `NES_USE_FS=1`, `NES_ROM_STREAM=1`, `NES_PRG_CACHE_SLOTS=5`, `NES_CHR_CACHE_SLOTS=9`, `NES_ENABLE_SOUND=0`, `NES_RAM_LACK=1`, `NES_USE_SRAM=0`, optionally `NES_FRAME_SKIP=1` | >=100 MHz class 32-bit MCU (higher end of the range for cacheless Cortex-M3/M4; lower for cached ARM9/ARM11; enable frame skip below that) | **>=128 KiB** (130 KB of buffers measured; allow 160 KiB with stack/RTOS/file system) | **>=128 KiB** (113 KiB with Thumb-2, ~168 KiB in ARM mode) |
+| Recommended (sound, full speed) | as above with `NES_PRG_CACHE_SLOTS=6`, `NES_CHR_CACHE_SLOTS=12`, `NES_ENABLE_SOUND=1` | cacheless Cortex-M3/M4 need roughly 168-216 MHz; cached ARM9/ARM11 and similar are faster per clock and need less | **>=160 KiB** (128 KiB NROM to 136 KiB MMC3 measured, plus stack/RTOS) | **>=192 KiB** (file system and front end included; ~113 KiB of code with Thumb-2) |
+| Full speed (ROM resident, no storage reads) | `NES_USE_FS=1`, `NES_ROM_STREAM=0`, `NES_ENABLE_SOUND=1`, `NES_RAM_LACK=1`, optionally `NES_USE_SRAM=1` | same as recommended (>=100 MHz class with sound off) | **>=96 KiB + the largest cartridge image** (40 KB cart ~= 94.5 KiB; 512 KB cart ~= 1.09 MiB measured) | **>=192 KiB** |
 
-Three notes:
+Four notes:
 
+- **Architecture independent**: the core is plain integer C11 - no FPU or DSP instructions and no ARM-specific extensions (verified to compile for `cortex-m3` and `arm926ej-s`). The real constraint is that **one frame must finish within 16.7 ms** (measurable on the target with `bench/`); cached ARM9/ARM11/RISC-V parts are usually faster per clock than cacheless Cortex-M, so the clock figures above are reference values for cacheless Cortex-M only.
 - Game images need **external storage** (SD/SPI flash). The streaming tiers read on demand; the resident tier
   stops touching storage after loading, so choose it when storage is slow or absent - while **cartridges of
   256 KB and up require the streaming tier** (resident needs as much RAM as the image itself).
