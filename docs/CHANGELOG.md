@@ -2,6 +2,38 @@
 
 # Changelog 
 
+## v1.0.0
+
+Release highlights:
+
+- **APU completed** — the DMC channel is now fully implemented (16 NTSC rates, `$4010`-`$4013`
+  semantics, sample fetch through the CPU bus, end-of-sample IRQ), the APU IRQ line is kept apart
+  from the CPU's shared flag (reading `$4015` no longer swallows mapper interrupts) and the
+  `$4015`/`$4017` semantics were corrected (live interrupt flags, frame-counter reset).
+- **Expansion audio 5/5** — VRC6 (24/26), Sunsoft 5B (69), Namco 163 (19/210/163), MMC5 (5) and
+  now **VRC7** (85) are emulated behind `NES_ENABLE_EXPANSION_AUDIO` (on for desktop builds, off
+  for core/MCU builds where the whole module compiles away).  VRC7 is the project's own compact
+  fixed-point FM model — no third-party emulator code — with the chip's built-in instrument ROM,
+  six two-operator channels, no heap use, and a single branch per sample for boards that are
+  silent.
+- **Mapper audit finished** — 28 boards were rewritten or corrected against the Mesen2 reference
+  and the local corpus (12, 51, 62, 79, 85, 86, 114, 117, 132, 133, 142, 147, 149, 150, 171, 176,
+  178, 187, 198, 199, 207, 227, 235, 240, 242, 244, 245, 250) plus 14 romdb entries for images
+  whose headers name the wrong board.  Mappers with an untrustworthy verdict dropped from 36 to
+  10, and more than 40 games went from blank or load failure to playable.
+- **State and API cleanup** — save states keep the whole APU (expansion audio included) by value,
+  the expansion-audio module was folded into `nes_apu`, `nes_state_io.h` was merged into
+  `nes_state.h`, every header now uses `#pragma once`, and the APU state version was bumped so
+  older state files are skipped safely instead of being misread.
+- **Verification** — 577-image corpus regression: 571 images render, 0 regressions and 0 frame
+  hash changes; 99 unit tests green, including expansion-audio tests that drive real boards and a
+  VRC7 test that asserts the produced waveform moves off its DC baseline.
+
+Known limitations (by design): PPU timing is scanline/pixel level rather than dot level, the
+Zapper light gun and the FDS disk system are not emulated, NES 2.0 plane 1/2 mappers (256/512/558)
+have no reference implementation to follow, and VRC7 tone generation is a compact approximation
+of the real OPLL.
+
 ## v0.3.0
 
 Release highlights:
@@ -154,6 +186,23 @@ The first beta version, which already supports CUP, PPU, mapper0 2, is already p
 # ([英文](# Changelog))
 
 # 更新日志 
+
+## v1.0.0
+
+发布要点：
+
+- **APU 补全** —— DMC 通道完整实现（16 档 NTSC 速率、`$4010`-`$4013` 完整语义、样本经 CPU 总线取字节、结束时置 IRQ）；APU 中断线与 CPU 的共享标志分离（读 `$4015` 不再吞掉 mapper 中断）；`$4015`/`$4017` 语义修正（实时中断标志、帧计数器复位）。
+- **扩展音频 5/5** —— VRC6（24/26）、Sunsoft 5B（69）、Namco 163（19/210/163）、MMC5（5），以及 **VRC7**（85）；整体由 `NES_ENABLE_EXPANSION_AUDIO` 控制（桌面默认开、核心/MCU 默认关，关闭时整块编译掉）。VRC7 是**本项目自研的紧凑定点 FM 模型**（不含第三方代码），带芯片内置乐器 ROM、6 个双算子通道、**不使用堆**；没有发声音的板子每采样只多一次判断。
+- **mapper 审核收尾** —— 28 块板按 Mesen2 权威与本地语料重写/修正（12、51、62、79、85、86、114、117、132、133、142、147、149、150、171、176、178、187、198、199、207、227、235、240、242、244、245、250），并新增 14 条 romdb 条目修正头部谎报的镜像；verdict 不可信的 mapper 由 **36 降到 10**，40 多张游戏从 blank 或加载失败变为可玩。
+- **状态与接口整理** —— 存档按值保存整个 APU（含扩展音频）；扩展音频并入 `nes_apu`；`nes_state_io.h` 并入 `nes_state.h`；全部头文件统一 `#pragma once`；APU 存档版本号提升，旧档按版本安全跳过而不会被误读。
+- **验证** —— 577 张语料回归：571 张出画面、0 回归、0 帧哈希变化；99 个单元测试全绿，其中扩展音频用例驱动真实板子，VRC7 用例断言输出波形确实偏离直流基线。
+
+已知限制（均为既定取舍）：PPU 为行/像素级精度而非逐点；不支持 Zapper 光枪与 FDS 磁碟机；NES 2.0 plane 1/2（256/512/558）无权威实现可循；VRC7 音色为紧凑近似。
+
+## v0.3.0
+
+- **mapper 审核与补全**：按 Mesen2 参考实现与本地语料逐块核对 README「已验证可玩」之外的板子，16 块板重写或修正（51、114、117、142、149、150、171、176、178、207、227、240、244、245、250 等），并新增 romdb 条目修正头部谎报的镜像。
+- 详细内容与逐项权威出处见上方英文段（英文段为本文件的权威版本）。
 
 ## v0.2.0
 

@@ -44,7 +44,7 @@ gitee: [nes: c语言实现的nes模拟器 (gitee.com)](https://gitee.com/PeakRac
 
 - [x] APU (定点计算，含 DMC 通道)
 
-- [x] 扩展音频 (VRC6 / Sunsoft 5B / Namco 163 / MMC5) —— `NES_ENABLE_EXPANSION_AUDIO`，
+- [x] 扩展音频 (VRC6 / Sunsoft 5B / Namco 163 / MMC5 / VRC7) —— `NES_ENABLE_EXPANSION_AUDIO`，
   SDL 前端默认开启，核心/MCU 构建默认关闭（零开销）
 
 **mapper 支持：**

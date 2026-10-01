@@ -28,8 +28,8 @@
     extern "C" {
 #endif
 
-#define NES_VERSION_MAJOR       0
-#define NES_VERSION_MINOR       2
+#define NES_VERSION_MAJOR       1
+#define NES_VERSION_MINOR       0
 #define NES_VERSION_PATCH       0
 
 #define STRINGIFY_HELPER(x)     #x

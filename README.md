@@ -46,7 +46,7 @@ so it can run reliably on resource-constrained hardware such as MCUs.
 
 - [x] APU (Fixed-point calculation, DMC channel included)
 
-- [x] Expansion audio (VRC6, Sunsoft 5B, Namco 163, MMC5) — `NES_ENABLE_EXPANSION_AUDIO`,
+- [x] Expansion audio (VRC6, Sunsoft 5B, Namco 163, MMC5, VRC7) — `NES_ENABLE_EXPANSION_AUDIO`,
   on for the SDL front ends and off (zero cost) for MCU/core builds
 
 **mapper support:**
