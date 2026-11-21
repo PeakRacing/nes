@@ -157,13 +157,10 @@ static inline uint8_t nes_read_cpu(nes_t* nes,uint16_t address){
     return nes_read_cpu_inner(nes, address);
 #endif
 }
-static inline uint8_t nes_read_cpu_inner(nes_t* nes,uint16_t address){
-    /* Most instruction and operand reads come from PRG. */
-    if (address >= 0x8000u) {
-        if (nes->nes_mapper.mapper_read_prg)
-            return nes->nes_mapper.mapper_read_prg(nes, address);
-        return nes->nes_cpu.prg_banks[(address >> 13)-4][address & 0x1fffu];
-    }
+#if defined(__GNUC__)
+__attribute__((noinline))
+#endif
+static uint8_t nes_read_cpu_io(nes_t* nes, uint16_t address){
     switch (address & 0xE000){
         case 0x0000://$0000-$1FFF 2KB internal RAM + Mirrors of $0000-$07FF
             return nes->nes_cpu.cpu_ram[address & (uint16_t)0x07ff];
@@ -199,6 +196,17 @@ static inline uint8_t nes_read_cpu_inner(nes_t* nes,uint16_t address){
             NES_LOG_DEBUG("nes_read_cpu error %04X\n",address);
             return address >> 8;
     }
+}
+
+static inline uint8_t nes_read_cpu_inner(nes_t* nes,uint16_t address){
+    if (address >= 0x8000u) {
+        if (nes->nes_mapper.mapper_read_prg)
+            return nes->nes_mapper.mapper_read_prg(nes, address);
+        return nes->nes_cpu.prg_banks[(address >> 13)-4][address & 0x1fffu];
+    }
+    if (address < 0x2000u)
+        return nes->nes_cpu.cpu_ram[address & 0x07ffu];
+    return nes_read_cpu_io(nes, address);
 }
 
 #if (NES_ENABLE_SOUND == 1)
@@ -405,6 +413,24 @@ static inline uint16_t nes_rel(nes_t* nes){
     a:Absolute::Fetches the value from a 16-bit address anywhere in memory.
 */
 static inline uint16_t nes_abs(nes_t* nes){
+    const uint16_t pc = nes->nes_cpu.PC;
+    /* Both operand bytes share a resident PRG bank in the usual case.
+       Keep bus reads for bank boundaries, PC wrap and custom PRG hooks. */
+    if (pc >= 0x8000u && (pc & 0x1fffu) != 0x1fffu &&
+        !nes->nes_mapper.mapper_read_prg) {
+        const uint8_t* bytes = nes->nes_cpu.prg_banks[(pc >> 13) - 4] + (pc & 0x1fffu);
+        nes->nes_cpu.PC = (uint16_t)(pc + 1u);
+        const uint8_t low = bytes[0];
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+        nes_test_rlog(nes, pc, low, nes->nes_cpu.PC);
+#endif
+        nes->nes_cpu.PC = (uint16_t)(pc + 2u);
+        const uint8_t high = bytes[1];
+#if defined(NES_TEST_MODE) && (NES_TEST_MODE == 1)
+        nes_test_rlog(nes, (uint16_t)(pc + 1u), high, nes->nes_cpu.PC);
+#endif
+        return (uint16_t)low | (uint16_t)((uint16_t)high << 8);
+    }
     const uint8_t low_byte = nes_read_cpu(nes, nes->nes_cpu.PC++);
     const uint16_t high_byte = nes_read_cpu(nes, nes->nes_cpu.PC++) << 8;
     return high_byte | low_byte;
@@ -1588,6 +1614,9 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
 #if defined(NES_TEST_PROFILE) && (NES_TEST_PROFILE == 1)
     nes_test_profile_region_begin(nes, NES_PROF_CPU);
 #endif
+    /* Mapper CPU callbacks are registered at mapper initialization, not by
+       bus writes. Cache that immutable dispatch pointer for this CPU slice. */
+    void (*const mapper_clock)(nes_t*, uint16_t) = nes->nes_mapper.mapper_cpu_clock;
     while (ticks > nes->nes_cpu.cycles){
 #if (NES_TEST_MODE == 1)
         nes_test_trace(nes, nes->nes_cpu.PC);
@@ -1881,7 +1910,10 @@ void nes_opcode(nes_t* nes,uint16_t ticks){
         if (nes->nes_cpu.opcode == 0x40) {
             prev_I = nes->nes_cpu.I;
         }
-        nes_mapper_cpu_tick(nes, (uint16_t)(nes->nes_cpu.cycles - cpu_cycles_before));
+        if (mapper_clock) {
+            uint16_t elapsed = (uint16_t)(nes->nes_cpu.cycles - cpu_cycles_before);
+            if (elapsed) mapper_clock(nes, elapsed);
+        }
         // Check NMI after instruction execution.
         if (nes->nes_cpu.irq_nmi) {
             nes_nmi(nes);

@@ -149,13 +149,17 @@ static void nes_mapper_write(nes_t* nes, uint16_t address, uint8_t data) {
     }
 }
 
-static void mapper24_irq_tick(nes_t* nes) {
+/* No CPU instruction executes inside this callback. Collapse timer events,
+   preserving the final counter and the pending IRQ latch exactly. */
+static void mapper24_irq_advance(nes_t* nes, uint16_t ticks) {
     mapper24_register_t* r = (mapper24_register_t*)nes->nes_mapper.mapper_register;
-    if (r->irq_counter == 0xFFu) {
-        r->irq_counter = r->irq_latch;
-        nes_cpu_irq(nes);
+    const uint16_t until_irq = 256u - r->irq_counter;
+    if (ticks < until_irq) {
+        r->irq_counter = (uint8_t)(r->irq_counter + ticks);
     } else {
-        r->irq_counter++;
+        ticks = (uint16_t)(ticks - until_irq);
+        r->irq_counter = (uint8_t)(r->irq_latch + ticks % (256u - r->irq_latch));
+        nes_cpu_irq(nes);
     }
 }
 
@@ -163,16 +167,14 @@ static void nes_mapper_cpu_clock(nes_t* nes, uint16_t cycles) {
     mapper24_register_t* r = (mapper24_register_t*)nes->nes_mapper.mapper_register;
     if (!r->irq_enable) return;
     if (r->irq_cycle_mode) {
-        while (cycles--) {
-            mapper24_irq_tick(nes);
-        }
+        mapper24_irq_advance(nes, cycles);
         return;
     }
-
     r->irq_cycle_accum = (uint16_t)(r->irq_cycle_accum + cycles * 3u);
-    while (r->irq_cycle_accum >= 341u) {
-        r->irq_cycle_accum = (uint16_t)(r->irq_cycle_accum - 341u);
-        mapper24_irq_tick(nes);
+    if (r->irq_cycle_accum >= 341u) {
+        uint16_t ticks = r->irq_cycle_accum / 341u;
+        r->irq_cycle_accum = (uint16_t)(r->irq_cycle_accum % 341u);
+        mapper24_irq_advance(nes, ticks);
     }
 }
 

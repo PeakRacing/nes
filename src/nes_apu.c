@@ -778,33 +778,40 @@ static uint8_t vrc6_pulse_volume(const nes_apu_exp_t* a, uint8_t index) {
     return (a->vrc6_pulse[index].step <= a->vrc6_pulse[index].duty) ? volume : 0u;
 }
 
-/* Clock the three VRC6 channels once per CPU cycle and return the summed level. */
-static void vrc6_clock(nes_apu_exp_t* a) {
-    if (a->vrc6_halt) return;
-
+/* Advance to timer events rather than visiting every CPU cycle. No writes
+   occur within one output sample; preserve the original endpoint state. */
+static void vrc6_advance(nes_apu_exp_t* a, uint32_t cycles) {
+    if (a->vrc6_halt || cycles == 0u) return;
     for (uint8_t i = 0; i < 2u; i++) {
-        if (a->vrc6_pulse[i].enabled) {
-            a->vrc6_pulse[i].timer--;
-            if (a->vrc6_pulse[i].timer == 0) {
-                a->vrc6_pulse[i].step = (uint8_t)((a->vrc6_pulse[i].step + 1u) & 0x0Fu);
-                a->vrc6_pulse[i].timer =
-                    (int32_t)(a->vrc6_pulse[i].frequency >> a->vrc6_shift) + 1;
-            }
+        if (!a->vrc6_pulse[i].enabled) continue;
+        int32_t timer = a->vrc6_pulse[i].timer;
+        if (timer <= 0 || cycles < (uint32_t)timer) {
+            a->vrc6_pulse[i].timer = timer - (int32_t)cycles;
+            continue;
         }
+        const uint32_t period = (a->vrc6_pulse[i].frequency >> a->vrc6_shift) + 1u;
+        const uint32_t remaining = cycles - (uint32_t)timer;
+        const uint32_t events = remaining / period + 1u;
+        a->vrc6_pulse[i].step = (uint8_t)((a->vrc6_pulse[i].step + events) & 15u);
+        a->vrc6_pulse[i].timer = (int32_t)(period - remaining % period);
     }
-
     if (a->vrc6_saw.enabled) {
-        a->vrc6_saw.timer--;
-        if (a->vrc6_saw.timer == 0) {
-            a->vrc6_saw.step = (uint8_t)((a->vrc6_saw.step + 1u) % 14u);
-            a->vrc6_saw.timer = (int32_t)(a->vrc6_saw.frequency >> a->vrc6_shift) + 1;
-            if (a->vrc6_saw.step == 0u) {
-                a->vrc6_saw.accumulator = 0;
-            } else if ((a->vrc6_saw.step & 0x01u) == 0u) {
-                a->vrc6_saw.accumulator =
-                    (uint8_t)(a->vrc6_saw.accumulator + a->vrc6_saw.acc_rate);
-            }
+        int32_t timer = a->vrc6_saw.timer;
+        if (timer <= 0 || cycles < (uint32_t)timer) {
+            a->vrc6_saw.timer = timer - (int32_t)cycles;
+            return;
         }
+        uint32_t remaining = cycles - (uint32_t)timer;
+        const uint32_t period = (a->vrc6_saw.frequency >> a->vrc6_shift) + 1u;
+        do {
+            a->vrc6_saw.step = (uint8_t)((a->vrc6_saw.step + 1u) % 14u);
+            if (a->vrc6_saw.step == 0u) a->vrc6_saw.accumulator = 0;
+            else if ((a->vrc6_saw.step & 1u) == 0u)
+                a->vrc6_saw.accumulator = (uint8_t)(a->vrc6_saw.accumulator + a->vrc6_saw.acc_rate);
+            if (remaining < period) break;
+            remaining -= period;
+        } while (1);
+        a->vrc6_saw.timer = (int32_t)(period - remaining);
     }
 }
 
@@ -1407,10 +1414,8 @@ void nes_apu_expansion_render(nes_t* nes, uint8_t* buffer, uint16_t start, uint1
         uint32_t acc_q8 = a->n163_acc;             /* reused as a generic sub-cycle accumulator */
         for (uint16_t i = 0; i < count; i++) {
             acc_q8 += step_q8;
-            while (acc_q8 >= 256u) {
-                acc_q8 -= 256u;
-                vrc6_clock(a);
-            }
+            vrc6_advance(a, acc_q8 >> 8);
+            acc_q8 &= 255u;
             const int32_t mixed = (int32_t)buffer[start + i] + (int32_t)vrc6_level(a) / 2;
             buffer[start + i] = (uint8_t)(mixed < 0 ? 0 : (mixed > 255 ? 255 : mixed));
         }

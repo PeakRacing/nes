@@ -211,6 +211,26 @@ static inline const uint8_t* nes_extended_bg_tile(nes_t* nes, uint16_t ex_bank, 
     return nes->nes_rom.chr_rom + address;
 #endif
 }
+/* Expand background opacity without changing palette or sprite hit semantics. */
+static const uint32_t nes_opacity_nibble[16] = {
+    0x00000000u, 0x01000000u, 0x00010000u, 0x01010000u, 0x00000100u, 0x01000100u, 0x00010100u, 0x01010100u, 0x00000001u, 0x01000001u, 0x00010001u, 0x01010001u, 0x00000101u, 0x01000101u, 0x00010101u, 0x01010101u
+};
+static inline void nes_draw_background_opaque(uint8_t* opaque, uint8_t bits) {
+    const uint32_t first = nes_opacity_nibble[bits >> 4];
+    const uint32_t second = nes_opacity_nibble[bits & 15u];
+#if defined(__GNUC__) && defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+    if (!((uintptr_t)opaque & 3u)) {
+        void* aligned = __builtin_assume_aligned(opaque, 4);
+        __builtin_memcpy(aligned, &first, 4);
+        __builtin_memcpy((uint8_t*)aligned + 4, &second, 4);
+        return;
+    }
+#endif
+    opaque[0] = (uint8_t)first; opaque[1] = (uint8_t)(first >> 8);
+    opaque[2] = (uint8_t)(first >> 16); opaque[3] = (uint8_t)(first >> 24);
+    opaque[4] = (uint8_t)second; opaque[5] = (uint8_t)(second >> 8);
+    opaque[6] = (uint8_t)(second >> 16); opaque[7] = (uint8_t)(second >> 24);
+}
 /* Full tiles use constant shifts and one clipping decision for eight pixels. */
 static inline void nes_draw_background_tile(nes_t* nes, nes_color_t* out,
                                             uint8_t x, uint8_t lo, uint8_t hi,
@@ -220,13 +240,14 @@ static inline void nes_draw_background_tile(nes_t* nes, nes_color_t* out,
     out += x;
 #define NES_BG_PIXEL(n, shift) do { \
     const uint8_t value = ((lo >> (shift)) & 1u) | (((hi >> (shift)) & 1u) << 1); \
-    opaque[n] = value != 0; out[n] = colors[value]; \
+    out[n] = colors[value]; \
 } while (0)
     NES_BG_PIXEL(0, 7); NES_BG_PIXEL(1, 6);
     NES_BG_PIXEL(2, 5); NES_BG_PIXEL(3, 4);
     NES_BG_PIXEL(4, 3); NES_BG_PIXEL(5, 2);
     NES_BG_PIXEL(6, 1); NES_BG_PIXEL(7, 0);
 #undef NES_BG_PIXEL
+    nes_draw_background_opaque(opaque, (uint8_t)(lo | hi));
     if (x < 8u && !nes->nes_ppu.MASK_m) {
         for (uint8_t i = 0; i < 8u - x; ++i) {
             opaque[i] = 0;
