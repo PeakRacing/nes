@@ -155,7 +155,7 @@ static inline void nes_apu_envelopes_and_linear_counter(nes_t *nes){
 // https://www.nesdev.org/wiki/APU_Pulse
 static inline void nes_apu_play(nes_t* nes){
     nes_apu_t* apu = &nes->nes_apu;
-    const uint16_t seg = (uint16_t)(apu->clock_count & 3);
+    const uint16_t seg = (uint16_t)(apu->sample_index & 3);
     const uint16_t sample_start = (uint16_t)(seg * nes->timing.samples_per_frame / 4);
     const uint16_t sample_end = (uint16_t)((seg + 1) * nes->timing.samples_per_frame / 4);
 
@@ -196,9 +196,12 @@ static inline void nes_apu_play(nes_t* nes){
 
     // DMC: 每个输出采样把定时器推进"每采样对应的 CPU 周期"（1/256 周期定点），
     // 这样 DAC 电平的变化跟得上采样率，而不是每 1/4 帧才跳一次。
-    uint32_t dmc_step_q8;
+    uint32_t dmc_step_q8,dmc_phase=0;
+    const uint32_t output_samples=(uint32_t)(sample_end-sample_start);
+    const uint32_t clock_seg=apu->clock_count&3U;
+    const uint32_t dmc_samples=(clock_seg+1U)*nes->timing.samples_per_frame/4U-clock_seg*nes->timing.samples_per_frame/4U;
     {
-        const uint32_t seg_samples = (uint32_t)(sample_end - sample_start);
+        const uint32_t seg_samples = dmc_samples;
         const uint32_t seg_cycles = (uint32_t)(nes->timing.cpu_clock / ((uint32_t)4u * nes->timing.frame_rate));
         dmc_step_q8 = (seg_samples != 0u) ? (uint32_t)(((uint64_t)seg_cycles << 8) / seg_samples) : 0u;
     }
@@ -249,7 +252,17 @@ static inline void nes_apu_play(nes_t* nes){
         apu->sample_buffer[i] = (uint8_t)(mixed > 255 ? 255 : mixed);
 
         // DMC 定时器推进（只在本通道使能时才有开销）
-        if (apu->dmc.enabled) nes_apu_dmc_advance(nes, dmc_step_q8);
+        /* Preserve the original DMC CPU clock budget even when $4017
+         * makes its sequence segment differ from the output segment.
+         * CPU does not execute during this PCM loop. Only sample placement
+         * changes; fetch and IRQ state at its end stay identical. */
+        if (apu->dmc.enabled) {
+            dmc_phase+=dmc_samples;
+            while(dmc_phase>=output_samples){
+                dmc_phase-=output_samples;
+                if(apu->dmc.enabled)nes_apu_dmc_advance(nes,dmc_step_q8);
+            }
+        }
     }
 
     // 写回相位累加器
@@ -259,10 +272,6 @@ static inline void nes_apu_play(nes_t* nes){
     noi->lfsr_acc = noi_acc;
     noi->lfsr = lfsr;
 
-    // 每4段输出一次音频(每视频帧一次)
-    if (seg == 3) {
-        nes_sound_output(apu->sample_buffer, nes->timing.samples_per_frame);
-    }
 }
 
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
@@ -271,7 +280,7 @@ static inline void nes_apu_play(nes_t* nes){
  * common case and returns immediately). */
 static inline void nes_apu_render_expansion(nes_t* nes) {
     nes_apu_t* apu = &nes->nes_apu;
-    const uint16_t seg = (uint16_t)(apu->clock_count & 3);
+    const uint16_t seg = (uint16_t)(apu->sample_index & 3);
     const uint16_t sample_start = (uint16_t)(seg * nes->timing.samples_per_frame / 4);
     const uint16_t sample_end = (uint16_t)((seg + 1) * nes->timing.samples_per_frame / 4);
     const uint32_t seg_cycles = (uint32_t)(nes->timing.cpu_clock / ((uint32_t)4u * nes->timing.frame_rate));
@@ -414,10 +423,16 @@ void nes_apu_frame(nes_t* nes){
 #if (NES_ENABLE_EXPANSION_AUDIO == 1)
     nes_apu_render_expansion(nes);
 #endif
+    /* PCM progress is independent of $4017 frame-counter resets. Mix every
+     * expansion segment before publishing the completed packet. */
+    if ((nes->nes_apu.sample_index & 3u) == 3u)
+        nes_sound_output(nes->nes_apu.sample_buffer, nes->timing.samples_per_frame);
+    nes->nes_apu.sample_index = (uint16_t)((nes->nes_apu.sample_index + 1u) & 3u);
     nes->nes_apu.clock_count++;
 }
 
 void nes_apu_init(nes_t *nes){
+    nes->nes_apu.sample_index = 0;
     nes->nes_apu.status = 0;
     nes->nes_apu.noise.lfsr = 1;
     /* DMC idle: 4KB sample window, rate index 0, DAC at 0, no IRQ. */
